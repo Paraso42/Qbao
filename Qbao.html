@@ -402,6 +402,7 @@ body.dark-mode .btn-secondary:hover { background: #555; }
     </div>
     <div id="subject-list"></div>
     <div id="sidebar-footer">
+      <div id="auth-user-ui"></div>
       <div class="util-label">💾 数据管理</div>
       <button class="btn-util" onclick="openBackupDialog()">📂 备份设置</button>
       <button class="btn-util" onclick="doManualBackup()">💾 立即备份</button>
@@ -411,6 +412,7 @@ body.dark-mode .btn-secondary:hover { background: #555; }
       <button class="btn-util" onclick="renderSettings();showScreen('settings')">⚙️ 个性化</button>
       <button class="btn-util" onclick="renderWrongBook();showScreen('wrongbook')">📕 错题本 <span id="wrongbook-count" style="color:#e94560;"></span></button>
       <div id="backup-status">未设置</div>
+      <div id="sync-status" style="font-size:11px;color:#555;text-align:center;margin-top:4px;">🔴 离线</div>
     </div>
   </aside>
   <main id="main">
@@ -572,6 +574,60 @@ body.dark-mode .btn-secondary:hover { background: #555; }
         <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeImportDialog()">取消</button><button class="btn btn-success btn-small" onclick="confirmImport()">确认导入</button></div>
       </div>
     </div>
+    <div class="dialog-overlay" id="auth-dialog">
+      <div class="dialog-box" style="max-width:420px;">
+        <h3 id="auth-dialog-title">🔑 登录 / 注册</h3>
+        <div id="auth-tabs" style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e0e0e0;">
+          <div class="subj-tab active" onclick="switchAuthTab('login')" id="auth-tab-login">登录</div>
+          <div class="subj-tab" onclick="switchAuthTab('register')" id="auth-tab-register">注册</div>
+          <div class="subj-tab" onclick="switchAuthTab('offline')" id="auth-tab-offline">离线模式</div>
+        </div>
+        <div id="auth-login-form">
+          <div style="margin-bottom:10px;">
+            <label style="font-size:14px;display:block;margin-bottom:4px;">用户名</label>
+            <input type="text" id="auth-login-username" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;" placeholder="输入用户名">
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="font-size:14px;display:block;margin-bottom:4px;">密码</label>
+            <input type="password" id="auth-login-password" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;" placeholder="输入密码">
+          </div>
+          <div id="auth-login-error" style="color:#e94560;font-size:13px;display:none;margin-bottom:8px;"></div>
+          <div class="dialog-actions">
+            <button class="btn btn-secondary btn-small" onclick="closeAuthDialog()">取消</button>
+            <button class="btn btn-primary btn-small" onclick="doLogin()">登录</button>
+          </div>
+        </div>
+        <div id="auth-register-form" style="display:none;">
+          <div style="margin-bottom:10px;">
+            <label style="font-size:14px;display:block;margin-bottom:4px;">用户名</label>
+            <input type="text" id="auth-reg-username" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;" placeholder="至少3个字符">
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="font-size:14px;display:block;margin-bottom:4px;">显示名称</label>
+            <input type="text" id="auth-reg-displayname" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;" placeholder="可选">
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="font-size:14px;display:block;margin-bottom:4px;">密码</label>
+            <input type="password" id="auth-reg-password" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;" placeholder="至少6个字符">
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="font-size:14px;display:block;margin-bottom:4px;">确认密码</label>
+            <input type="password" id="auth-reg-password2" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;" placeholder="再次输入密码">
+          </div>
+          <div id="auth-reg-error" style="color:#e94560;font-size:13px;display:none;margin-bottom:8px;"></div>
+          <div class="dialog-actions">
+            <button class="btn btn-secondary btn-small" onclick="closeAuthDialog()">取消</button>
+            <button class="btn btn-success btn-small" onclick="doRegister()">注册</button>
+          </div>
+        </div>
+        <div id="auth-offline-form" style="display:none;">
+          <p style="color:#666;font-size:14px;margin-bottom:12px;">离线模式下，数据仅保存在本地浏览器，不会同步到云端。</p>
+          <div class="dialog-actions">
+            <button class="btn btn-primary btn-small" onclick="enterOfflineMode()">进入离线模式</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="dialog-overlay" id="backup-dialog">
       <div class="dialog-box">
         <h3>💾 备份文件夹设置</h3>
@@ -606,6 +662,53 @@ body.dark-mode .btn-secondary:hover { background: #555; }
   </main>
 </div>
 <script>
+// ===== API 配置 =====
+const API_BASE = 'http://114.55.210.82/api/v1';
+let authToken = null;
+let authUser = null;
+let isOnlineMode = false;
+let syncPending = false;
+let syncTimer = null;
+
+function getToken() { return localStorage.getItem('qbao_token'); }
+function setToken(t) { if (t) localStorage.setItem('qbao_token', t); else localStorage.removeItem('qbao_token'); }
+function getUser() { try { return JSON.parse(localStorage.getItem('qbao_user') || 'null'); } catch { return null; } }
+function setUser(u) { if (u) localStorage.setItem('qbao_user', JSON.stringify(u)); else localStorage.removeItem('qbao_user'); }
+
+async function fetchWithAuth(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (getToken()) headers['Authorization'] = 'Bearer ' + getToken();
+  const res = await fetch(API_BASE + path, { ...options, headers });
+  if (res.status === 401) { clearAuth(); return null; }
+  return res;
+}
+
+function clearAuth() { authToken = null; authUser = null; isOnlineMode = false; setToken(null); setUser(null); }
+
+async function apiLogin(username, password) {
+  const res = await fetch(API_BASE + '/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || '登录失败'); }
+  const data = await res.json();
+  authToken = data.token; authUser = data.user; isOnlineMode = true;
+  setToken(data.token); setUser(data.user);
+  return data;
+}
+
+async function apiRegister(username, displayName, password) {
+  const res = await fetch(API_BASE + '/auth/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, displayName: displayName || username, password })
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || '注册失败'); }
+  const data = await res.json();
+  authToken = data.token; authUser = data.user; isOnlineMode = true;
+  setToken(data.token); setUser(data.user);
+  return data;
+}
+
 // ===== 状态管理 =====
 const DEFAULT_STATE = { subjects: {}, currentSubjectId: null, chapters: {}, currentChapterId: null, history: [], lastScreen: 'start' };
 let state = {};
@@ -621,7 +724,53 @@ function loadState() {
   } catch(e) { console.warn('load err', e); }
   state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
-function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {} }
+
+async function DataStoreInit() {
+  loadState();
+  if (!isOnlineMode || !getToken()) return; // 离线模式，直接用本地数据
+  try {
+    const res = await fetchWithAuth('/data');
+    if (!res) return; // token 失效
+    const cloud = await res.json();
+    if (cloud && cloud.state_json && cloud.synced_at) {
+      const localTime = localStorage.getItem('qbao_lastSync');
+      if (!localTime || new Date(cloud.synced_at) > new Date(localTime)) {
+        state = migrateState(cloud.state_json);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } else {
+        state = migrateState(state);
+      }
+    }
+  } catch(e) { console.warn('cloud load err', e); }
+}
+
+function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); scheduleCloudSync(); } catch(e) {} }
+
+function scheduleCloudSync() {
+  if (!isOnlineMode || !getToken()) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try {
+      const res = await fetchWithAuth('/data', {
+        method: 'PUT',
+        body: JSON.stringify({ state_json: state })
+      });
+      if (res && res.ok) {
+        localStorage.setItem('qbao_lastSync', new Date().toISOString());
+        updateSyncStatus();
+      }
+    } catch(e) { console.warn('cloud sync err', e); }
+  }, 2000);
+}
+
+function updateSyncStatus() {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (!isOnlineMode) { el.textContent = '🔴 离线'; el.style.color = '#555'; return; }
+  const last = localStorage.getItem('qbao_lastSync');
+  if (last) { el.textContent = '☁️ 已同步 ' + new Date(last).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); el.style.color = '#2ed573'; }
+  else { el.textContent = '☁️ 未同步'; el.style.color = '#f59e0b'; }
+}
 function getCh() { return state.chapters[state.currentChapterId] || null; }
 function getSubj() { return state.subjects[state.currentSubjectId] || null; }
 function getExam() { return state.generatedExams[state.currentExamId] || null; }
@@ -1377,7 +1526,119 @@ function startSrsReviewForSubj(subjId) {
   startExamQuiz(eid);
 }
 function showScreen(name){ document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active')); const t=document.getElementById('screen-'+name); if(t)t.classList.add('active'); state.lastScreen=name; saveState(); }
-async function init(){ try{ document.getElementById('app').style.display='flex'; loadState(); try{await tryAutoRestore();}catch(e){console.warn('auto restore skipped',e);} const sids=Object.keys(state.subjects); if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;} else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0]; const s=getSubj(); if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null; renderSubjectList(); const saved=state.lastScreen||'start'; showScreen(saved); const ch=getCh(); if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();} updateQuickActions(); loadChapterStrategyToUI(); checkAchievements(); applyAllFontSizes(); applyDarkMode(); populateWrongBookFromHistory(); populateSRSFromHistory(); updateSrsCard(); updateWrongBookBadge(); console.log('✅ v1.1 初始化完成'); }catch(e){console.error('init failed',e);document.getElementById('app').style.display='flex';} }
+
+// ===== 认证 UI =====
+function openAuthDialog() { document.getElementById('auth-dialog').classList.add('active'); switchAuthTab('login'); }
+function closeAuthDialog() { document.getElementById('auth-dialog').classList.remove('active'); clearAuthDialogErrors(); }
+function clearAuthDialogErrors() {
+  ['auth-login-error', 'auth-reg-error'].forEach(id => { const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; } });
+}
+function switchAuthTab(tab) {
+  document.getElementById('auth-tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('auth-tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('auth-tab-offline').classList.toggle('active', tab === 'offline');
+  document.getElementById('auth-login-form').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('auth-register-form').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('auth-offline-form').style.display = tab === 'offline' ? 'block' : 'none';
+  clearAuthDialogErrors();
+}
+function showAuthError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block'; }
+
+async function doLogin() {
+  const username = document.getElementById('auth-login-username').value.trim();
+  const password = document.getElementById('auth-login-password').value;
+  if (!username || !password) return showAuthError('auth-login-error', '请输入用户名和密码');
+  try {
+    await apiLogin(username, password);
+    closeAuthDialog();
+    updateAuthUI();
+    await DataStoreInit();
+    renderSubjectList();
+    updateSyncStatus();
+  } catch(e) { showAuthError('auth-login-error', e.message); }
+}
+
+async function doRegister() {
+  const username = document.getElementById('auth-reg-username').value.trim();
+  const displayName = document.getElementById('auth-reg-displayname').value.trim();
+  const password = document.getElementById('auth-reg-password').value;
+  const password2 = document.getElementById('auth-reg-password2').value;
+  if (!username || username.length < 3) return showAuthError('auth-reg-error', '用户名至少3个字符');
+  if (!password || password.length < 6) return showAuthError('auth-reg-error', '密码至少6个字符');
+  if (password !== password2) return showAuthError('auth-reg-error', '两次密码不一致');
+  try {
+    await apiRegister(username, displayName, password);
+    closeAuthDialog();
+    updateAuthUI();
+    await DataStoreInit();
+    renderSubjectList();
+    updateSyncStatus();
+  } catch(e) { showAuthError('auth-reg-error', e.message); }
+}
+
+function enterOfflineMode() {
+  isOnlineMode = false;
+  closeAuthDialog();
+  updateAuthUI();
+  updateSyncStatus();
+}
+
+function doLogout() {
+  if (!confirm('确定退出登录？数据将保留在本地。')) return;
+  clearAuth();
+  isOnlineMode = false;
+  updateAuthUI();
+  updateSyncStatus();
+}
+
+function updateAuthUI() {
+  const container = document.getElementById('auth-user-ui');
+  if (!container) return;
+  if (isOnlineMode && authUser) {
+    container.innerHTML = '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:6px;"><div style="font-size:12px;color:#aaa;text-align:center;">👤 ' + escapeHtml(authUser.displayName || authUser.username) + '</div><button class="btn-util" onclick="doLogout()" style="margin-top:4px;">🚪 退出登录</button></div>';
+  } else {
+    container.innerHTML = '<button class="btn-util" onclick="openAuthDialog()" style="border-color:rgba(79,172,254,0.3);color:#4facfe;">☁️ 登录/注册</button>';
+  }
+  updateSyncStatus();
+}
+async function init(){ try{
+		document.getElementById('app').style.display='flex';
+		/* 恢复登录状态 */
+		if (getToken()) {
+			authToken = getToken();
+			authUser = getUser();
+			if (authUser) {
+				isOnlineMode = true;
+				await DataStoreInit();
+			} else {
+				clearAuth();
+			}
+		}
+		if (!isOnlineMode) loadState();
+		try{await tryAutoRestore();}catch(e){console.warn('auto restore skipped',e);}
+		const sids=Object.keys(state.subjects);
+		if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;}
+		else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0];
+		const s=getSubj();
+		if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;
+		renderSubjectList();
+		const saved=state.lastScreen||'start';
+		showScreen(saved);
+		const ch=getCh();
+		if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();}
+		updateQuickActions();
+		loadChapterStrategyToUI();
+		checkAchievements();
+		applyAllFontSizes();
+		applyDarkMode();
+		populateWrongBookFromHistory();
+		populateSRSFromHistory();
+		updateSrsCard();
+		updateWrongBookBadge();
+		updateAuthUI();
+		updateSyncStatus();
+		console.log('✅ v2.0 初始化完成');
+	}catch(e){console.error('init failed',e);document.getElementById('app').style.display='flex';} }
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
