@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qbao</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; font-size: 17px; }
+#app { display: flex; height: 100vh; overflow: hidden; }
+#sidebar { width: 268px; background: #1a1a2e; color: #eee; display: flex; flex-direction: column; flex-shrink: 0; height: 100vh; position: sticky; top: 0; font-size: 13px; }
+#sidebar-header { padding: 16px 16px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+#sidebar-header h2 { font-size: calc(18 * 1em / 13); color: #fff; margin-bottom: 8px; text-align: center; }
+#sidebar-header .btn-row { display: flex; gap: 5px; }
+#sidebar-header .btn-row button { flex: 1; padding: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); color: #bbb; border-radius: 6px; cursor: pointer; font-size: calc(13 * 1em / 13); transition: .2s; }
+#sidebar-header .btn-row button:hover { background: rgba(255,255,255,0.06); color: #fff; }
+#sidebar-header .btn-row button.primary { border-color: #4facfe; color: #4facfe; }
+#sidebar-header .btn-row button.primary:hover { background: rgba(79,172,254,0.12); }
+#subject-list { flex: 1; overflow-y: auto; padding: 8px 10px; }
+.subject-group { margin-bottom: 8px; }
+.subject-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: .2s; font-size: calc(15 * 1em / 13); font-weight: 600; color: #ccc; }
+.subject-header:hover { background: rgba(255,255,255,0.04); }
+.subject-header.active { background: rgba(79,172,254,0.18); color: #4facfe; }
+.subject-header .subj-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(14 * 1em / 13); }
+.subject-header .subj-count { font-size: calc(12 * 1em / 13); color: #777; font-weight: normal; margin: 0 4px; }
+.subj-actions { display: flex; gap: 1px; }
+.subj-btn { background: transparent; border: none; color: #555; cursor: pointer; font-size: calc(12 * 1em / 13); padding: 1px 3px; border-radius: 3px; transition: .2s; }
+.subj-btn:hover { color: #ddd; background: rgba(255,255,255,0.08); }
+.subj-btn.sb-del:hover { color: #e94560; background: rgba(233,69,96,0.18); }
+.chapter-list-in-subj { margin-left: 8px; margin-top: 1px; }
+.chapter-item { padding: 5px 7px; margin-bottom: 1px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: .2s; font-size: calc(13 * 1em / 13); background: rgba(255,255,255,0.01); }
+.chapter-item:hover { background: rgba(255,255,255,0.05); }
+.chapter-item.active { background: rgba(233,69,96,0.18); border-left: 2px solid #e94560; }
+.chapter-info { flex: 1; min-width: 0; }
+.chapter-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chapter-count { font-size: calc(12 * 1em / 13); color: #777; }
+.ch-actions { display: flex; gap: 1px; }
+.ch-btn { background: transparent; border: none; color: #444; cursor: pointer; font-size: calc(12 * 1em / 13); padding: 1px 3px; border-radius: 3px; transition: .2s; }
+.ch-btn:hover { color: #bbb; background: rgba(255,255,255,0.06); }
+.ch-btn.ch-del:hover { background: rgba(233,69,96,0.25); color: #e94560; }
+.ch-btn.ch-hist:hover { background: rgba(79,172,254,0.25); color: #4facfe; }
+.btn-add-chapter { width: 100%; padding: 4px; background: transparent; border: 1px dashed rgba(255,255,255,0.08); color: #555; border-radius: 4px; cursor: pointer; font-size: calc(12 * 1em / 13); margin-top: 2px; transition: .2s; }
+.btn-add-chapter:hover { border-color: rgba(255,255,255,0.2); color: #999; }
+#sidebar-footer { padding: 10px 14px; border-top: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+#sidebar-footer .util-label { font-size: calc(11 * 1em / 13); color: #555; text-align: center; margin-bottom: 4px; }
+#sidebar-footer .btn-util { width: 100%; padding: 5px 6px; background: transparent; border: 1px solid rgba(255,255,255,0.08); color: #888; border-radius: 5px; cursor: pointer; font-size: calc(12 * 1em / 13); transition: .2s; margin-bottom: 3px; }
+#sidebar-footer .btn-util:hover { background: rgba(255,255,255,0.04); color: #ccc; }
+#backup-status { font-size: calc(11 * 1em / 13); color: #555; text-align: center; }
+#main { flex: 1; overflow-y: auto; padding: 24px 32px; max-width: 1000px; margin: 0 auto; width: 100%; font-size: 17px; }
+.screen { display: none; }
+.screen.active { display: block; }
+h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
+.subtitle { color: #888; margin-bottom: 16px; font-size: calc(15 * 1em / 17); }
+.progress-bar { background: #e0e0e0; border-radius: 8px; height: 7px; margin-bottom: 5px; overflow: hidden; }
+.progress-bar .fill { height: 100%; background: linear-gradient(90deg, #4facfe, #00f2fe); border-radius: 8px; transition: width .4s ease; }
+.progress-stats { display: flex; justify-content: space-between; font-size: calc(14 * 1em / 17); color: #666; margin-bottom: 16px; flex-wrap: wrap; gap: 3px; }
+.card { background: #fff; border-radius: 12px; padding: 24px 26px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
+.card h3 { font-size: calc(17 * 1em / 17); margin-bottom: 6px; }
+.card h4 { font-size: calc(15 * 1em / 17); margin: 14px 0 6px; color: #555; }
+.prompt-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 12px; font-size: calc(14 * 1em / 17); line-height: 1.7; margin: 8px 0; max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.btn { display: inline-block; padding: 10px 20px; border: none; border-radius: 7px; font-size: calc(14 * 1em / 17); cursor: pointer; transition: .2s; font-family: inherit; }
+.btn-primary { background: #4facfe; color: #fff; }
+.btn-primary:hover { background: #3d8fd9; }
+.btn-danger { background: #e94560; color: #fff; }
+.btn-danger:hover { background: #d63851; }
+.btn-success { background: #2ed573; color: #fff; }
+.btn-success:hover { background: #26b863; }
+.btn-secondary { background: #6c757d; color: #fff; }
+.btn-secondary:hover { background: #5a6268; }
+.btn-warning { background: #f59e0b; color: #fff; }
+.btn-warning:hover { background: #d97706; }
+.btn-small { padding: 7px 14px; font-size: calc(13 * 1em / 17); }
+.strategy-group { margin: 10px 0; }
+.strategy-labels { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: calc(13 * 1em / 17); }
+.strategy-labels span { display: flex; align-items: center; gap: 3px; }
+.strategy-labels .val { font-weight: 700; min-width: 24px; text-align: center; }
+.dual-range-wrap { position: relative; height: 40px; margin: 2px 0 8px; }
+.dual-range-wrap input[type="range"] { position: absolute; left: 0; top: 0; width: 100%; height: 5px; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; margin: 0; padding: 0; z-index: 3; }
+.dual-range-wrap input[type="range"]::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: transparent; }
+.dual-range-wrap input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; pointer-events: auto; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.dual-range-wrap input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; pointer-events: auto; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.dual-range-wrap #s-err::-webkit-slider-thumb, .dual-range-wrap .exam-s-err::-webkit-slider-thumb { background: #e94560; }
+.dual-range-wrap #s-err::-moz-range-thumb, .dual-range-wrap .exam-s-err::-moz-range-thumb { background: #e94560; }
+.dual-range-wrap #s-review::-webkit-slider-thumb, .dual-range-wrap .exam-s-review::-webkit-slider-thumb { background: #f59e0b; }
+.dual-range-wrap #s-review::-moz-range-thumb, .dual-range-wrap .exam-s-review::-moz-range-thumb { background: #f59e0b; }
+/* 多章节滑条专属样式 */
+.multi-range-wrap { position: relative; height: 40px; margin: 2px 0; }
+.multi-range-wrap input[type="range"] { position: absolute; left: 0; top: 0; width: 100%; height: 5px; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; margin: 0; padding: 0; z-index: 3; }
+.multi-range-wrap input[type="range"]::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: transparent; }
+.multi-range-wrap input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; pointer-events: auto; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.multi-range-wrap input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; pointer-events: auto; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.multi-range-wrap input[type="range"].cum-slider::-webkit-slider-thumb { background: #4facfe; }
+.multi-range-wrap input[type="range"].cum-slider::-moz-range-thumb { background: #4facfe; }
+.dual-track-bg { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 100%; height: 5px; border-radius: 3px; background: #e0e0e0; pointer-events: none; z-index: 0; }
+.dual-track-fill { position: absolute; top: 50%; transform: translateY(-50%); height: 5px; border-radius: 2px; pointer-events: none; z-index: 1; transition: left .15s ease, width .15s ease; }
+.dual-track-fill.err { background: #e94560; left: 0; }
+.dual-track-fill.review { background: #f59e0b; }
+.dual-track-fill.new { background: #2ed573; }
+.track-segment { position: absolute; top: 50%; transform: translateY(-50%); height: 5px; border-radius: 2px; pointer-events: none; z-index: 1; transition: left .15s ease, width .15s ease; }
+.strategy-values { display: flex; justify-content: space-around; margin-top: 2px; font-size: calc(14 * 1em / 17); padding: 5px 0; border-radius: 6px; background: #f8f9fa; }
+.strategy-values .sv-item { text-align: center; }
+.strategy-values .sv-item .sv-num { font-size: calc(18 * 1em / 17); font-weight: 700; }
+.strategy-values .sv-item.err .sv-num { color: #e94560; }
+.strategy-values .sv-item.review .sv-num { color: #f59e0b; }
+.strategy-values .sv-item.new .sv-num { color: #2ed573; }
+.strategy-values .sv-item .sv-label { font-size: calc(12 * 1em / 17); color: #888; }
+.type-counts { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.type-count-item { display: flex; align-items: center; gap: 4px; background: #f8f9fa; padding: 4px 10px; border-radius: 6px; }
+.type-count-item label { font-size: calc(13 * 1em / 17); white-space: nowrap; }
+.type-count-item input[type="number"] { width: 40px; padding: 3px 4px; border: 1px solid #dee2e6; border-radius: 4px; text-align: center; font-size: calc(13 * 1em / 17); }
+.tags-manager { margin: 8px 0; }
+.tags-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; padding: 6px; border: 1px dashed #dee2e6; border-radius: 6px; background: #fafafa; }
+.tag-chip { display: inline-flex; align-items: center; gap: 3px; background: #e8f4fd; color: #1a6bb0; padding: 2px 8px; border-radius: 16px; font-size: calc(13 * 1em / 17); cursor: pointer; transition: .2s; border: 1px solid transparent; user-select: none; }
+.tag-chip:hover { border-color: #4facfe; }
+.tag-chip.active { background: #ffe6e6; color: #c2410c; border-color: #e94560; }
+.tag-chip .tag-remove { cursor: pointer; opacity: 0.4; font-size: calc(14 * 1em / 17); line-height: 1; margin-left: 2px; }
+.tag-chip .tag-remove:hover { opacity: 1; color: #e94560; }
+.tag-add-input { display: flex; gap: 5px; margin-top: 6px; }
+.tag-add-input input { flex: 1; padding: 5px 8px; border: 1px solid #dee2e6; border-radius: 5px; font-size: calc(13 * 1em / 17); }
+.tag-add-input input:focus { outline: none; border-color: #4facfe; }
+.quiz-card { background: #fff; border-radius: 12px; padding: 26px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
+.quiz-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 6px; }
+.quiz-tag { display: inline-block; background: #e8f4fd; color: #4facfe; padding: 2px 8px; border-radius: 12px; font-size: calc(12 * 1em / 17); }
+.quiz-type { display: inline-block; background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: calc(12 * 1em / 17); }
+.quiz-question { font-size: 17px; line-height: 1.6; margin: 12px 0 16px; }
+.quiz-question code, .quiz-option code, .explanation-box code, .qd-question code, .qd-answer code, .qd-explanation code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; font-family: monospace; }
+body.dark-mode .quiz-question code, body.dark-mode .quiz-option code, body.dark-mode .explanation-box code, body.dark-mode .qd-question code, body.dark-mode .qd-answer code, body.dark-mode .qd-explanation code { background: #333; }
+.katex { font-size: 1em !important; }
+.quiz-options { display: flex; flex-direction: column; gap: 7px; }
+.quiz-option { padding: 11px 14px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; transition: .2s; font-size: 15px; }
+.quiz-option:hover { border-color: #4facfe; background: #f0f8ff; }
+.quiz-option.selected { border-color: #4facfe; background: #e8f4fd; }
+.quiz-option.correct { border-color: #2ed573; background: #e6ffe6; }
+.quiz-option.wrong { border-color: #e94560; background: #ffe6e6; }
+.quiz-option.disabled { pointer-events: none; opacity: 0.7; }
+.explanation-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-top: 12px; }
+.explanation-box h4 { color: #166534; margin-bottom: 3px; font-size: calc(14 * 1em / 17); }
+.explanation-box p { color: #333; line-height: 1.5; font-size: calc(14 * 1em / 17); }
+.quiz-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.quiz-nav { display: flex; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
+.quiz-nav .dot { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #dee2e6; display: flex; align-items: center; justify-content: center; font-size: calc(12 * 1em / 17); cursor: pointer; transition: .2s; }
+.quiz-nav .dot:hover { border-color: #4facfe; }
+.quiz-nav .dot.current { border-color: #4facfe; background: #4facfe; color: #fff; }
+.quiz-nav .dot.answered { background: #2ed573; color: #fff; border-color: #2ed573; }
+.quiz-nav .dot.wrong { background: #e94560; color: #fff; border-color: #e94560; }
+.empty-state { text-align: center; color: #999; padding: 30px 16px; font-size: calc(15 * 1em / 17); }
+.report-card { background: #fff; border-radius: 12px; padding: 26px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 14px 0; }
+.report-stat { text-align: center; padding: 12px; background: #f8f9fa; border-radius: 8px; }
+.report-stat .num { font-size: calc(27 * 1em / 17); font-weight: 700; }
+.report-stat .label { font-size: calc(13 * 1em / 17); color: #888; margin-top: 2px; }
+.report-stat.correct .num { color: #2ed573; }
+.report-stat.wrong .num { color: #e94560; }
+.report-stat.rate .num { color: #4facfe; }
+.subj-tabs { display: flex; gap: 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 16px; }
+.subj-tab { padding: 8px 18px; cursor: pointer; font-size: calc(15 * 1em / 17); color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: .2s; }
+.subj-tab:hover { color: #333; }
+.subj-tab.active { color: #4facfe; border-bottom-color: #4facfe; font-weight: 600; }
+.subj-tab-content { display: none; }
+.subj-tab-content.active { display: block; }
+.subj-dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 12px 0; }
+.subj-dash-card { text-align: center; padding: 16px 10px; background: #f8f9fa; border-radius: 8px; }
+.subj-dash-card .num { font-size: calc(25 * 1em / 17); font-weight: 700; }
+.subj-dash-card .label { font-size: calc(13 * 1em / 17); color: #888; margin-top: 2px; }
+.qbank-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.qbank-toolbar label { display: flex; align-items: center; gap: 4px; font-size: calc(14 * 1em / 17); cursor: pointer; }
+.qbank-toolbar label input[type="checkbox"] { width: 14px; height: 14px; accent-color: #e94560; cursor: pointer; }
+.qbank-toolbar .qbank-search { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 140px; }
+.qbank-toolbar .qbank-search input { flex: 1; padding: 5px 8px; border: 1px solid #dee2e6; border-radius: 5px; font-size: calc(14 * 1em / 17); min-width: 80px; }
+.qbank-toolbar .qbank-search input:focus { outline: none; border-color: #4facfe; }
+.qbank-chapter-group { margin-bottom: 16px; }
+.qbc-header { font-size: calc(15 * 1em / 17); font-weight: 600; padding: 5px 0; margin-bottom: 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 6px; }
+.qbc-header span { font-weight: normal; color: #888; font-size: calc(13 * 1em / 17); }
+.qbank-round { background: #fff; border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; transition: .2s; border-left: 3px solid transparent; }
+.qbank-round:hover { border-left-color: #4facfe; }
+.qbank-round.expanded { border-left-color: #4facfe; }
+.qbank-round-header { display: flex; justify-content: space-between; align-items: center; font-size: calc(13 * 1em / 17); color: #666; }
+.qbank-round-detail { margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee; display: none; }
+.qbank-round.expanded .qbank-round-detail { display: block; }
+.qbank-question { padding: 6px 8px; margin-bottom: 2px; border-radius: 4px; font-size: calc(14 * 1em / 17); cursor: pointer; transition: .2s; }
+.qbank-question:hover { background: #f0f8ff; }
+.qbank-question.correct { background: #f0fdf4; }
+.qbank-question.wrong { background: #fff5f5; }
+.qbank-question.unanswered { background: #f8f9fa; }
+.qbank-question .q-text { font-weight: 500; }
+.qbank-question .q-detail { color: #888; font-size: calc(13 * 1em / 17); margin-top: 1px; }
+.qdetail-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 1100; }
+.qdetail-overlay.active { display: flex; }
+.qdetail-box { background: #fff; border-radius: 14px; padding: 28px; width: 92%; max-width: 580px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+.qdetail-box h3 { margin-bottom: 12px; font-size: calc(17 * 1em / 17); }
+.qdetail-box .qd-question { font-size: calc(17 * 1em / 17); line-height: 1.6; margin: 10px 0; }
+.qdetail-box .qd-answer { background: #f8f9fa; border-radius: 6px; padding: 10px; margin: 6px 0; font-size: calc(14 * 1em / 17); }
+.qdetail-box .qd-explanation { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; margin: 6px 0; font-size: calc(14 * 1em / 17); }
+.qdetail-box .qd-explanation h4 { color: #166534; font-size: calc(14 * 1em / 17); margin-bottom: 3px; }
+.dialog-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 1000; }
+.dialog-overlay.active { display: flex; }
+.dialog-box { background: #fff; border-radius: 14px; padding: 26px; width: 92%; max-width: 580px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+.dialog-box h3 { margin-bottom: 12px; font-size: calc(18 * 1em / 17); }
+.dialog-box textarea { width: 100%; min-height: 140px; padding: 10px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: calc(14 * 1em / 17); resize: vertical; }
+.dialog-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; flex-wrap: wrap; }
+.error-box { background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; margin-top: 8px; display: none; }
+.error-box.active { display: block; }
+.error-box h4 { color: #dc2626; margin-bottom: 3px; font-size: calc(14 * 1em / 17); }
+.error-box p { color: #666; font-size: calc(13 * 1em / 17); margin-bottom: 5px; }
+.restore-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid #dee2e6; border-radius: 6px; margin-bottom: 6px; transition: .2s; }
+.restore-list-item:hover { border-color: #4facfe; background: #f0f8ff; }
+.restore-list-item .rli-info { font-size: calc(14 * 1em / 17); }
+.restore-list-item .rli-info .rli-date { color: #888; font-size: calc(13 * 1em / 17); }
+.restore-list-item .rli-info .rli-label { font-weight: 500; }
+.chapter-select-grid { max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; padding: 6px; margin: 6px 0; }
+.chapter-select-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; transition: .2s; }
+.chapter-select-item:hover { background: #f8f9fa; }
+.chapter-select-item label { flex: 1; font-size: calc(14 * 1em / 17); cursor: pointer; }
+.chapter-select-item input[type="checkbox"] { accent-color: #4facfe; width: 15px; height: 15px; cursor: pointer; }
+.chapter-select-item .cs-count { font-size: calc(12 * 1em / 17); color: #888; }
+/* 章节历史分轮卡片 */
+.ch-history-card { background: #fff; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; cursor: pointer; border-left: 3px solid #e0e0e0; transition: border-color .2s; }
+.ch-history-card.expanded { border-left-color: #4facfe; }
+.ch-history-card-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
+.ch-round-badge { background: #e8f4fd; color: #1a6bb0; padding: 2px 8px; border-radius: 10px; font-size: calc(12 * 1em / 17); font-weight: 600; white-space: nowrap; }
+.ch-history-card-date { font-size: calc(12 * 1em / 17); color: #888; flex: 1; }
+.ch-history-card-stats { font-size: calc(13 * 1em / 17); font-weight: 600; white-space: nowrap; }
+.ch-history-card-detail { display: none; border-top: 1px solid #eee; padding: 8px; }
+.ch-history-card.expanded .ch-history-card-detail { display: block; }
+.ch-history-q { padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; font-size: calc(13 * 1em / 17); display: flex; flex-direction: column; gap: 2px; line-height: 1.5; }
+.ch-history-q.correct { background: #f0fdf4; }
+.ch-history-q.wrong { background: #fff5f5; }
+.ch-history-q-icon { font-size: calc(10 * 1em / 17); }
+.ch-history-q-exp { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #ddd; color: #555; font-size: calc(12 * 1em / 17); }
+/* 章节占比标签列表 */
+.chapter-pct-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; justify-content: center; }
+.chapter-pct-label { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; font-size: calc(13 * 1em / 17); font-weight: 600; color: #fff; }
+/* v8.4 成就卡片 */
+.achievements-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.achievements-count { font-size: calc(15 * 1em / 17); color: #888; }
+.achievements-count strong { color: #2ed573; font-size: calc(18 * 1em / 17); }
+.achievements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+.achievement-card { background: #fff; border-radius: 10px; padding: 18px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border-left: 4px solid #e0e0e0; transition: .2s; text-align: center; }
+.achievement-card.unlocked { border-left-color: #2ed573; background: linear-gradient(135deg, #f0fdf4, #fff); }
+.achievement-card.locked { opacity: 0.45; filter: grayscale(0.5); }
+.achievement-card .ach-icon { font-size: calc(32 * 1em / 17); margin-bottom: 4px; }
+.achievement-card .ach-name { font-size: calc(15 * 1em / 17); font-weight: 600; margin: 4px 0; }
+.achievement-card .ach-desc { font-size: calc(12 * 1em / 17); color: #888; margin-top: 2px; }
+.achievement-card .ach-status { font-size: calc(11 * 1em / 17); margin-top: 8px; color: #aaa; }
+.achievement-card.unlocked .ach-status { color: #166534; }
+.achievement-card .ach-mystery { font-size: calc(40 * 1em / 17); color: #ccc; }
+/* v8.4 设置页面 */
+.settings-section { margin-bottom: 20px; }
+.settings-section h4 { font-size: calc(15 * 1em / 17); margin-bottom: 8px; color: #555; }
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eee; }
+.settings-row label { min-width: 140px; font-size: calc(14 * 1em / 17); }
+.settings-row input[type="range"] { flex: 1; max-width: 300px; }
+.settings-row .settings-val { font-size: calc(15 * 1em / 17); font-weight: 600; min-width: 50px; color: #4facfe; }
+.settings-future { background: #f8f9fa; border-radius: 8px; padding: 14px; margin-top: 12px; color: #999; font-size: 13px; text-align: center; }
+/* v8.4 增强科目总览 */
+.enhanced-overview { margin: 12px 0; }
+.eo-section { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); margin-bottom: 12px; }
+.eo-section h4 { font-size: calc(15 * 1em / 17); margin-bottom: 10px; color: #333; display: flex; align-items: center; gap: 6px; }
+.eo-chapter-item { margin-bottom: 10px; }
+.eo-chapter-name { display: flex; justify-content: space-between; font-size: calc(13 * 1em / 17); font-weight: 600; margin-bottom: 3px; }
+.eo-chapter-bar { height: 10px; background: #e8e8e8; border-radius: 5px; overflow: hidden; }
+.eo-chapter-fill { height: 100%; border-radius: 5px; transition: width .4s ease; }
+.eo-trend-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.eo-trend-icon { font-size: calc(28 * 1em / 17); font-weight: 700; }
+.eo-trend-text { font-size: calc(14 * 1em / 17); color: #666; }
+.eo-type-bar { display: flex; height: 28px; border-radius: 6px; overflow: hidden; margin: 8px 0; }
+.eo-type-seg { display: flex; align-items: center; justify-content: center; font-size: calc(11 * 1em / 17); color: #fff; font-weight: 600; min-width: 2px; transition: width .3s ease; }
+.eo-type-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.eo-type-legend-item { display: flex; align-items: center; gap: 4px; font-size: calc(12 * 1em / 17); color: #666; }
+.eo-type-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+.eo-highlight { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+.eo-highlight-card { flex: 1; min-width: 150px; background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; }
+.eo-highlight-card .eo-hc-label { font-size: calc(12 * 1em / 17); color: #888; margin-bottom: 4px; }
+.eo-highlight-card .eo-hc-value { font-size: calc(16 * 1em / 17); font-weight: 700; }
+.eo-sparkline { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin: 8px 0; }
+.eo-sparkline-bar { flex: 1; min-width: 4px; max-width: 20px; border-radius: 2px 2px 0 0; transition: height .3s ease; }
+/* v8.4 忽略题目 */
+.dot.ignored { background: #ccc !important; color: #888 !important; border-color: #ccc !important; text-decoration: line-through; }
+@media (max-width: 768px) {
+  #sidebar { width: 100%; height: auto; position: relative; max-height: 240px; }
+  #sidebar-header { padding: 10px 12px; }
+  #sidebar-header h2 { font-size: calc(16 * 1em / 13); }
+  #subject-list { max-height: 140px; }
+  #sidebar-footer { display: none; }
+  #main { padding: 14px; }
+  .subj-tab { padding: 6px 12px; font-size: calc(14 * 1em / 17); }
+}
+/* 夜间模式 */
+body.dark-mode { background: #121212; color: #e0e0e0; }
+body.dark-mode #main { color: #e0e0e0; }
+body.dark-mode h1 { color: #e0e0e0; }
+body.dark-mode .subtitle { color: #aaa; }
+body.dark-mode .progress-bar { background: #333; }
+body.dark-mode .progress-stats { color: #aaa; }
+body.dark-mode .card, body.dark-mode .quiz-card, body.dark-mode .report-card { background: #1e1e1e; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+body.dark-mode .card h3, body.dark-mode .quiz-card h3 { color: #e0e0e0; }
+body.dark-mode .card h4 { color: #bbb; }
+body.dark-mode .prompt-box { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .quiz-question { color: #e0e0e0; }
+body.dark-mode .quiz-option { border-color: #444; color: #e0e0e0; }
+body.dark-mode .quiz-option:hover { border-color: #4facfe; background: #1a2a3a; }
+body.dark-mode .quiz-option.selected { border-color: #4facfe; background: #1a2a4a; }
+body.dark-mode .quiz-option.correct { border-color: #2ed573; background: #1a2e1a; }
+body.dark-mode .quiz-option.wrong { border-color: #e94560; background: #2e1a1a; }
+body.dark-mode .explanation-box { background: #1a2a1a; border-color: #2ed573; }
+body.dark-mode .explanation-box h4 { color: #2ed573; }
+body.dark-mode .explanation-box p { color: #e0e0e0; }
+body.dark-mode .quiz-nav .dot { border-color: #555; color: #ccc; }
+body.dark-mode .quiz-nav .dot:hover { border-color: #4facfe; }
+body.dark-mode .quiz-nav .dot.current { border-color: #4facfe; background: #4facfe; color: #fff; }
+body.dark-mode .quiz-nav .dot.answered { background: #2ed573; color: #fff; border-color: #2ed573; }
+body.dark-mode .quiz-nav .dot.wrong { background: #e94560; color: #fff; border-color: #e94560; }
+body.dark-mode .empty-state { color: #777; }
+body.dark-mode .report-stat { background: #2a2a2a; }
+body.dark-mode .report-stat .label { color: #999; }
+body.dark-mode .subj-tabs { border-bottom-color: #333; }
+body.dark-mode .subj-tab { color: #888; border-bottom-color: transparent; }
+body.dark-mode .subj-tab:hover { color: #e0e0e0; }
+body.dark-mode .subj-tab.active { color: #4facfe; border-bottom-color: #4facfe; }
+body.dark-mode .subj-dash-card { background: #2a2a2a; }
+body.dark-mode .subj-dash-card .label { color: #999; }
+body.dark-mode .qbank-toolbar label { color: #ccc; }
+body.dark-mode .qbank-toolbar .qbank-search input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .qbank-chapter-group { color: #e0e0e0; }
+body.dark-mode .qbc-header { color: #e0e0e0; border-bottom-color: #333; }
+body.dark-mode .qbc-header span { color: #999; }
+body.dark-mode .qbank-round { background: #2a2a2a; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+body.dark-mode .qbank-round-header { color: #bbb; }
+body.dark-mode .qbank-round-detail { border-top-color: #333; }
+body.dark-mode .qbank-question { color: #e0e0e0; }
+body.dark-mode .qbank-question:hover { background: #1a2a3a; }
+body.dark-mode .qbank-question.correct { background: #1a2e1a; }
+body.dark-mode .qbank-question.wrong { background: #2e1a1a; }
+body.dark-mode .qbank-question.unanswered { background: #2a2a2a; }
+body.dark-mode .qbank-question .q-detail { color: #999; }
+body.dark-mode .dialog-overlay, body.dark-mode .qdetail-overlay { background: rgba(0,0,0,0.6); }
+body.dark-mode .dialog-box, body.dark-mode .qdetail-box { background: #1e1e1e; color: #e0e0e0; }
+body.dark-mode .dialog-box h3, body.dark-mode .qdetail-box h3 { color: #e0e0e0; }
+body.dark-mode .dialog-box textarea { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .qdetail-box .qd-answer { background: #2a2a2a; color: #e0e0e0; }
+body.dark-mode .qdetail-box .qd-question { color: #e0e0e0; }
+body.dark-mode .qdetail-box .qd-explanation { background: #1a2a1a; border-color: #2ed573; }
+body.dark-mode .qdetail-box .qd-explanation h4 { color: #2ed573; }
+body.dark-mode .error-box { background: #2e1a1a; border-color: #e94560; }
+body.dark-mode .restore-list-item { border-color: #444; }
+body.dark-mode .restore-list-item:hover { border-color: #4facfe; background: #1a2a3a; }
+body.dark-mode .restore-list-item .rli-info { color: #e0e0e0; }
+body.dark-mode .restore-list-item .rli-info .rli-date { color: #999; }
+body.dark-mode .strategy-values { background: #2a2a2a; }
+body.dark-mode .strategy-values .sv-item .sv-label { color: #999; }
+body.dark-mode .type-count-item { background: #2a2a2a; }
+body.dark-mode .type-count-item label { color: #ccc; }
+body.dark-mode .type-count-item input[type="number"] { background: #333; border-color: #555; color: #e0e0e0; }
+body.dark-mode .tags-list { border-color: #444; background: #222; }
+body.dark-mode .tag-chip { background: #1a2a3a; color: #4facfe; }
+body.dark-mode .tag-chip.active { background: #2e1a1a; color: #e94560; border-color: #e94560; }
+body.dark-mode .tag-add-input input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .chapter-select-grid { border-color: #444; }
+body.dark-mode .chapter-select-item label { color: #ccc; }
+body.dark-mode .chapter-select-item .cs-count { color: #999; }
+body.dark-mode .ch-history-card { background: #2a2a2a; box-shadow: 0 1px 3px rgba(0,0,0,0.2); border-left-color: #444; }
+body.dark-mode .ch-history-card.expanded { border-left-color: #4facfe; }
+body.dark-mode .ch-history-card-date { color: #999; }
+body.dark-mode .ch-history-card-detail { border-top-color: #333; }
+body.dark-mode .ch-history-q { color: #e0e0e0; }
+body.dark-mode .ch-history-q.correct { background: #1a2e1a; }
+body.dark-mode .ch-history-q.wrong { background: #2e1a1a; }
+body.dark-mode .ch-history-q-exp { border-top-color: #444; color: #bbb; }
+body.dark-mode .achievement-card { background: #2a2a2a; box-shadow: 0 1px 4px rgba(0,0,0,0.2); border-left-color: #444; }
+body.dark-mode .achievement-card.unlocked { border-left-color: #2ed573; background: linear-gradient(135deg, #1a2a1a, #1e1e1e); }
+body.dark-mode .achievement-card .ach-name { color: #e0e0e0; }
+body.dark-mode .achievement-card .ach-desc { color: #999; }
+body.dark-mode .achievement-card .ach-status { color: #777; }
+body.dark-mode .achievement-card.unlocked .ach-status { color: #2ed573; }
+body.dark-mode .achievement-card .ach-mystery { color: #555; }
+body.dark-mode .settings-section h4 { color: #bbb; }
+body.dark-mode .settings-row { border-bottom-color: #333; }
+body.dark-mode .settings-row label { color: #ccc; }
+body.dark-mode .eo-section { background: #1e1e1e; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+body.dark-mode .eo-section h4 { color: #e0e0e0; }
+body.dark-mode .eo-chapter-name { color: #e0e0e0; }
+body.dark-mode .eo-chapter-bar { background: #333; }
+body.dark-mode .eo-trend-text { color: #aaa; }
+body.dark-mode .eo-type-legend-item { color: #aaa; }
+body.dark-mode .eo-highlight-card { background: #2a2a2a; }
+body.dark-mode .eo-highlight-card .eo-hc-label { color: #999; }
+body.dark-mode .eo-highlight-card .eo-hc-value { color: #e0e0e0; }
+body.dark-mode .btn-secondary { background: #444; color: #e0e0e0; }
+body.dark-mode .btn-secondary:hover { background: #555; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <h2>📚 科目与章节</h2>
+      <div class="btn-row">
+        <button class="primary" onclick="createSubject()">＋ 科目</button>
+      </div>
+    </div>
+    <div id="subject-list"></div>
+    <div id="sidebar-footer">
+      <div class="util-label">💾 数据管理</div>
+      <button class="btn-util" onclick="openBackupDialog()">📂 备份设置</button>
+      <button class="btn-util" onclick="doManualBackup()">💾 立即备份</button>
+      <button class="btn-util" onclick="openRestoreDialog()">⏪ 回档</button>
+      <div class="util-label" style="margin-top:6px;">🛠️ 工具</div>
+      <button class="btn-util" onclick="renderAchievements();showScreen('achievements')">🏆 成就</button>
+      <button class="btn-util" onclick="renderSettings();showScreen('settings')">⚙️ 个性化</button>
+      <button class="btn-util" onclick="renderWrongBook();showScreen('wrongbook')">📕 错题本 <span id="wrongbook-count" style="color:#e94560;"></span></button>
+      <div id="backup-status">未设置</div>
+    </div>
+  </aside>
+  <main id="main">
+    <div id="screen-start" class="screen active">
+      <h1>📚 Qbao</h1>
+      <p class="subtitle"><strong>单选 + 判断 + 名词解释 + 简答</strong> · 独立章节策略 · 科目题库 · 新占比滑条</p>
+      <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0%"></div></div>
+      <div class="progress-stats">
+        <span>客观题正确率：<strong id="rate-display">0%</strong></span>
+        <span>进度：<strong id="progress-display">0/0</strong></span>
+        <span>客观题错题：<strong id="wrong-display">0</strong></span>
+      </div>
+      <div class="card" id="chapter-quick-actions" style="display:none;">
+        <h3 id="chapter-quick-title">📖 当前章节</h3>
+        <p id="chapter-quick-info"></p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn btn-primary btn-small" id="btn-continue-quiz" onclick="showScreen('quiz');renderQuestion();updateProgress();">▶️ 继续答题</button>
+        </div>
+      </div>
+<div class="card" id="chapter-prompt-card" style="display:none;">
+        <h3>🎓 准备新的一轮 — <span id="ch-strategy-name">当前章节</span></h3>
+        <h4>📐 第一步：各题型数量</h4>
+        <div class="type-counts">
+          <div class="type-count-item"><label>📝 单选</label><input type="number" id="tc-single" min="0" max="50" value="10" onchange="onChapterStrategyChange()"></div>
+          <div class="type-count-item"><label>⚖️ 判断</label><input type="number" id="tc-judge" min="0" max="50" value="5" onchange="onChapterStrategyChange()"></div>
+          <div class="type-count-item"><label>📖 名词解释</label><input type="number" id="tc-term" min="0" max="50" value="1" onchange="onChapterStrategyChange()"></div>
+          <div class="type-count-item"><label>✍️ 简答</label><input type="number" id="tc-short" min="0" max="50" value="1" onchange="onChapterStrategyChange()"></div>
+        </div>
+        <h4>📐 第二步：出题策略</h4>
+        <p style="color:#666;font-size:13px;margin-bottom:3px;">三比例之和 = 100%：</p>
+        <div class="strategy-group">
+          <div class="strategy-labels"><span>🔴 针对错题 <span class="val" id="dv-err">60</span>%</span><span>🟡 滚动复习 <span class="val" id="dv-review">20</span>%</span><span>🟢 新考点 <span class="val" id="dv-new">20</span>%</span></div>
+          <div class="dual-range-wrap">
+            <div class="dual-track-bg"></div>
+            <div class="dual-track-fill err" id="fill-err" style="width:60%"></div>
+            <div class="dual-track-fill review" id="fill-review" style="width:20%;left:60%"></div>
+            <div class="dual-track-fill new" id="fill-new" style="width:20%;left:80%"></div>
+            <input type="range" id="s-err" min="0" max="100" value="60" step="1" oninput="onChapterDualSlider()">
+            <input type="range" id="s-review" min="0" max="100" value="80" step="1" oninput="onChapterDualSlider()">
+          </div>
+          <div class="strategy-values">
+            <div class="sv-item err"><div class="sv-num" id="sn-err">60</div><div class="sv-label">🔴 针对错题</div></div>
+            <div class="sv-item review"><div class="sv-num" id="sn-review">20</div><div class="sv-label">🟡 滚动复习</div></div>
+            <div class="sv-item new"><div class="sv-num" id="sn-new">20</div><div class="sv-label">🟢 新考点</div></div>
+          </div>
+        </div>
+        <h4>🏷️ 第三步：管理薄弱知识点标签</h4>
+        <p style="color:#666;font-size:13px;margin-bottom:4px;">勾选 = 加入出题提示词，点击标签切换状态：</p>
+        <div class="tags-manager">
+          <div class="tags-list" id="tags-list-container"><span style="color:#bbb;font-size:13px;">暂无标签。</span></div>
+          <div class="tag-add-input">
+            <input type="text" id="tag-input" placeholder="手动输入标签..." onkeydown="if(event.key==='Enter')addManualTag()">
+            <button class="btn btn-small btn-primary" onclick="addManualTag()">＋ 添加</button>
+          </div>
+        </div>
+        <h4>📋 第四步：复制提示词 → 发给 AI</h4>
+        <p style="color:#666;font-size:13px;">全选后 Ctrl+C 复制，附带学习资料发给 AI：</p>
+        <div class="prompt-box" id="prompt-text">正在生成提示词...</div>
+        <button class="btn btn-primary btn-small" onclick="selectPrompt()">👆 全选复制</button>
+        <h4 style="margin-top:14px;">第五步：收到 AI 返回的 JSON 后导入：</h4>
+        <button class="btn btn-success btn-small" onclick="openImportDialog()">📥 导入题目数据 (JSON)</button>
+      </div>
+    </div>
+    <div id="screen-quiz" class="screen">
+      <div class="quiz-card">
+        <div class="quiz-header">
+          <span class="quiz-tag" id="quiz-tag">标签</span>
+          <span class="quiz-type" id="quiz-type">题型</span>
+          <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-left:auto;">← 返回</button>
+        </div>
+        <div id="question-area"><div class="empty-state">📭 暂无题目</div></div>
+        <div class="quiz-nav" id="quiz-nav"></div>
+        <div class="quiz-actions">
+          <button class="btn btn-primary btn-small" id="btn-submit" onclick="submitAnswer()">提交答案</button>
+          <button class="btn btn-secondary btn-small" id="btn-next" onclick="nextQuestion()" style="display:none;">下一题 ➡️</button>
+          <button class="btn btn-danger btn-small" onclick="endExam()">🏁 结束考试</button>
+          <button class="btn btn-warning btn-small" id="btn-ignore" onclick="ignoreCurrentQuestion()">👍 我会了</button>
+          <button class="btn btn-small" id="btn-favorite" onclick="toggleFavoriteCurrent()" style="background:#f59e0b;color:#fff;">⭐ 收藏</button>
+        </div>
+      </div>
+    </div>
+    <div id="screen-report" class="screen">
+      <h1>📊 本轮报告</h1>
+      <div class="report-card" id="report-content"><div class="empty-state">暂无数据</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-small" onclick="resetQuiz()">🔄 重新开始</button>
+        <button class="btn btn-success btn-small" onclick="showScreen('start')">🔄 导入下一轮</button>
+        <button class="btn btn-warning btn-small" onclick="syncTagsFromWrongAnswers()">🏷️ 从错题同步标签</button>
+      </div>
+    </div>
+    <div id="screen-history" class="screen">
+      <h1>📜 全部答题历史</h1>
+      <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
+      <div id="history-content"></div>
+    </div>
+    <div id="screen-subject-dash" class="screen">
+      <h1 id="subj-dash-title">📊 科目总览</h1>
+      <div class="subj-tabs">
+        <div class="subj-tab active" data-tab="overview" onclick="switchSubjTab('overview')">📊 总览</div>
+        <div class="subj-tab" data-tab="questionbank" onclick="switchSubjTab('questionbank')">📚 题库</div>
+        <div class="subj-tab" data-tab="compose-exam" onclick="switchSubjTab('compose-exam')">📝 大考卷</div>
+        <div class="subj-tab" data-tab="srs-review" onclick="switchSubjTab('srs-review')">📅 间隔复习</div>
+      </div>
+      <div id="subj-tab-overview" class="subj-tab-content active"></div>
+      <div id="subj-tab-questionbank" class="subj-tab-content"></div>
+      <div id="subj-tab-compose-exam" class="subj-tab-content"></div>
+      <div id="subj-tab-srs-review" class="subj-tab-content"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn btn-secondary btn-small" onclick="showScreen('start')">← 返回首页</button>
+      </div>
+    </div>
+    <div id="screen-achievements" class="screen">
+      <h1>🏆 成就</h1>
+      <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
+      <div class="achievements-header"><div class="achievements-count" id="ach-count-display">已解锁 <strong>0</strong> / 20</div></div>
+      <div class="achievements-grid" id="achievements-grid"></div>
+    </div>
+    <div id="screen-settings" class="screen">
+      <h1>⚙️ 个性化设置</h1>
+      <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
+      <div class="card">
+        <div class="settings-section">
+          <h4>📌 侧边栏</h4>
+          <div class="settings-row"><label>侧边栏字体大小</label><input type="range" id="settings-sidebar-font-size" min="11" max="16" value="13" step="1" oninput="onSettingsSidebarFontSize()"><span class="settings-val" id="settings-sidebar-font-size-val">13px</span></div>
+        </div>
+        <div class="settings-section">
+          <h4>📄 主页区域</h4>
+          <div class="settings-row"><label>主页字体大小</label><input type="range" id="settings-main-font-size" min="15" max="22" value="17" step="1" oninput="onSettingsMainFontSize()"><span class="settings-val" id="settings-main-font-size-val">17px</span></div>
+        </div>
+        <div class="settings-section">
+          <h4>🔤 答题区域</h4>
+          <div class="settings-row"><label>题目字体大小</label><input type="range" id="settings-quiz-font-size" min="14" max="28" value="17" step="1" oninput="onSettingsQuizFontSize()"><span class="settings-val" id="settings-quiz-font-size-val">17px</span></div>
+        </div>
+        <div class="settings-section">
+          <h4>🌙 外观</h4>
+          <div class="settings-row"><label>夜间模式</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="settings-dark-mode" onchange="onSettingsDarkMode()" style="width:18px;height:18px;accent-color:#8b5cf6;"> 开启</label></div>
+        </div>
+      </div>
+    </div>
+    <div id="screen-wrongbook" class="screen">
+      <h1>📕 错题本</h1>
+      <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
+      <div class="card">
+        <div class="qbank-toolbar">
+          <label><input type="checkbox" id="wb-only-unsolved" onchange="renderWrongBookList()"> 🔴 仅未掌握</label>
+          <div class="qbank-search">🔍 <input type="text" id="wb-search-input" placeholder="搜索题目/标签..." oninput="renderWrongBookList()"></div>
+          <button class="btn btn-small btn-danger" id="wb-clear-all" onclick="clearWrongBook()">🗑️ 清空错题本</button>
+        </div>
+        <p style="color:#666;font-size:13px;margin-bottom:8px;" id="wb-summary"></p>
+        <div id="wrongbook-list" style="max-height:60vh;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="dialog-overlay" id="import-dialog">
+      <div class="dialog-box">
+        <h3>📥 导入题目 JSON</h3>
+        <p style="color:#666;font-size:14px;margin-bottom:8px;">粘贴 AI 返回的 JSON：</p>
+        <textarea id="import-textarea" placeholder='[{"type":"single","question":"...","options":["A","B","C","D"],"answer":0,"tag":"知识点","explanation":"解析..."}]'></textarea>
+        <div class="error-box" id="import-error-box"><h4>❌ 导入失败</h4><p id="import-error-text"></p><button class="btn btn-small btn-secondary" onclick="copyImportError()">📋 复制错误</button></div>
+        <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeImportDialog()">取消</button><button class="btn btn-success btn-small" onclick="confirmImport()">确认导入</button></div>
+      </div>
+    </div>
+    <div class="dialog-overlay" id="backup-dialog">
+      <div class="dialog-box">
+        <h3>💾 备份文件夹设置</h3>
+        <div id="backup-dialog-content">
+          <div id="backup-current-status" style="padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:12px;text-align:center;font-size:13px;color:#888;">检测中...</div>
+          <div class="dialog-actions" id="backup-dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeBackupDialog()">关闭</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-overlay" id="restore-dialog">
+      <div class="dialog-box">
+        <h3>⏪ 回档 — 选择备份恢复</h3>
+        <p style="color:#666;font-size:14px;margin-bottom:8px;">选择备份文件恢复（当前数据将被替换）：</p>
+        <div id="restore-list" style="max-height:320px;overflow-y:auto;"></div>
+        <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeRestoreDialog()">关闭</button></div>
+      </div>
+    </div>
+    <div class="dialog-overlay" id="chapter-history-dialog">
+      <div class="dialog-box">
+        <h3>📜 章节答题历史</h3>
+        <div id="chapter-history-content" style="max-height:360px;overflow-y:auto;"></div>
+        <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="document.getElementById('chapter-history-dialog').classList.remove('active')">关闭</button></div>
+      </div>
+    </div>
+    <div class="qdetail-overlay" id="qdetail-dialog">
+      <div class="qdetail-box">
+        <h3 id="qd-title">📖 题目详情</h3>
+        <div id="qd-content"></div>
+        <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="document.getElementById('qdetail-dialog').classList.remove('active')">关闭</button></div>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+// ===== 状态管理 =====
+const DEFAULT_STATE = { subjects: {}, currentSubjectId: null, chapters: {}, currentChapterId: null, history: [], lastScreen: 'start' };
+let state = {};
+const STORAGE_KEY = 'quizEngineState_v7';
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      state = JSON.parse(saved);
+      state = migrateState(state);
+      return;
+    }
+  } catch(e) { console.warn('load err', e); }
+  state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {} }
+function getCh() { return state.chapters[state.currentChapterId] || null; }
+function getSubj() { return state.subjects[state.currentSubjectId] || null; }
+function getExam() { return state.generatedExams[state.currentExamId] || null; }
+function getActiveSet() { const ex = getExam(); if (ex) return { questions: ex.questions, userAnswers: ex.userAnswers, currentIdx: ex.currentIdx, setName: ex.name, isExam: true, setId: ex.id, subjectId: ex.subjectId }; const ch = getCh(); if (ch) return { questions: ch.questions, userAnswers: ch.userAnswers, currentIdx: ch.currentIdx, setName: ch.name, isExam: false, setId: ch.id, subjectId: null }; return null; }
+function isObjType(t) { return t === 'single' || t === 'judge'; }
+function getCi(q, answer) {
+  if (!q) return false;
+  if (q.type === 'term' || q.type === 'short') return true;
+  if (q.type === 'single' || q.type === 'judge') return answer === q.answer;
+  return null;
+}
+function escapeHtml(text) {
+  if (typeof text !== 'string') return String(text ?? '');
+  const d = document.createElement('div'); d.textContent = text; return d.innerHTML;
+}
+function renderMarkdown(text) {
+  if (typeof text !== 'string') return escapeHtml(String(text ?? ''));
+  let s = escapeHtml(text);
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_,m) => { try { return katex.renderToString(m.trim(),{displayMode:true,throwOnError:false}); } catch(e){ return '<code>'+m+'</code>'; } });
+  s = s.replace(/\$([^\$]+?)\$/g, (_,m) => { try { return katex.renderToString(m.trim(),{displayMode:false,throwOnError:false}); } catch(e){ return '<code>'+m+'</code>'; } });
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+function getChStrategy(cid) {
+  const ch = state.chapters[cid];
+  if (!ch) return null;
+  if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] };
+  return ch.strategy;
+}
+function migrateState(s) {
+  if (!s.history) s.history = [];
+  if (!s.subjects) s.subjects = {};
+  if (!s.chapters) s.chapters = {};
+  for (const cid in s.chapters) {
+    const ch = s.chapters[cid];
+    if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] };
+    if (ch.weakTags && Array.isArray(ch.weakTags)) {
+      if (typeof ch.weakTags[0] === 'string') ch.strategy.weakTags = ch.weakTags.map(t => ({ name: t, active: true }));
+      else ch.strategy.weakTags = ch.weakTags;
+      delete ch.weakTags;
+    }
+  }
+  if (s.weakTags) delete s.weakTags;
+  if (Object.keys(s.subjects).length === 0 && Object.keys(s.chapters).length > 0) {
+    const sid = 'subj_' + Date.now().toString(36);
+    s.subjects[sid] = { id: sid, name: '默认科目', chapterIds: Object.keys(s.chapters) };
+    s.currentSubjectId = sid;
+  }
+  if (!s.achievements) s.achievements = { unlocked: [], history: [] };
+  if (!s.ignoredQuestions) s.ignoredQuestions = [];
+  if (!s.favoriteQuestions) s.favoriteQuestions = [];
+  if (!s.wrongBook) s.wrongBook = {};
+  if (!s.srsData) s.srsData = {};
+  if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, mainFontSize: 17, darkMode: false };
+  if (!s.settings.sidebarFontSize) s.settings.sidebarFontSize = 13;
+  if (!s.settings.mainFontSize) s.settings.mainFontSize = 17;
+  if (typeof s.settings.darkMode !== 'boolean') s.settings.darkMode = false;
+  if (!s.generatedExams) s.generatedExams = {};
+  return s;
+}
+// ===== 科目管理 =====
+function createSubject() {
+  const name = prompt('科目名称：', '科目 ' + (Object.keys(state.subjects).length + 1));
+  if (!name || !name.trim()) return;
+  const id = 'subj_' + Date.now().toString(36);
+  state.subjects[id] = { id, name: name.trim(), chapterIds: [] };
+  if (!state.currentSubjectId) state.currentSubjectId = id;
+  saveState(); renderSubjectList(); checkAchievements();
+}
+function renameSubject(id) { const s = state.subjects[id]; if (!s) return; const n = prompt('新名称：', s.name); if (n && n.trim()) { s.name = n.trim(); saveState(); renderSubjectList(); } }
+function deleteSubject(id) {
+  const s = state.subjects[id]; if (!s) return;
+  if (!confirm('删除科目「' + s.name + '」及其所有章节？')) return;
+  s.chapterIds.forEach(cid => { delete state.chapters[cid]; });
+  delete state.subjects[id];
+  const keys = Object.keys(state.subjects);
+  if (keys.length === 0) { const sid2 = 'subj_' + Date.now().toString(36); state.subjects[sid2] = { id: sid2, name: '默认科目', chapterIds: [] }; state.currentSubjectId = sid2; }
+  else if (state.currentSubjectId === id) { state.currentSubjectId = keys[0]; state.currentChapterId = state.subjects[keys[0]].chapterIds[0] || null; }
+  saveState(); renderSubjectList(); updateQuickActions();
+}
+function switchSubject(id) {
+  if (!state.subjects[id]) return;
+  state.currentSubjectId = id;
+  const s = state.subjects[id];
+  state.currentChapterId = s.chapterIds.length > 0 ? s.chapterIds[0] : null;
+  saveState(); renderSubjectList(); updateQuickActions();
+  showSubjectDashboard(id);
+}
+// ===== 章节管理 =====
+function createChapter(subjId, name) {
+  const s = state.subjects[subjId]; if (!s) return null;
+  const id = 'ch_' + Date.now().toString(36) + Math.random().toString(36).slice(2,4);
+  state.chapters[id] = { id, name: name || ('章节 ' + (s.chapterIds.length + 1)), questions: [], userAnswers: [], currentIdx: 0, createdAt: Date.now(), strategy: { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] } };
+  s.chapterIds.push(id); state.currentChapterId = id;
+  saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); checkAchievements();
+  return state.chapters[id];
+}
+function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); showScreen('start'); }
+function renameChapter(chId, newName) { const ch = state.chapters[chId]; if (!ch || !newName || !newName.trim()) return; ch.name = newName.trim(); saveState(); renderSubjectList(); }
+function deleteChapter(chId) {
+  if (!confirm('删除该章节？')) return;
+  delete state.chapters[chId];
+  for (const sid in state.subjects) { const s = state.subjects[sid]; const idx = s.chapterIds.indexOf(chId); if (idx !== -1) { s.chapterIds.splice(idx, 1); break; } }
+  if (state.currentChapterId === chId) { const s = getSubj(); state.currentChapterId = (s && s.chapterIds.length > 0) ? s.chapterIds[0] : null; }
+  saveState(); renderSubjectList(); updateQuickActions(); showScreen('start');
+}
+function renameChapterPrompt(chId) { const ch = state.chapters[chId]; if (!ch) return; const n = prompt('新名称：', ch.name); if (n && n.trim()) renameChapter(chId, n.trim()); }
+// ===== 侧边栏渲染 =====
+function renderSubjectList() {
+  const container = document.getElementById('subject-list');
+  if (!container) return;
+  const sids = Object.keys(state.subjects);
+  if (sids.length === 0) { container.innerHTML = '<div style="color:#666;text-align:center;padding:14px;font-size:13px;">暂无科目<br>点击上方「＋科目」</div>'; return; }
+  let html = '';
+  sids.forEach(sid => {
+    const s = state.subjects[sid]; const active = sid === state.currentSubjectId ? 'active' : '';
+    html += '<div class="subject-group"><div class="subject-header ' + active + '" onclick="switchSubject(\'' + sid + '\')">';
+    html += '<span class="subj-name">📂 ' + escapeHtml(s.name) + '</span><span class="subj-count">' + s.chapterIds.length + '</span>';
+    html += '<span class="subj-actions"><button class="subj-btn" onclick="event.stopPropagation();renameSubject(\'' + sid + '\')">✏️</button><button class="subj-btn sb-del" onclick="event.stopPropagation();deleteSubject(\'' + sid + '\')">🗑️</button></span></div>';
+    html += '<div class="chapter-list-in-subj">';
+    if (s.chapterIds.length > 0) {
+      s.chapterIds.forEach(cid => {
+        const ch = state.chapters[cid]; if (!ch) return;
+        const ca = cid === state.currentChapterId ? 'active' : ''; const qCount = ch.questions ? ch.questions.length : 0;
+        html += '<div class="chapter-item ' + ca + '" onclick="switchChapter(\'' + cid + '\')"><div class="chapter-info"><span class="chapter-name">' + escapeHtml(ch.name) + '</span><span class="chapter-count">' + qCount + '题</span></div>';
+        html += '<div class="ch-actions"><button class="ch-btn ch-hist" onclick="event.stopPropagation();showChapterHistory(\'' + cid + '\')">📜</button><button class="ch-btn" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
+      });
+    }
+    html += '<button class="btn-add-chapter" onclick="event.stopPropagation();createChapter(\'' + sid + '\')">＋ 新建章节</button></div></div>';
+  });
+  container.innerHTML = html;
+}
+// ===== 章节策略 =====
+function loadChapterStrategyToUI() {
+  const ch = getCh(); if (!ch) { document.getElementById('chapter-prompt-card').style.display = 'none'; return; }
+  document.getElementById('chapter-prompt-card').style.display = 'block';
+  document.getElementById('ch-strategy-name').textContent = escapeHtml(ch.name);
+  const s = getChStrategy(ch.id); if (!s) return;
+  document.getElementById('tc-single').value = s.typeCounts.single || 10;
+  document.getElementById('tc-judge').value = s.typeCounts.judge || 5;
+  document.getElementById('tc-term').value = s.typeCounts.term || 1;
+  document.getElementById('tc-short').value = s.typeCounts.short || 1;
+  document.getElementById('s-err').value = s.errPct;
+  document.getElementById('s-review').value = s.errPct + (s.reviewPct || 20);
+  updateChapterDualSliderUI(s.errPct, s.reviewPct, s.newPct);
+  renderChapterTags(); updateChapterPromptTemplate();
+}
+function onChapterStrategyChange() { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return; s.typeCounts.single = parseInt(document.getElementById('tc-single').value) || 0; s.typeCounts.judge = parseInt(document.getElementById('tc-judge').value) || 0; s.typeCounts.term = parseInt(document.getElementById('tc-term').value) || 0; s.typeCounts.short = parseInt(document.getElementById('tc-short').value) || 0; saveState(); updateChapterPromptTemplate(); }
+function onChapterDualSlider() {
+  let v1 = parseInt(document.getElementById('s-err').value) || 0; let v2 = parseInt(document.getElementById('s-review').value) || 0;
+  if (v1 > v2) { if (document.activeElement === document.getElementById('s-err')) { v2 = v1; document.getElementById('s-review').value = v2; } else { v1 = v2; document.getElementById('s-err').value = v1; } }
+  const rPct = v2 - v1, nPct = 100 - v2;
+  const ch = getCh(); if (ch) { const s = getChStrategy(ch.id); if (s) { s.errPct = v1; s.reviewPct = rPct; s.newPct = nPct; saveState(); } }
+  updateChapterDualSliderUI(v1, rPct, nPct); updateChapterPromptTemplate();
+}
+function updateChapterDualSliderUI(err, rev, newP) { ['dv-err','sn-err'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = err; }); ['dv-review','sn-review'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = rev; }); ['dv-new','sn-new'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = newP; }); const fe = document.getElementById('fill-err'); if (fe) fe.style.width = err + '%'; const fr = document.getElementById('fill-review'); if (fr) { fr.style.width = rev + '%'; fr.style.left = err + '%'; } const fn = document.getElementById('fill-new'); if (fn) { fn.style.width = newP + '%'; fn.style.left = (err + rev) + '%'; }
+}
+function renderChapterTags() { const container = document.getElementById('tags-list-container'); if (!container) return; const ch = getCh(); if (!ch) { container.innerHTML = ''; return; } const s = getChStrategy(ch.id); const tags = s ? s.weakTags : []; if (!tags || tags.length === 0) { container.innerHTML = '<span style="color:#bbb;font-size:11px;">暂无标签。答题后错题标签自动添加。</span>'; return; } container.innerHTML = tags.map((t, i) => '<span class="' + (t.active ? 'tag-chip active' : 'tag-chip') + '" onclick="toggleChapterTag(' + i + ')">' + (t.active ? '✅ ' : '⬜ ') + escapeHtml(t.name) + '<span class="tag-remove" onclick="event.stopPropagation();removeChapterTag(' + i + ')">×</span></span>').join(''); }
+function toggleChapterTag(idx) { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s || !s.weakTags[idx]) return; s.weakTags[idx].active = !s.weakTags[idx].active; saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
+function removeChapterTag(idx) { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s || !s.weakTags[idx]) return; s.weakTags.splice(idx, 1); saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
+function addManualTag() { const input = document.getElementById('tag-input'); const name = input.value.trim(); if (!name) return; const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return; if (s.weakTags.some(t => t.name === name)) { input.value = ''; return; } s.weakTags.push({ name, active: true }); input.value = ''; saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
+function syncTagsFromWrongAnswers() { const ch = getCh(); if (!ch || !ch.questions) { alert('当前章节无数据'); return; } const s = getChStrategy(ch.id); if (!s) return; const newTags = new Set(); ch.questions.forEach((q, i) => { if (isObjType(q.type) && ch.userAnswers[i] !== undefined && getCi(q, ch.userAnswers[i]) === false && q.tag) newTags.add(q.tag); }); if (newTags.size === 0) { alert('无客观题错题标签可同步'); return; } let added = 0; newTags.forEach(tag => { if (!s.weakTags.some(t => t.name === tag)) { s.weakTags.push({ name: tag, active: true }); added++; } }); saveState(); renderChapterTags(); updateChapterPromptTemplate(); alert('✅ 已添加 ' + added + ' 个标签'); }
+function updateChapterPromptTemplate() {
+  const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return;
+  const single = s.typeCounts.single || 0, judge = s.typeCounts.judge || 0, term = s.typeCounts.term || 0, short = s.typeCounts.short || 0;
+  const errPct = s.errPct || 0, reviewPct = s.reviewPct || 0, newPct = s.newPct || 0;
+  let parts = []; if (single > 0) parts.push(single + ' 道单选题'); if (judge > 0) parts.push(judge + ' 道判断题'); if (term > 0) parts.push(term + ' 道名词解释题'); if (short > 0) parts.push(short + ' 道简答题');
+  const qStr = parts.join('，') || '请自行决定题型与数量';
+  const activeTags = (s.weakTags || []).filter(t => t.active).map(t => t.name);
+  let tagLine7 = ''; if (errPct > 0 && activeTags.length > 0) tagLine7 = '\n7. 【薄弱点重点出题】请重点针对以下知识点标签出题：' + activeTags.join('、') + '。确保这些知识点在题目中得到充分覆盖。';
+  document.getElementById('prompt-text').textContent = '请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：' + qStr + '。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：输出为标准的 JSON 数组格式，不要包含 Markdown 代码块标记，直接输出纯文本 JSON。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 "single", "judge", "term", "short"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 ["正确", "错误"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：' + errPct + '% 针对错题，' + reviewPct + '% 滚动复习，' + newPct + '% 新考点。\n6. 请在 explanation 中标注来源。' + tagLine7 + '\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如："三角函数"、"牛顿定律"、"文艺复兴"等。';
+}
+function selectPrompt() { const el = document.getElementById('prompt-text'); if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+function updateQuickActions() {
+  const ch = getCh(); const container = document.getElementById('chapter-quick-actions');
+  if (!ch) { container.style.display = 'none'; return; }
+  document.getElementById('chapter-quick-title').textContent = '📖 当前：' + escapeHtml(ch.name);
+  const hasQs = ch.questions && ch.questions.length > 0; const answered = hasQs ? ch.userAnswers.filter(a => a !== undefined).length : 0;
+  if (hasQs) { document.getElementById('chapter-quick-info').textContent = '共 ' + ch.questions.length + ' 题，已答 ' + answered + ' 题'; document.getElementById('btn-continue-quiz').style.display = answered < ch.questions.length ? 'inline-block' : 'none'; container.style.display = 'block'; }
+  else { document.getElementById('chapter-quick-info').textContent = '暂无题目'; document.getElementById('btn-continue-quiz').style.display = 'none'; container.style.display = 'block'; }
+}
+// ===== 导入 =====
+function openImportDialog() { document.getElementById('import-error-box').classList.remove('active'); document.getElementById('import-textarea').value = ''; document.getElementById('import-dialog').classList.add('active'); }
+function closeImportDialog() { document.getElementById('import-dialog').classList.remove('active'); }
+function confirmImport() {
+  const text = document.getElementById('import-textarea').value.trim(); const errBox = document.getElementById('import-error-box');
+  try { if (!text) throw new Error('请输入 JSON'); const data = JSON.parse(text); if (!Array.isArray(data)) throw new Error('JSON 必须是数组'); data.forEach((item,i) => { if (!item.type||!item.question) throw new Error('第'+(i+1)+'题缺 type 或 question'); if (!['single','judge','term','short'].includes(item.type)) throw new Error('第'+(i+1)+'题 type 无效'); if ((item.type==='single'||item.type==='judge')&&(!Array.isArray(item.options)||!item.options.length)) throw new Error('第'+(i+1)+'题缺 options'); }); const ch = getCh(); if (!ch) throw new Error('请先选择章节'); ch.questions = data; ch.userAnswers = new Array(data.length).fill(undefined); ch.currentIdx = 0; saveState(); renderQuestion(); updateProgress(); renderSubjectList(); updateQuickActions(); closeImportDialog(); showScreen('quiz'); }
+  catch(e) { errBox.classList.add('active'); document.getElementById('import-error-text').textContent = '❌ ' + e.message; }
+}
+function copyImportError() { navigator.clipboard.writeText(document.getElementById('import-error-text').textContent); }
+// ===== 答题 =====
+function renderQuestion() {
+  const as = getActiveSet(); const area = document.getElementById('question-area'); const tagEl = document.getElementById('quiz-tag'), typeEl = document.getElementById('quiz-type'); const navEl = document.getElementById('quiz-nav'), sb = document.getElementById('btn-submit'), nx = document.getElementById('btn-next');
+  if (!as||!as.questions||!as.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; return; }
+  if (as.currentIdx>=as.questions.length) as.currentIdx=as.questions.length-1; if (as.currentIdx<0) as.currentIdx=0;
+  const q = as.questions[as.currentIdx]; if (!q) { if (area) area.innerHTML='<div class="empty-state">🎉 全部完成</div>'; return; }
+  const typeMap = { single:'单选题', judge:'判断题', term:'名词解释', short:'简答题' };
+  if (tagEl) tagEl.textContent = as.setName||'未标注'; if (typeEl) typeEl.textContent = typeMap[q.type]||q.type;
+  const hasAns = as.userAnswers[as.currentIdx] !== undefined; const isCor = hasAns ? getCi(q, as.userAnswers[as.currentIdx]) : null;
+  let html = '<div class="quiz-question"><strong>'+(as.currentIdx+1)+'. </strong>'+renderMarkdown(q.question)+'</div>';
+  if (q.type==='single'||q.type==='judge') {
+    html += '<div class="quiz-options">';
+    q.options.forEach((opt,idx) => { let cls = 'quiz-option'; if (hasAns) cls+=' disabled'; if (hasAns&&idx===as.userAnswers[as.currentIdx]) cls+=isCor?' correct':' wrong'; if (hasAns&&idx===q.answer) cls+=' correct'; if (!hasAns&&as.userAnswers[as.currentIdx]===idx) cls+=' selected'; html += '<div class="'+cls+'" onclick="'+(hasAns?'':'selectOption('+idx+')')+'">'+String.fromCharCode(65+idx)+'. '+renderMarkdown(opt)+'</div>'; });
+    html += '</div>';
+  } else { html += '<div class="quiz-options"><textarea style="width:100%;min-height:60px;padding:8px;border:1px solid #dee2e6;border-radius:5px;font-size:15px;font-family:inherit;" placeholder="输入你的答案..." id="subjective-answer"'+(hasAns?' disabled':'')+'>'+(hasAns?escapeHtml(as.userAnswers[as.currentIdx]||''):'')+'</textarea></div>'; }
+  if (hasAns&&q.explanation) html += '<div class="explanation-box"><h4>📖 参考答案</h4><p>'+renderMarkdown(q.explanation)+'</p></div>';
+  if (area) area.innerHTML = html;
+  if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
+  if (sb) sb.style.display = hasAns?'none':'inline-block'; const ig=document.getElementById('btn-ignore'); if(ig)ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block'; const fv=document.getElementById('btn-favorite'); if(fv){fv.textContent=isQuestionFavorite(as.setId,q)?'★ 已收藏':'⭐ 收藏';fv.style.background=isQuestionFavorite(as.setId,q)?'#2ed573':'#f59e0b';}
+  if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
+  applyQuizFontSize();
+}
+function selectOption(idx) { const as=getActiveSet(); if (!as||as.userAnswers[as.currentIdx]!==undefined) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); }
+function submitAnswer() {
+  const as=getActiveSet(); if (!as||!as.questions||!as.questions.length) return;
+  const q=as.questions[as.currentIdx]; if (!q||as.userAnswers[as.currentIdx]!==undefined) return;
+  if (q.type==='term'||q.type==='short') { const ta=document.getElementById('subjective-answer'); if (!ta||!ta.value.trim()) { alert('请输入答案'); return; } as.userAnswers[as.currentIdx]=ta.value.trim(); }
+  else { if (as.userAnswers[as.currentIdx]===undefined) { alert('请选择选项'); return; } }
+  saveState(); renderQuestion(); updateProgress(); updateQuickActions(); checkAchievements();
+}
+function nextQuestion() { const as=getActiveSet(); if (!as) return; if (as.currentIdx<as.questions.length-1) { as.currentIdx++; saveState(); renderQuestion(); updateProgress(); } }
+function goToQuestion(idx) { const as=getActiveSet(); if (!as||idx<0||idx>=as.questions.length) return; as.currentIdx=idx; saveState(); renderQuestion(); updateProgress(); }
+function endExam() { const as=getActiveSet(); if (!as) return; if (as.isExam) endExamGenerated(as); else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateWrongBookAfterExam(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); showScreen('report'); renderReport(); } }
+function resetQuiz() { const as=getActiveSet(); if (!as) return; as.userAnswers=new Array(as.questions.length).fill(undefined); as.currentIdx=0; saveState(); renderQuestion(); updateProgress(); showScreen('start'); updateQuickActions(); }
+function autoUpdateChapterWeakTags() {
+  const ch=getCh(); if (!ch||!ch.questions) return; const s=getChStrategy(ch.id); if (!s) return;
+  const tagResults={}; ch.questions.forEach((q,i)=>{ if (!q.tag||!isObjType(q.type)||ch.userAnswers[i]===undefined) return; if (!tagResults[q.tag]) tagResults[q.tag]={correct:0,total:0}; tagResults[q.tag].total++; if (getCi(q,ch.userAnswers[i])===true) tagResults[q.tag].correct++; });
+  for (const tag in tagResults) { const r=tagResults[tag]; if (r.correct===r.total) s.weakTags=s.weakTags.filter(t=>t.name!==tag); else if (!s.weakTags.some(t=>t.name===tag)) s.weakTags.push({name:tag,active:true}); }
+  saveState(); renderChapterTags(); updateChapterPromptTemplate();
+}
+function autoUpdateChapterWeakTags(ch) { if (!ch||!ch.questions) return; const s=getChStrategy(ch.id); if (!s) return; const tagResults={}; ch.questions.forEach((q,i)=>{ if (!q.tag||!isObjType(q.type)||ch.userAnswers[i]===undefined) return; if (!tagResults[q.tag]) tagResults[q.tag]={correct:0,total:0}; tagResults[q.tag].total++; if (getCi(q,ch.userAnswers[i])===true) tagResults[q.tag].correct++; }); for (const tag in tagResults) { const r=tagResults[tag]; if (r.correct===r.total) s.weakTags=s.weakTags.filter(t=>t.name!==tag); else if (!s.weakTags.some(t=>t.name===tag)) s.weakTags.push({name:tag,active:true}); } saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
+function calcStats(as) { if (!as||!as.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=as.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; as.questions.forEach((q,i)=>{ if(as.userAnswers[i]!==undefined) answered++; if(isObjType(q.type)){objTotal++;const ci=getCi(q,as.userAnswers[i]);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;} else {if(as.userAnswers[i]!==undefined)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
+function updateProgress() { const as=getActiveSet(); const stats=calcStats(as); const pct=stats.total>0?Math.round((stats.answered/stats.total)*100):0; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):(stats.total>0&&stats.answered===stats.total?100:0); document.getElementById('progress-fill').style.width=pct+'%'; document.getElementById('rate-display').textContent=rate+'%'; document.getElementById('progress-display').textContent=stats.answered+'/'+stats.total; document.getElementById('wrong-display').textContent=stats.wrongCount; }
+function renderReport() {
+  const ch=getCh(); const c=document.getElementById('report-content'); if (!c) return;
+  if (!ch||!ch.questions||!ch.questions.length) { c.innerHTML='<div class="empty-state">暂无数据</div>'; return; }
+  const stats=calcStats(ch); const correctTotal=stats.objCorrect+stats.subjCount; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0;
+  let html='<div class="report-grid"><div class="report-stat correct"><div class="num">'+correctTotal+'</div><div class="label">✅ 总正确</div></div><div class="report-stat wrong"><div class="num">'+stats.wrongCount+'</div><div class="label">❌ 客观题错误</div></div><div class="report-stat rate"><div class="num">'+rate+'%</div><div class="label">📊 客观题正确率</div></div><div class="report-stat"><div class="num">'+stats.answered+'/'+stats.total+'</div><div class="label">📝 进度</div></div></div>';
+  const wrongTags=new Set(); ch.questions.forEach((q,i)=>{if(isObjType(q.type)&&ch.userAnswers[i]!==undefined&&getCi(q,ch.userAnswers[i])===false&&q.tag) wrongTags.add(q.tag);});
+  if (wrongTags.size>0) { html+='<hr style="margin:10px 0;"><div style="padding:8px;background:#fff8f0;border-radius:6px;"><h4 style="color:#c2410c;font-size:14px;margin-bottom:4px;">🏷️ 错题标签</h4><div style="display:flex;flex-wrap:wrap;gap:3px;">'; wrongTags.forEach(t=>{html+='<span style="background:#fed7aa;padding:1px 8px;border-radius:12px;font-size:12px;color:#9a3412;">'+escapeHtml(t)+'</span>';}); html+='</div></div>'; }
+  html+='<hr style="margin:10px 0;"><h4 style="margin-bottom:8px;font-size:15px;">📋 逐题回顾</h4>';
+  ch.questions.forEach((q,i)=>{const ua=ch.userAnswers[i];const ci=getCi(q,ua);const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};let icon='⏳';if(ua!==undefined)icon=ci===true?'✅':(ci===false?'❌':'✅（主观题）');html+='<div class="history-q-item '+(ci===false?' wrong':ci===true?' correct':'')+'"><p class="q-text">'+icon+' ['+(tm[q.type]||q.type)+'] '+(q.tag?escapeHtml(q.tag):'')+' 第'+(i+1)+'题：'+escapeHtml(q.question)+'</p>';if(ua!==undefined){if(q.type==='single'||q.type==='judge'){html+='<p class="q-detail">📝 你答：'+escapeHtml(String(q.options[ua]??''))+' ｜ ✅：'+escapeHtml(String(q.options[q.answer]??''))+'</p>';}else{html+='<p class="q-detail">📝 你的答案：'+escapeHtml(String(ua))+'</p>';}}if(q.explanation)html+='<p class="q-detail">📖 '+escapeHtml(q.explanation)+'</p></div>';});
+  c.innerHTML=html;
+}
+// ===== 历史 =====
+function saveQuizHistory(ch) { if (!ch||!ch.questions||!ch.questions.length) return; const stats=calcStats(ch); const record={id:Date.now().toString(36),chapterId:ch.id,chapterName:ch.name,date:new Date().toLocaleString('zh-CN'),total:stats.total,correct:stats.objCorrect+stats.subjCount,wrong:stats.wrongCount,rate:stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0,questions:ch.questions.map((q,i)=>({question:q.question,type:q.type,tag:q.tag,userAnswer:ch.userAnswers[i],explanation:q.explanation,options:q.options,isCorrect:getCi(q,ch.userAnswers[i])}))}; if(!state.history)state.history=[];state.history.unshift(record);if(state.history.length>100)state.history=state.history.slice(0,100);saveState(); }
+function renderHistory() { const container=document.getElementById('history-content'); if(!container) return; const history=state.history||[]; if(history.length===0){container.innerHTML='<div class="empty-state">📭 暂无答题记录</div>';return;} const groups={};history.forEach((r,idx)=>{if(!groups[r.chapterId])groups[r.chapterId]={name:r.chapterName,records:[]};groups[r.chapterId].records.push({record:r,idx});}); let html=''; for(const chId in groups){const g=groups[chId];html+='<div class="history-chapter-group"><h3>📂 '+escapeHtml(g.name)+' <span>'+g.records.length+' 次</span></h3>';g.records.forEach(item=>{const r=item.record;html+='<div class="history-session" onclick="toggleSession(event,this)"><div class="history-session-header"><span class="history-session-date">🕐 '+escapeHtml(r.date)+'</span><span class="history-session-stats">✅ '+(r.correct||0)+' / ❌ '+(r.wrong||0)+' / 📊 '+(r.rate||0)+'%</span></div><div class="history-session-detail">'+renderSessionDetail(r,item.idx)+'</div></div>';});html+='</div>';} container.innerHTML=html; }
+function renderSessionDetail(record,sessionIdx){let html='<div class="history-filter-bar" onclick="event.stopPropagation()"><label onclick="event.stopPropagation()"><input type="checkbox" onchange="event.stopPropagation();filterHistorySession('+sessionIdx+',this)" id="filter-wrong-'+sessionIdx+'"> ❌ 只看错题</label><div class="search-box" onclick="event.stopPropagation()">🔍 <input type="text" placeholder="搜索..." id="search-'+sessionIdx+'" oninput="event.stopPropagation();filterHistorySession('+sessionIdx+',null)" onclick="event.stopPropagation()"></div></div><div id="session-qs-'+sessionIdx+'">'+renderSessionQuestions(record,sessionIdx,false,'')+'</div>';return html;}
+function renderSessionQuestions(record,sessionIdx,onlyWrong,keyword){if(!record.questions)return '<div class="empty-state">无数据</div>';let html='';record.questions.forEach((q,i)=>{const ci=q.isCorrect;if(onlyWrong&&ci!==false)return;if(keyword){const kw=keyword.toLowerCase();if(!(q.question&&q.question.toLowerCase().includes(kw))&&!(q.explanation&&q.explanation.toLowerCase().includes(kw)))return;}const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};const icon=ci===true?'✅':(ci===false?'❌':'⏳');html+='<div class="history-q-item '+(ci===true?'correct':ci===false?'wrong':'')+'"><p class="q-text">'+icon+' ['+(tm[q.type]||q.type)+'] '+escapeHtml(q.tag||'')+' 第'+(i+1)+'题：'+escapeHtml(q.question)+'</p>';if(q.explanation)html+='<p class="q-detail">📖 '+escapeHtml(q.explanation)+'</p></div>';});if(!html)html='<div class="empty-state" style="padding:12px;">无匹配</div>';return html;}
+function toggleSession(event,el){if(event)event.stopPropagation();el.classList.toggle('expanded');}
+function filterHistorySession(sessionIdx,checkbox){const record=(state.history||[])[sessionIdx];if(!record)return;const onlyWrong=checkbox?checkbox.checked:document.getElementById('filter-wrong-'+sessionIdx).checked;const keyword=document.getElementById('search-'+sessionIdx).value.trim();const container=document.getElementById('session-qs-'+sessionIdx);if(container)container.innerHTML=renderSessionQuestions(record,sessionIdx,onlyWrong,keyword);}
+function showChapterHistory(chId){const ch=state.chapters[chId];if(!ch)return;const history=(state.history||[]).filter(r=>r.chapterId===chId);const container=document.getElementById('chapter-history-content');const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};if(history.length===0){container.innerHTML='<div class="empty-state">该章节暂无记录</div>';}else{let html='<p style="color:#666;margin-bottom:8px;font-size:14px;">共 '+history.length+' 轮答题</p>';history.forEach((r,ri)=>{const correctCount=r.questions?r.questions.filter(q=>q.isCorrect===true).length:0;const wrongCount=r.questions?r.questions.filter(q=>q.isCorrect===false).length:0;html+='<div class="ch-history-card" onclick="this.classList.toggle(\'expanded\')"><div class="ch-history-card-header"><span class="ch-round-badge">第'+(ri+1)+'轮</span><span class="ch-history-card-date">'+escapeHtml(r.date)+'</span><span class="ch-history-card-stats">✅'+correctCount+' ❌'+wrongCount+' 📊'+(r.rate||0)+'%</span></div><div class="ch-history-card-detail">';if(r.questions)r.questions.forEach((q,qi)=>{const ci=q.isCorrect;const icon=ci===true?'✅':(ci===false?'❌':'⏳');html+='<div class="ch-history-q '+(ci===true?'correct':ci===false?'wrong':'')+'"><span class="ch-history-q-icon">'+icon+'</span><span>['+(tm[q.type]||q.type)+'] '+escapeHtml(q.tag||'')+' '+escapeHtml(q.question)+'</span>';if(q.explanation)html+='<div class="ch-history-q-exp">📖 '+escapeHtml(q.explanation)+'</div>';html+='</div>';});html+='</div></div>';});container.innerHTML=html;}document.getElementById('chapter-history-dialog').classList.add('active');}
+// ===== 科目仪表板 =====
+function showSubjectDashboard(subjId) { const s=state.subjects[subjId]; if (!s) return; document.getElementById('subj-dash-title').textContent='📊 '+escapeHtml(s.name); document.querySelectorAll('.subj-tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.subj-tab').forEach(el=>el.classList.remove('active')); const ot=document.querySelector('.subj-tab[data-tab="overview"]'); if(ot)ot.classList.add('active'); const oc=document.getElementById('subj-tab-overview'); if(oc)oc.classList.add('active'); renderSubjOverview(s); renderSubjQuestionBank(s); renderSubjComposeExam(s); renderSubjSrsReview(s); showScreen('subject-dash'); }
+function switchSubjTab(tab) { document.querySelectorAll('.subj-tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.subj-tab').forEach(el=>el.classList.remove('active')); const te=document.querySelector('.subj-tab[data-tab="'+tab+'"]'); if(te)te.classList.add('active'); const ce=document.getElementById('subj-tab-'+tab); if(ce)ce.classList.add('active'); }
+function renderSubjOverview(s) {
+  let totalQs=0,totalAnswered=0,objCorrect=0,objTotal=0,wrongCount=0,totalRounds=0;
+  let histAnswered=0,histCorrect=0,histWrong=0;
+  let typeDist={single:0,judge:0,term:0,short:0};
+  const chStats=[];
+  s.chapterIds.forEach(cid=>{
+    totalRounds+=(state.history||[]).filter(r=>r.chapterId===cid).length;
+    const ch=state.chapters[cid];if(!ch||!ch.questions)return;
+    totalQs+=ch.questions.length;let cCor=0,cTot=0,cAns=0,cWr=0;
+    ch.questions.forEach((q,i)=>{typeDist[q.type]=(typeDist[q.type]||0)+1;
+    if(ch.userAnswers[i]!==undefined){cAns++;}
+    if(isObjType(q.type)){cTot++;const ci=getCi(q,ch.userAnswers[i]);if(ci===true){cCor++;}else if(ci===false){cWr++;}}});
+    chStats.push({name:ch.name,rate:cTot>0?Math.round(cCor/cTot*100):0,total:cTot,correct:cCor,wrong:cWr,answered:cAns});
+  });
+  (state.history||[]).forEach(r=>{if(!s.chapterIds.includes(r.chapterId)||!r.questions)return;
+  r.questions.forEach(q=>{if(q.userAnswer!==undefined)histAnswered++;if(isObjType(q.type)){if(q.isCorrect===true)histCorrect++;else if(q.isCorrect===false)histWrong++;}});});
+  objCorrect=histCorrect; objTotal=histCorrect+histWrong; wrongCount=histWrong; totalAnswered=histAnswered;
+  const rate=objTotal>0?Math.round(objCorrect/objTotal*100):(totalAnswered>0?100:0);
+  const o=document.getElementById('subj-tab-overview');if(!o)return;
+  let h='<div class="enhanced-overview">';
+  h+='<div class="eo-section"><h4>📊 总览</h4><div class="subj-dash-grid">';
+  h+='<div class="subj-dash-card"><div class="num">'+s.chapterIds.length+'</div><div class="label">📂 章节</div></div>';
+  h+='<div class="subj-dash-card"><div class="num">'+totalQs+'</div><div class="label">📝 当前题数</div></div>';
+  h+='<div class="subj-dash-card"><div class="num">'+totalRounds+'</div><div class="label">🔄 总轮次</div></div>';
+  h+='<div class="subj-dash-card"><div class="num">'+histAnswered+'</div><div class="label">✍️ 累计答题</div></div>';
+  h+='<div class="subj-dash-card"><div class="num" style="color:#2ed573">'+histCorrect+'</div><div class="label">✅ 正确</div></div>';
+  h+='<div class="subj-dash-card"><div class="num" style="color:#e94560">'+histWrong+'</div><div class="label">❌ 错误</div></div>';
+  h+='<div class="subj-dash-card"><div class="num" style="color:#4facfe">'+rate+'%</div><div class="label">📊 正确率</div></div>';
+  h+='</div></div>';
+  if(chStats.length>0){
+    h+='<div class="eo-section"><h4>📖 各章节正确率</h4>';
+    chStats.forEach(cs=>{const color=cs.rate>=70?'#2ed573':cs.rate>=40?'#f59e0b':'#e94560';
+    h+='<div class="eo-chapter-item"><div class="eo-chapter-name"><span>'+escapeHtml(cs.name)+'</span><span>'+cs.rate+'% ('+cs.correct+'/'+cs.total+')</span></div>';
+    h+='<div class="eo-chapter-bar"><div class="eo-chapter-fill" style="width:'+cs.rate+'%;background:'+color+'"></div></div></div>';});
+    h+='</div>';
+  }
+  const allRounds=(state.history||[]).filter(r=>s.chapterIds.includes(r.chapterId)&&r.questions&&r.questions.length>0);
+  if(allRounds.length>=2){
+    const rates=allRounds.map(r=>r.rate||0);
+    let sumX=0,sumY=0,sumXY=0,sumXX=0,n=rates.length;
+    for(let i=0;i<n;i++){sumX+=i;sumY+=rates[i];sumXY+=i*rates[i];sumXX+=i*i;}
+    const slope=(n*sumXY-sumX*sumY)/(n*sumXX-sumX*sumX||1);
+    let trendIcon,trendText;
+    if(slope>2){trendIcon='📈';trendText='实力提升中（每轮平均 +'+slope.toFixed(1)+'%）';}
+    else if(slope<-2){trendIcon='📉';trendText='实力下降中（每轮平均 '+slope.toFixed(1)+'%）';}
+    else{trendIcon='➡️';trendText='实力稳定（每轮变化 '+slope.toFixed(1)+'%）';}
+    h+='<div class="eo-section"><h4>📈 实力趋势</h4><div class="eo-trend-row"><span class="eo-trend-icon">'+trendIcon+'</span><span class="eo-trend-text">'+trendText+'</span></div>';
+    h+='<div class="eo-sparkline">';rates.forEach((r,i)=>{const color=r>=70?'#2ed573':r>=40?'#f59e0b':'#e94560';h+='<div class="eo-sparkline-bar" style="height:'+Math.max(r,5)+'%;background:'+color+'" title="第'+(i+1)+'轮: '+r+'%"></div>';});
+    h+='</div></div>';
+  }
+  if(chStats.length>=2){
+    const sorted=[...chStats].sort((a,b)=>b.rate-a.rate);
+    const best=sorted[0],worst=sorted[sorted.length-1];
+    h+='<div class="eo-section"><h4>⭐ 最佳与待提升</h4><div class="eo-highlight">';
+    h+='<div class="eo-highlight-card"><div class="eo-hc-label">🥇 最佳章节</div><div class="eo-hc-value" style="color:#2ed573">'+escapeHtml(best.name)+' '+best.rate+'%</div></div>';
+    h+='<div class="eo-highlight-card"><div class="eo-hc-label">📌 待提升</div><div class="eo-hc-value" style="color:#e94560">'+escapeHtml(worst.name)+' '+worst.rate+'%</div></div>';
+    h+='</div></div>';
+  }
+  const totalType=Object.values(typeDist).reduce((a,b)=>a+b,0)||1;
+  const typeColors={single:'#4facfe',judge:'#f59e0b',term:'#8b5cf6',short:'#e94560'};
+  const typeNames={single:'单选',judge:'判断',term:'名词解释',short:'简答'};
+  h+='<div class="eo-section"><h4>📚 题型分布</h4><div class="eo-type-bar">';
+  for(const t in typeDist){if(typeDist[t]>0){const pct=Math.round(typeDist[t]/totalType*100);h+='<div class="eo-type-seg" style="width:'+pct+'%;background:'+typeColors[t]+'">'+typeNames[t]+'</div>';}}
+  h+='</div><div class="eo-type-legend">';
+  for(const t in typeDist){h+='<div class="eo-type-legend-item"><span class="eo-type-legend-dot" style="background:'+typeColors[t]+'"></span>'+typeNames[t]+' '+typeDist[t]+'</div>';}
+  h+='</div></div></div>';
+  o.innerHTML=h;
+}
+function renderSubjQuestionBank(s) { const container=document.getElementById('subj-tab-questionbank'); if(!container) return; container.innerHTML='<div class="qbank-toolbar"><label><input type="checkbox" id="qbank-only-wrong" onchange="renderSubjQuestionBankContent()"> ❌ 仅显示错题</label><div class="qbank-search">🔍 <input type="text" id="qbank-search-input" placeholder="搜索题目/标签..." oninput="renderSubjQuestionBankContent()"></div></div><div id="qbank-content"></div>'; renderSubjQuestionBankContent(s); }
+function renderSubjQuestionBankContent(subjOverride) { const s=subjOverride||getSubj(); if(!s) return; const onlyWrong=document.getElementById('qbank-only-wrong')?.checked||false; const keyword=(document.getElementById('qbank-search-input')?.value||'').trim().toLowerCase(); const container=document.getElementById('qbank-content'); if(!container) return; let html=''; s.chapterIds.forEach(cid=>{const ch=state.chapters[cid];if(!ch)return;const history=(state.history||[]).filter(r=>r.chapterId===cid);let chHtml='<div class="qbank-chapter-group"><div class="qbc-header">📂 '+escapeHtml(ch.name)+' <span>'+(ch.questions?ch.questions.length:0)+' 题 · '+history.length+' 次答题</span></div>';if(history.length===0&&(!ch.questions||ch.questions.length===0)){chHtml+='<div class="empty-state" style="padding:12px;">无数据</div></div>';html+=chHtml;return;}history.forEach((r,ri)=>{let hasVisible=false,roundHtml='';if(r.questions){r.questions.forEach((q,qi)=>{const ci=q.isCorrect;if(onlyWrong&&ci!==false)return;if(keyword&&!(q.question&&q.question.toLowerCase().includes(keyword))&&!(q.tag&&q.tag.toLowerCase().includes(keyword))&&!(q.explanation&&q.explanation.toLowerCase().includes(keyword)))return;hasVisible=true;const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};const icon=ci===true?'✅':(ci===false?'❌':'⏳');roundHtml+='<div class="qbank-question '+(ci===true?'correct':ci===false?'wrong':'unanswered')+'" onclick="showQDetailFromBank('+JSON.stringify(q).replace(/"/g,'&quot;')+','+ri+','+qi+')"><p class="q-text">'+icon+' ['+(tm[q.type]||q.type)+'] '+escapeHtml(q.tag||'')+'：'+escapeHtml((q.question||'').substring(0,60))+((q.question||'').length>60?'...':'')+'</p>';if(q.explanation)roundHtml+='<p class="q-detail">📖 '+escapeHtml(q.explanation.substring(0,80))+'</p>';roundHtml+='</div>';});}if(hasVisible){chHtml+='<div class="qbank-round" onclick="this.classList.toggle(\'expanded\')"><div class="qbank-round-header"><span>🕐 '+escapeHtml(r.date)+'</span><span>✅ '+(r.correct||0)+' / ❌ '+(r.wrong||0)+' / 📊 '+(r.rate||0)+'%</span></div><div class="qbank-round-detail">'+roundHtml+'</div></div>';}});if(!onlyWrong&&ch.questions&&ch.questions.length>0){const unanswered=ch.questions.filter((q,i)=>ch.userAnswers[i]===undefined);if(unanswered.length>0){let pendingHtml='';unanswered.forEach((q,i)=>{if(keyword&&!q.question.toLowerCase().includes(keyword)&&!(q.tag&&q.tag.toLowerCase().includes(keyword)))return;pendingHtml+='<div class="qbank-question unanswered" onclick="showQDetailFromBank('+JSON.stringify(q).replace(/"/g,'&quot;')+',-1,'+i+')"><p class="q-text">⏳ ['+(q.type==='single'?'单选':q.type==='judge'?'判断':q.type==='term'?'名词解释':'简答')+'] '+escapeHtml(q.tag||'')+'：'+escapeHtml(q.question.substring(0,60))+'</p></div>';});if(pendingHtml){chHtml+='<div class="qbank-round" onclick="this.classList.toggle(\'expanded\')"><div class="qbank-round-header"><span>⏳ 未答题 ('+unanswered.length+' 题)</span></div><div class="qbank-round-detail">'+pendingHtml+'</div></div>';}}}chHtml+='</div>';html+=chHtml;});if(!html)html='<div class="empty-state">没有符合条件的题目</div>';container.innerHTML=html;}
+function showQDetailFromBank(q,roundIdx,qIdx){if(!q)return;const tm={single:'单选题',judge:'判断题',term:'名词解释',short:'简答题'};let html='<div class="qd-question"><strong>第'+(qIdx+1)+'题 ['+(tm[q.type]||q.type)+']</strong> '+(q.tag?'🏷️ '+escapeHtml(q.tag):'')+'</div><div class="qd-question">'+renderMarkdown(q.question)+'</div>';if(q.type==='single'||q.type==='judge'){html+='<div class="qd-answer"><strong>选项：</strong><br>';(q.options||[]).forEach((opt,i)=>{html+=String.fromCharCode(65+i)+'. '+renderMarkdown(opt)+(i===q.answer?' <span style="color:#2ed573;">✓</span>':'')+'<br>';});html+='</div>';}if(q.userAnswer!==undefined){const ci=getCi(q,q.userAnswer);html+='<div class="qd-answer"><strong>你的答案：</strong> '+(ci===true?'✅ ':ci===false?'❌ ':'')+escapeHtml(String(q.userAnswer))+'</div>';}if(q.explanation)html+='<div class="qd-explanation"><h4>📖 解析</h4>'+renderMarkdown(q.explanation)+'</div>';document.getElementById('qd-title').textContent='📖 题目详情'+(roundIdx>=0?' (第'+(roundIdx+1)+'轮)':' (未答题)');document.getElementById('qd-content').innerHTML=html;document.getElementById('qdetail-dialog').classList.add('active');}
+// ===== 大考卷 - v8.2 全新累积滑条 =====
+const EXAM_COLORS = ['#e94560','#f59e0b','#2ed573','#4facfe','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
+function renderSubjComposeExam(s) {
+  const container = document.getElementById('subj-tab-compose-exam'); if (!container) return;
+  let html = '<div class="card"><h3>📝 大考卷 — ' + escapeHtml(s.name) + '</h3><p style="color:#666;font-size:14px;margin-bottom:10px;">从本科目各章节中抽取题目，组成综合试卷。</p>';
+  html += '<h4 style="font-size:15px;margin-bottom:6px;">1. 选择章节</h4><div class="chapter-select-grid" id="exam-chapter-select">';
+  s.chapterIds.forEach(cid => { const ch = state.chapters[cid]; if (!ch) return; html += '<div class="chapter-select-item"><input type="checkbox" id="exam-chk-' + cid + '" value="' + cid + '" onchange="updateExamSlidersFromSubj()"><label for="exam-chk-' + cid + '">' + escapeHtml(ch.name) + '</label><span class="cs-count">' + (ch.questions ? ch.questions.length : 0) + ' 题</span></div>'; });
+  html += '</div><h4 style="font-size:15px;margin:10px 0 6px;">2. 各题型数量</h4><div class="type-counts">';
+  html += '<div class="type-count-item"><label>📝 单选</label><input type="number" id="exam-tc-single" min="0" value="5" onchange="updateExamTotal()"></div>';
+  html += '<div class="type-count-item"><label>⚖️ 判断</label><input type="number" id="exam-tc-judge" min="0" value="3" onchange="updateExamTotal()"></div>';
+  html += '<div class="type-count-item"><label>📖 名词解释</label><input type="number" id="exam-tc-term" min="0" value="1" onchange="updateExamTotal()"></div>';
+  html += '<div class="type-count-item"><label>✍️ 简答</label><input type="number" id="exam-tc-short" min="0" value="1" onchange="updateExamTotal()"></div>';
+  html += '</div><p style="font-size:13px;color:#888;" id="exam-total-info">总题数：10 题</p>';
+  // 章节占比 - v8.2 累积滑条
+  html += '<h4 style="font-size:15px;margin:10px 0 6px;">3. 章节占比（滑动累积边界，总和100%）</h4><div id="exam-proportion-area">请先勾选章节</div>';
+  // 出题策略
+  html += '<h4 style="font-size:15px;margin:10px 0 6px;">4. 出题策略</h4><div class="strategy-group" style="margin:4px 0;"><div class="strategy-labels" style="font-size:13px;"><span>🔴 针对错题 <span class="val" id="exam-dv-err">60</span>%</span><span>🟡 滚动复习 <span class="val" id="exam-dv-review">20</span>%</span><span>🟢 新考点 <span class="val" id="exam-dv-new">20</span>%</span></div><div class="dual-range-wrap" style="height:36px;"><div class="dual-track-bg"></div><div class="dual-track-fill err" id="exam-fill-err" style="width:60%"></div><div class="dual-track-fill review" id="exam-fill-review" style="width:20%;left:60%"></div><div class="dual-track-fill new" id="exam-fill-new" style="width:20%;left:80%"></div><input type="range" class="exam-s-err" id="exam-s-err" min="0" max="100" value="60" step="1" oninput="updateExamDualSlider()"><input type="range" class="exam-s-review" id="exam-s-review" min="0" max="100" value="80" step="1" oninput="updateExamDualSlider()"></div></div>';
+  html += '<div style="margin-top:12px;"><button class="btn btn-success btn-small" onclick="composeSubjExam(\'' + s.id + '\')">📝 生成大考卷</button></div></div>';
+  html += '<div class="card" style="margin-top:12px;"><h4 style="font-size:15px;margin-bottom:8px;">📋 历史试卷</h4>';
+  html += renderGeneratedExamList(s.id, 'exam');
+  html += '</div>';
+  container.innerHTML = html;
+  updateExamTotal(); updateExamDualSlider(); updateExamSlidersFromSubj();
+}
+function updateExamTotal() { const s=parseInt(document.getElementById('exam-tc-single')?.value)||0; const j=parseInt(document.getElementById('exam-tc-judge')?.value)||0; const t=parseInt(document.getElementById('exam-tc-term')?.value)||0; const sh=parseInt(document.getElementById('exam-tc-short')?.value)||0; const el=document.getElementById('exam-total-info'); if(el)el.textContent='总题数：'+(s+j+t+sh)+' 题'; }
+function updateExamDualSlider() { let v1=parseInt(document.getElementById('exam-s-err')?.value)||0; let v2=parseInt(document.getElementById('exam-s-review')?.value)||0; if(v1>v2){if(document.activeElement===document.getElementById('exam-s-err')){v2=v1;document.getElementById('exam-s-review').value=v2;}else{v1=v2;document.getElementById('exam-s-err').value=v1;}} const rPct=v2-v1,nPct=100-v2; ['exam-dv-err'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=v1;}); ['exam-dv-review'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=rPct;}); ['exam-dv-new'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=nPct;}); const fe=document.getElementById('exam-fill-err');if(fe)fe.style.width=v1+'%'; const fr=document.getElementById('exam-fill-review');if(fr){fr.style.width=rPct+'%';fr.style.left=v1+'%';} const fn=document.getElementById('exam-fill-new');if(fn){fn.style.width=(100-v2)+'%';fn.style.left=v2+'%';} }
+// ---- v8.2 核心：N-1 个累积滑条，互不可穿过 ----
+function updateExamSlidersFromSubj() {
+  const area = document.getElementById('exam-proportion-area'); if (!area) return;
+  const checkedCids = []; document.querySelectorAll('#exam-chapter-select input[type="checkbox"]:checked').forEach(cb => checkedCids.push(cb.value));
+  area._checkedCids = checkedCids;
+  const n = checkedCids.length;
+  if (n === 0) { area.innerHTML = '<div style="color:#999;font-size:13px;text-align:center;padding:6px;">请先勾选章节</div>'; return; }
+  if (n === 1) {
+    const ch = state.chapters[checkedCids[0]];
+    area.innerHTML = '<div style="text-align:center;padding:6px;font-size:14px;color:#888;">仅一个章节占比固定 <strong style="color:#2ed573;">100%</strong></div>' +
+      '<div class="chapter-pct-labels"><span class="chapter-pct-label" style="background:' + EXAM_COLORS[0] + ';">' + escapeHtml(ch ? ch.name : '') + ' 100%</span></div>';
+    area._pcts = [100];
+    return;
+  }
+  // n >= 2: 生成 n-1 个累积滑条
+  const sliders = state._examCumSliders || (() => {
+    const arr = []; for (let i = 0; i < n - 1; i++) arr.push(Math.round((i + 1) * 100 / n));
+    state._examCumSliders = arr;
+    return arr;
+  })();
+  // 确保长度匹配
+  while (sliders.length < n - 1) sliders.push(Math.round((sliders.length + 1) * 100 / n));
+  while (sliders.length > n - 1) sliders.pop();
+  // 确保单调性
+  for (let i = 0; i < n - 1; i++) {
+    const prev = i > 0 ? sliders[i - 1] : 0;
+    const next = i < n - 2 ? sliders[i + 1] : 100;
+    if (sliders[i] < prev) sliders[i] = prev;
+    if (sliders[i] > next) sliders[i] = next;
+  }
+  state._examCumSliders = sliders;
+  saveState();
+  // 构造 UI
+  let html = '<div class="multi-range-wrap" id="cum-slider-wrap">';
+  html += '<div class="dual-track-bg"></div>';
+  // 计算各段占比并生成色块
+  const pcts = [];
+  let prevVal = 0;
+  for (let i = 0; i < n; i++) {
+    const curVal = i < n - 1 ? sliders[i] : 100;
+    pcts.push(curVal - prevVal);
+    prevVal = curVal;
+  }
+  for (let i = 0; i < n; i++) {
+    const left = pcts.slice(0, i).reduce((a, b) => a + b, 0);
+    const color = EXAM_COLORS[i % EXAM_COLORS.length];
+    html += '<div class="track-segment" id="cum-seg-' + i + '" style="width:' + pcts[i] + '%;left:' + left + '%;background:' + color + ';"></div>';
+  }
+  // 生成 n-1 个滑块
+  for (let i = 0; i < n - 1; i++) {
+    html += '<input type="range" class="cum-slider" id="cum-slider-' + i + '" min="0" max="100" value="' + sliders[i] + '" step="1" oninput="onCumSliderChange(' + i + ')">';
+  }
+  html += '</div>';
+  // 标签列表
+  html += '<div class="chapter-pct-labels" id="cum-pct-labels">';
+  for (let i = 0; i < n; i++) {
+    const ch = state.chapters[checkedCids[i]];
+    const color = EXAM_COLORS[i % EXAM_COLORS.length];
+    html += '<span class="chapter-pct-label" id="cum-label-' + i + '" style="background:' + color + ';">' + escapeHtml(ch ? ch.name : '未知') + ' ' + pcts[i] + '%</span>';
+  }
+  html += '</div>';
+  area.innerHTML = html;
+  area._pcts = pcts;
+}
+function onCumSliderChange(sliderIdx) {
+  const area = document.getElementById('exam-proportion-area');
+  const checkedCids = area._checkedCids || [];
+  const n = checkedCids.length;
+  if (n < 2) return;
+  const sliders = state._examCumSliders || [];
+  const newVal = parseInt(document.getElementById('cum-slider-' + sliderIdx).value) || 0;
+  // 确保不越过左边界
+  const leftBound = sliderIdx > 0 ? sliders[sliderIdx - 1] : 0;
+  const rightBound = sliderIdx < n - 2 ? sliders[sliderIdx + 1] : 100;
+  let clampedVal = Math.max(leftBound, Math.min(rightBound, newVal));
+  sliders[sliderIdx] = clampedVal;
+  document.getElementById('cum-slider-' + sliderIdx).value = clampedVal;
+  // 更新色块和标签
+  const pcts = [];
+  let prevVal = 0;
+  for (let i = 0; i < n; i++) {
+    const curVal = i < n - 1 ? sliders[i] : 100;
+    pcts.push(curVal - prevVal);
+    prevVal = curVal;
+  }
+  for (let i = 0; i < n; i++) {
+    const seg = document.getElementById('cum-seg-' + i);
+    if (seg) {
+      const left = pcts.slice(0, i).reduce((a, b) => a + b, 0);
+      seg.style.width = pcts[i] + '%';
+      seg.style.left = left + '%';
+    }
+    const label = document.getElementById('cum-label-' + i);
+    if (label) {
+      const ch = state.chapters[checkedCids[i]];
+      label.textContent = escapeHtml(ch ? ch.name : '未知') + ' ' + pcts[i] + '%';
+    }
+  }
+  state._examCumSliders = sliders;
+  area._pcts = pcts;
+  saveState();
+}
+function getSubjExamSliderValues() {
+  const area = document.getElementById('exam-proportion-area');
+  const checkedCids = area._checkedCids || [];
+  const n = checkedCids.length;
+  if (n === 0) return { cids: [], weights: [] };
+  const pcts = area._pcts || new Array(n).fill(Math.floor(100 / n));
+  return { cids: checkedCids, weights: pcts };
+}
+function composeSubjExam(subjId) {
+  const s = state.subjects[subjId]; if (!s) return;
+  const checkedCids = []; document.querySelectorAll('#exam-chapter-select input[type="checkbox"]:checked').forEach(cb => checkedCids.push(cb.value));
+  if (checkedCids.length === 0) { alert('请至少选择一个章节'); return; }
+  const ts = parseInt(document.getElementById('exam-tc-single').value) || 0; const tj = parseInt(document.getElementById('exam-tc-judge').value) || 0; const tt = parseInt(document.getElementById('exam-tc-term').value) || 0; const tsh = parseInt(document.getElementById('exam-tc-short').value) || 0;
+  if (ts + tj + tt + tsh === 0) { alert('请设置至少 1 道题'); return; }
+  let aS = 0, aJ = 0, aT = 0, aSh = 0;
+  checkedCids.forEach(cid => { const ch = state.chapters[cid]; if (ch && ch.questions) ch.questions.forEach(q => { if (q.type === 'single') aS++; else if (q.type === 'judge') aJ++; else if (q.type === 'term') aT++; else if (q.type === 'short') aSh++; }); (state.history||[]).filter(r=>r.chapterId===cid).forEach(r => { if (r.questions) r.questions.forEach(q => { if (q.type === 'single') aS++; else if (q.type === 'judge') aJ++; else if (q.type === 'term') aT++; else if (q.type === 'short') aSh++; }); }); });
+  if (ts > aS) { alert('单选需求 ' + ts + '，可用 ' + aS); return; } if (tj > aJ) { alert('判断需求 ' + tj + '，可用 ' + aJ); return; } if (tt > aT) { alert('名词解释需求 ' + tt + '，可用 ' + aT); return; } if (tsh > aSh) { alert('简答需求 ' + tsh + '，可用 ' + aSh); return; }
+  const { cids, weights } = getSubjExamSliderValues();
+  function dist(count, cidList, wList) { if (count === 0) return new Array(cidList.length).fill(0); const raw = wList.map(w => (w / 100) * count); const results = raw.map(Math.floor); let remain = count - results.reduce((a, b) => a + b, 0); while (remain > 0) { let maxIdx = 0; for (let i = 0; i < results.length; i++) { if (raw[i] - results[i] > raw[maxIdx] - results[maxIdx]) maxIdx = i; } results[maxIdx]++; remain--; } return results; }
+  const sD = dist(ts, cids, weights), jD = dist(tj, cids, weights), tD = dist(tt, cids, weights), shD = dist(tsh, cids, weights);
+  function pick(chId, type, count) { if (count <= 0) return []; let pool = []; (state.history||[]).filter(r=>r.chapterId===chId).forEach(r => { if (r.questions) r.questions.forEach(q => { if (q.type === type) pool.push({...q}); }); }); const ch = state.chapters[chId]; if (ch && ch.questions) { ch.questions.forEach((q, idx) => { if (q.type === type && ch.userAnswers[idx] === undefined) pool.push({...q}); }); if (pool.length < count) ch.questions.forEach((q, idx) => { if (q.type === type && ch.userAnswers[idx] !== undefined) pool.push({...q}); }); } pool = pool.filter(q => !isQuestionIgnored(chId, q)); const shuffled = [...pool]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled.slice(0, count); }
+  const selected = []; cids.forEach((cid, idx) => { selected.push(...pick(cid, 'single', sD[idx])); selected.push(...pick(cid, 'judge', jD[idx])); selected.push(...pick(cid, 'term', tD[idx])); selected.push(...pick(cid, 'short', shD[idx])); });
+  if (selected.length === 0) { alert('未能抽取题目'); return; }
+  const eid = 'exam_' + Date.now().toString(36);
+  const genExam = { id: eid, name: '大考卷 ' + new Date().toLocaleString('zh-CN'), type: 'exam', subjectId: subjId, questions: selected, userAnswers: new Array(selected.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
+  state.generatedExams[eid] = genExam;
+  state.currentExamId = eid;
+  saveState(); startExamQuiz(eid); renderSubjComposeExam(s);
+  alert('✅ 大考卷已生成：共 ' + selected.length + ' 题');
+}
+// ===== 备份系统 =====
+let backupDirHandle = null, backupMeta = []; const BACKUP_META = '做题引擎备份_meta.json', MAX_BACKUPS = 10;
+function openHandleDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open('QuizEngineDirHandle',1);r.onupgradeneeded=()=>r.result.createObjectStore('handles');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function storeDirHandle(h){const db=await openHandleDB();const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(h,'backupDir');await new Promise(r=>{tx.oncomplete=r;tx.onerror=r;});db.close();}
+async function loadDirHandle(){try{const db=await openHandleDB();const tx=db.transaction('handles','readonly');const r=tx.objectStore('handles').get('backupDir');return new Promise((resolve,reject)=>{r.onsuccess=()=>{db.close();resolve(r.result);};r.onerror=()=>{db.close();reject(r.error);};});}catch(e){return null;}}
+async function clearDirHandle(){const db=await openHandleDB();const tx=db.transaction('handles','readwrite');tx.objectStore('handles').delete('backupDir');await new Promise(r=>{tx.oncomplete=r;tx.onerror=r;});db.close();}
+function updateBackupStatus(msg,type){const el=document.getElementById('backup-status');if(el){el.textContent=msg;el.style.color=type==='ok'?'#2ed573':type==='warn'?'#f59e0b':'#666';}}
+async function openBackupDialog(){const status=document.getElementById('backup-current-status');const actions=document.getElementById('backup-dialog-actions');status.innerHTML='🔍 检测中...';actions.innerHTML='';const handle=await loadDirHandle();if(handle){try{const perm=await handle.queryPermission({mode:'readwrite'});if(perm==='granted'){backupDirHandle=handle;status.innerHTML='✅ 当前备份位置：<strong>'+escapeHtml(handle.name)+'</strong>';actions.innerHTML='<button class="btn btn-warning btn-small" onclick="changeBackupFolder()">🔄 更改</button><button class="btn btn-secondary btn-small" onclick="closeBackupDialog()">关闭</button>';await refreshBackupMeta();document.getElementById('backup-dialog').classList.add('active');return;}}catch(e){}await clearDirHandle();}status.innerHTML='📂 尚未设置备份文件夹。<br><span style="color:#888;font-size:13px;">选择后自动备份。</span>';actions.innerHTML='<button class="btn btn-primary btn-small" onclick="setupBackupFromDialog()">📂 选择文件夹</button><button class="btn btn-secondary btn-small" onclick="closeBackupDialog()">关闭</button>';document.getElementById('backup-dialog').classList.add('active');}
+function closeBackupDialog(){document.getElementById('backup-dialog').classList.remove('active');}
+async function setupBackupFromDialog(){if(!window.showDirectoryPicker){alert('⚠️ 请使用 Chrome/Edge');return;}try{const handle=await window.showDirectoryPicker({mode:'readwrite'});backupDirHandle=handle;await storeDirHandle(handle);updateBackupStatus('✅ 已设置: '+handle.name,'ok');await refreshBackupMeta();closeBackupDialog();alert('✅ 备份文件夹已设置');}catch(e){if(e.name!=='AbortError')alert('❌ 设置失败');}}
+async function changeBackupFolder(){await clearDirHandle();backupDirHandle=null;await setupBackupFromDialog();}
+async function refreshBackupMeta(){if(!backupDirHandle)return;try{const mh=await backupDirHandle.getFileHandle(BACKUP_META).catch(()=>null);if(mh)backupMeta=JSON.parse(await (await mh.getFile()).text());else backupMeta=[];updateBackupStatus('✅ '+backupMeta.length+' 份备份','ok');}catch(e){backupMeta=[];updateBackupStatus('✅ 就绪','ok');}}
+async function doManualBackup(){if(!backupDirHandle){alert('请先设置备份文件夹');return;}updateBackupStatus('⏳ 备份中...');await autoBackup();}
+async function autoBackup(){if(!backupDirHandle)return;try{const perm=await backupDirHandle.requestPermission({mode:'readwrite'});if(perm!=='granted'){updateBackupStatus('⚠️ 权限失效','warn');backupDirHandle=null;await clearDirHandle();return;}let backups=[];try{const mh=await backupDirHandle.getFileHandle(BACKUP_META).catch(()=>null);if(mh)backups=JSON.parse(await (await mh.getFile()).text());}catch(e){backups=[];}const idx=backups.length+1;const ts=new Date();const tsStr=ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0')+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0');const filename='做题引擎备份_'+String(idx).padStart(3,'0')+'.json';const label='第'+idx+'次备份';const fh=await backupDirHandle.getFileHandle(filename,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify({backupVersion:8,createdAt:ts.toISOString(),state},null,2));await w.close();backups.push({filename,label,timestamp:ts.toISOString(),dateStr:tsStr});while(backups.length>MAX_BACKUPS){const r=backups.shift();try{await backupDirHandle.removeEntry(r.filename);}catch(e){}}const mh2=await backupDirHandle.getFileHandle(BACKUP_META,{create:true});const w2=await mh2.createWritable();await w2.write(JSON.stringify(backups,null,2));await w2.close();backupMeta=backups;updateBackupStatus('✅ 备份: '+label,'ok');}catch(e){updateBackupStatus('⚠️ 备份失败: '+e.message,'warn');}}
+async function tryAutoRestore(){if(location.protocol==='file:')return false;const handle=await loadDirHandle();if(!handle)return false;try{const perm=await handle.queryPermission({mode:'readwrite'});if(perm!=='granted'){if((await handle.requestPermission({mode:'readwrite'}))!=='granted'){await clearDirHandle();return false;}}}catch(e){await clearDirHandle();return false;}backupDirHandle=handle;await refreshBackupMeta();if(backupMeta.length===0)return false;const latest=backupMeta[backupMeta.length-1];try{const fh=await backupDirHandle.getFileHandle(latest.filename).catch(()=>null);if(!fh)return false;const data=JSON.parse(await (await fh.getFile()).text());if(data&&data.state){state=migrateState(data.state);saveState();updateBackupStatus('✅ 已恢复: '+latest.label,'ok');return true;}}catch(e){console.warn('auto restore err',e);}return false;}
+async function openRestoreDialog(){if(!backupDirHandle||backupMeta.length===0){alert(backupDirHandle?'暂无备份':'请先设置备份文件夹');return;}await refreshBackupMeta();const container=document.getElementById('restore-list');if(backupMeta.length===0){container.innerHTML='<div class="empty-state">暂无备份</div>';}else{const sorted=[...backupMeta].reverse();container.innerHTML=sorted.map(b=>{const isLatest=b.filename===backupMeta[backupMeta.length-1].filename;return '<div class="restore-list-item"><div class="rli-info"><div class="rli-label">'+escapeHtml(b.label)+(isLatest?' ⭐最新':'')+'</div><div class="rli-date">'+escapeHtml(b.dateStr||b.timestamp)+'</div></div><button class="btn btn-small btn-warning" onclick="restoreFromBackup(\''+b.filename+'\')">⏪ 回档</button></div>';}).join('');}document.getElementById('restore-dialog').classList.add('active');}
+function closeRestoreDialog(){document.getElementById('restore-dialog').classList.remove('active');}
+async function restoreFromBackup(filename){if(!confirm('回档后当前数据将被替换。建议先做一次立即备份。'))return;try{const fh=await backupDirHandle.getFileHandle(filename);const data=JSON.parse(await(await fh.getFile()).text());if(!data||!data.state)throw new Error('格式错误');state=migrateState(data.state);saveState();closeRestoreDialog();renderSubjectList();const sids=Object.keys(state.subjects);if(sids.length>0){if(!state.currentSubjectId||!state.subjects[state.currentSubjectId])state.currentSubjectId=sids[0];const s=getSubj();if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId]))state.currentChapterId=s.chapterIds[0]||null;}const ch=getCh();if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();}renderHistory();updateQuickActions();loadChapterStrategyToUI();showScreen(state.lastScreen||'start');updateBackupStatus('✅ 已回档','ok');alert('✅ 回档成功');}catch(e){alert('❌ 回档失败: '+e.message);}}
+// ===== v8.4 功能 =====
+const ACTIONS = [
+  { id:'first_step', name:'迈出第一步', icon:'👣', desc:'完成第一次答题', check:g=>g.totalAnswered>=1 },
+  { id:'first_correct', name:'初次正确', icon:'✨', desc:'第一次答对客观题', check:g=>g.totalCorrect>=1 },
+  { id:'first_chapter', name:'开卷有益', icon:'📖', desc:'完成第一轮答题', check:g=>g.totalRounds>=1 },
+  { id:'five_answers', name:'初露锋芒', icon:'🌟', desc:'累计答题5道', check:g=>g.totalAnswered>=5 },
+  { id:'ten_correct', name:'初战告捷', icon:'🎯', desc:'累计答对10道客观题', check:g=>g.totalCorrect>=10 },
+  { id:'streak_5', name:'势如破竹', icon:'🔥', desc:'连续答对5题', check:g=>g.maxStreak>=5 },
+  { id:'ten_questions', name:'勤学好问', icon:'📝', desc:'累计答题10道', check:g=>g.totalAnswered>=10 },
+  { id:'three_chapters', name:'博采众长', icon:'📚', desc:'创建3个章节', check:g=>g.totalChapters>=3 },
+  { id:'two_subjects', name:'学科兼修', icon:'🎓', desc:'创建2个科目', check:g=>g.totalSubjects>=2 },
+  { id:'fifty_questions', name:'题海泛舟', icon:'🌊', desc:'累计答题50道', check:g=>g.totalAnswered>=50 },
+  { id:'hundred_correct', name:'百步穿杨', icon:'🏹', desc:'累计答对100道客观题', check:g=>g.totalCorrect>=100 },
+  { id:'streak_10', name:'连胜纪录', icon:'⚡', desc:'连续答对10题', check:g=>g.maxStreak>=10 },
+  { id:'five_subjects', name:'博学多才', icon:'🌍', desc:'创建5个科目', check:g=>g.totalSubjects>=5 },
+  { id:'hundred_questions', name:'学富五车', icon:'🏛️', desc:'累计答题100道', check:g=>g.totalAnswered>=100 },
+  { id:'five_hundred_q', name:'学海无涯', icon:'🚢', desc:'累计答题500道', check:g=>g.totalAnswered>=500 },
+  { id:'streak_20', name:'不可阻挡', icon:'💪', desc:'连续答对20题', check:g=>g.maxStreak>=20 },
+  { id:'perfect_session', name:'完美发挥', icon:'💯', desc:'一轮10题以上全部答对', check:g=>g.hasPerfectSession },
+  { id:'ten_subjects', name:'满腹经纶', icon:'👑', desc:'创建10个科目', check:g=>g.totalSubjects>=10 },
+  { id:'thousand_questions', name:'题海大师', icon:'🏆', desc:'累计答题1000道', check:g=>g.totalAnswered>=1000 },
+  { id:'streak_50', name:'神话传说', icon:'🐉', desc:'连续答对50题', check:g=>g.maxStreak>=50 }
+];
+function computeGlobalStats() { let totalAnswered=0,totalCorrect=0,totalWrong=0,totalRounds=state.history?state.history.length:0,maxStreak=0,hasPerfectSession=false; let typeDist={single:0,judge:0,term:0,short:0}; (state.history||[]).forEach(r=>{if(!r.questions)return; let streak=0; r.questions.forEach(q=>{typeDist[q.type]=(typeDist[q.type]||0)+1; if(q.userAnswer!==undefined){totalAnswered++; if(isObjType(q.type)){if(q.isCorrect===true){totalCorrect++;streak++;if(streak>maxStreak)maxStreak=streak;}else{totalWrong++;streak=0;}}}}); if(r.total>=10&&r.wrong===0)hasPerfectSession=true; }); const totalChapters=Object.values(state.chapters).filter(ch=>ch.questions&&ch.questions.length>0).length; return { totalAnswered, totalCorrect, totalWrong, totalRounds, maxStreak, hasPerfectSession, totalSubjects:Object.keys(state.subjects).length, totalChapters, typeDist }; }
+function checkAchievements() { if(!state.achievements)state.achievements={unlocked:[],history:[]}; const g=computeGlobalStats(); let newUnlock=false; ACTIONS.forEach(a=>{ if(!state.achievements.unlocked.includes(a.id)&&a.check(g)){ state.achievements.unlocked.push(a.id); state.achievements.history.push({id:a.id,date:new Date().toLocaleString('zh-CN')}); newUnlock=true; } }); if(newUnlock){saveState();} return newUnlock; }
+function renderAchievements() { const unlocked=state.achievements?state.achievements.unlocked:[]; const history=state.achievements?state.achievements.history:[]; const countEl=document.getElementById('ach-count-display'); if(countEl)countEl.innerHTML='已解锁 <strong>'+unlocked.length+'</strong> / '+ACTIONS.length; const grid=document.getElementById('achievements-grid'); if(!grid)return; grid.innerHTML=ACTIONS.map(a=>{ const isUnlocked=unlocked.includes(a.id); const rec=history.find(h=>h.id===a.id); if(isUnlocked){ return '<div class="achievement-card unlocked"><div class="ach-icon">'+a.icon+'</div><div class="ach-name">'+escapeHtml(a.name)+'</div><div class="ach-desc">'+escapeHtml(a.desc)+'</div><div class="ach-status">🔓 '+escapeHtml(rec?rec.date:'已解锁')+'</div></div>'; } else { return '<div class="achievement-card locked"><div class="ach-mystery">❓</div><div class="ach-status">未解锁</div></div>'; } }).join(''); }
+function renderSettings() { const quizFs=state.settings?state.settings.quizFontSize:17; const sidebarFs=state.settings?state.settings.sidebarFontSize:13; const mainFs=state.settings?state.settings.mainFontSize:17; const s1=document.getElementById('settings-quiz-font-size');const v1=document.getElementById('settings-quiz-font-size-val');if(s1)s1.value=quizFs;if(v1)v1.textContent=quizFs+'px';const s2=document.getElementById('settings-sidebar-font-size');const v2=document.getElementById('settings-sidebar-font-size-val');if(s2)s2.value=sidebarFs;if(v2)v2.textContent=sidebarFs+'px';const s3=document.getElementById('settings-main-font-size');const v3=document.getElementById('settings-main-font-size-val');if(s3)s3.value=mainFs;if(v3)v3.textContent=mainFs+'px';const dm=document.getElementById('settings-dark-mode');if(dm)dm.checked=state.settings?state.settings.darkMode:false;applyAllFontSizes(); }
+function onSettingsQuizFontSize() { const fs=parseInt(document.getElementById('settings-quiz-font-size').value)||17; state.settings.quizFontSize=fs; document.getElementById('settings-quiz-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); }
+function onSettingsSidebarFontSize() { const fs=parseInt(document.getElementById('settings-sidebar-font-size').value)||13; state.settings.sidebarFontSize=fs; document.getElementById('settings-sidebar-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); }
+function onSettingsMainFontSize() { const fs=parseInt(document.getElementById('settings-main-font-size').value)||17; state.settings.mainFontSize=fs; document.getElementById('settings-main-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); }
+function applyQuizFontSize() { const fs=state.settings?state.settings.quizFontSize:17; document.querySelectorAll('.quiz-question').forEach(el=>el.style.fontSize=fs+'px'); document.querySelectorAll('.quiz-option').forEach(el=>el.style.fontSize=(fs-2)+'px'); }
+function applyAllFontSizes() { applyQuizFontSize(); const sidebarFs=state.settings?state.settings.sidebarFontSize:13; const mainFs=state.settings?state.settings.mainFontSize:17; document.getElementById('sidebar').style.fontSize=sidebarFs+'px'; document.getElementById('main').style.fontSize=mainFs+'px'; }
+function onSettingsDarkMode() { state.settings.darkMode=document.getElementById('settings-dark-mode').checked; saveState(); applyDarkMode(); }
+function applyDarkMode() { const enabled=state.settings&&state.settings.darkMode; document.body.classList.toggle('dark-mode', enabled); const cb=document.getElementById('settings-dark-mode'); if(cb)cb.checked=enabled; }
+function simpleHash(str) { let h=0; for(let i=0;i<str.length;i++) h=((h<<5)-h+str.charCodeAt(i))|0; return h.toString(36); }
+function getQuestionId(chId,q) { return chId+':'+simpleHash((q.question||'')); }
+function isQuestionIgnored(chId,q) { return state.ignoredQuestions&&state.ignoredQuestions.includes(getQuestionId(chId,q)); }
+function isQuestionFavorite(chId,q) { return state.favoriteQuestions&&state.favoriteQuestions.includes(getQuestionId(chId,q)); }
+function toggleFavorite(chId,q) { const qId=getQuestionId(chId,q); if(!state.favoriteQuestions)state.favoriteQuestions=[]; const idx=state.favoriteQuestions.indexOf(qId); if(idx>=0) state.favoriteQuestions.splice(idx,1); else state.favoriteQuestions.push(qId); saveState(); renderQuestion(); }
+function toggleFavoriteCurrent() { const ch=getCh(); if(!ch)return; const q=ch.questions[ch.currentIdx]; if(!q)return; toggleFavorite(ch.id,q); }
+function ignoreCurrentQuestion() { const ch=getCh(); if(!ch)return; const q=ch.questions[ch.currentIdx]; if(!q)return; if(!state.ignoredQuestions)state.ignoredQuestions=[]; const qId=getQuestionId(ch.id,q); if(!state.ignoredQuestions.includes(qId)){state.ignoredQuestions.push(qId);} saveState(); if(ch.currentIdx<ch.questions.length-1){ch.currentIdx++;} renderQuestion(); updateProgress(); }
+// ===== 错题本 =====
+function updateWrongBookAfterExam(as) {
+  if (!state.wrongBook) state.wrongBook = {};
+  as.questions.forEach((q, i) => {
+    if (!isObjType(q.type) || as.userAnswers[i] === undefined) return;
+    if (getCi(q, as.userAnswers[i]) === false) {
+      const qId = getQuestionId(as.setId, q);
+      if (!state.wrongBook[qId]) {
+        state.wrongBook[qId] = { question: q.question, type: q.type, options: q.options, answer: q.answer, tag: q.tag, explanation: q.explanation, chapterId: as.setId, chapterName: as.setName, wrongCount: 0, mastered: false, addedAt: Date.now() };
+      }
+      const entry = state.wrongBook[qId];
+      entry.wrongCount++;
+      entry.lastWrong = Date.now();
+      entry.mastered = false;
+    }
+  });
+  saveState();
+}
+function renderWrongBook() {
+  const countEl = document.getElementById('wrongbook-count');
+  const entries = Object.values(state.wrongBook || {});
+  if (countEl) countEl.textContent = entries.length ? '(' + entries.length + ')' : '';
+  renderWrongBookList();
+}
+function renderWrongBookList() {
+  const container = document.getElementById('wrongbook-list');
+  const summary = document.getElementById('wb-summary');
+  const onlyUn = document.getElementById('wb-only-unsolved')?.checked || false;
+  const keyword = (document.getElementById('wb-search-input')?.value || '').trim().toLowerCase();
+  let entries = Object.values(state.wrongBook || {});
+  if (onlyUn) entries = entries.filter(e => !e.mastered);
+  if (keyword) entries = entries.filter(e => (e.question||'').toLowerCase().includes(keyword) || (e.tag||'').toLowerCase().includes(keyword) || (e.chapterName||'').toLowerCase().includes(keyword));
+  const mastered = Object.values(state.wrongBook||{}).filter(e=>e.mastered).length;
+  if (summary) summary.textContent = entries.length
+    ? '共 ' + (state.wrongBook?Object.keys(state.wrongBook).length:0) + ' 道错题，已掌握 ' + mastered + ' 道'
+    : '错题本为空，答错题会自动收录到这里';
+  if (!entries.length) { container.innerHTML = '<div class="empty-state">📭 暂无错题' + (keyword||onlyUn?'（过滤后无结果）':'，继续保持！') + '</div>'; return; }
+  const tm = {single:'单选',judge:'判断',term:'名词解释',short:'简答'};
+  let html = '';
+  entries.forEach(e => {
+    const qId = getQuestionId(e.chapterId, {question: e.question});
+    html += '<div class="qbank-round' + (e.mastered?' mastered':'') + '" onclick="this.classList.toggle(\'expanded\')"><div class="qbank-round-header"><span>[' + (tm[e.type]||e.type) + '] ' + escapeHtml(e.chapterName||'') + ' ' + escapeHtml((e.question||'').substring(0,50)) + '</span><span style="color:#e94560;">错 ' + e.wrongCount + ' 次</span></div><div class="qbank-round-detail">';
+    html += '<div class="qbank-question wrong"><p class="q-text">' + escapeHtml(e.question) + '</p>';
+    if (e.tag) html += '<p class="q-detail">🏷️ ' + escapeHtml(e.tag) + '</p>';
+    if (e.options) { (e.options||[]).forEach((opt,i) => { html += String.fromCharCode(65+i)+'. '+escapeHtml(opt)+(i===e.answer?' <span style="color:#2ed573;">✓</span>':'')+'<br>'; }); }
+    if (e.explanation) html += '<p class="q-detail" style="margin-top:4px;">📖 ' + escapeHtml(e.explanation) + '</p>';
+    html += '</div></div>';
+    html += '<div style="padding:4px 8px;display:flex;gap:6px;"><button class="btn btn-small btn-success" onclick="event.stopPropagation();markWrongBookMastered(\'' + qId.replace(/'/g,"\\'") + '\')">✅ 标记已掌握</button><button class="btn btn-small btn-danger" onclick="event.stopPropagation();removeWrongBook(\'' + qId.replace(/'/g,"\\'") + '\')">🗑️ 移除</button></div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+function markWrongBookMastered(qId) { if (state.wrongBook && state.wrongBook[qId]) { state.wrongBook[qId].mastered = true; saveState(); renderWrongBook(); } }
+function removeWrongBook(qId) { if (state.wrongBook && state.wrongBook[qId]) { delete state.wrongBook[qId]; saveState(); renderWrongBook(); } }
+function clearWrongBook() { if (!state.wrongBook || !Object.keys(state.wrongBook).length) return; if (!confirm('清空错题本？')) return; state.wrongBook = {}; saveState(); renderWrongBook(); }
+function populateWrongBookFromHistory() {
+  if (!state.wrongBook) state.wrongBook = {};
+  let added = 0;
+  (state.history || []).forEach(r => {
+    if (!r.questions) return;
+    r.questions.forEach((q, qi) => {
+      if (!isObjType(q.type) || q.isCorrect !== false) return;
+      const qId = getQuestionId(r.chapterId, q);
+      if (!state.wrongBook[qId]) {
+        state.wrongBook[qId] = { question: q.question, type: q.type, options: q.options, answer: q.answer, tag: q.tag, explanation: q.explanation, chapterId: r.chapterId, chapterName: r.chapterName, wrongCount: 0, mastered: false, addedAt: Date.now() };
+        added++;
+      }
+      state.wrongBook[qId].wrongCount++;
+    });
+  });
+  if (added > 0) saveState();
+  return added;
+}
+function populateSRSFromHistory() {
+  if (!state.srsData) state.srsData = {};
+  let added = 0;
+  (state.history || []).forEach(r => {
+    if (!r.questions) return;
+    r.questions.forEach(q => {
+      if (!isObjType(q.type) || q.userAnswer === undefined) return;
+      const qId = getQuestionId(r.chapterId, q);
+      if (!state.srsData[qId]) {
+        state.srsData[qId] = { interval: 0, easeFactor: 2.5, repetitions: 0, nextReview: 0 };
+        added++;
+      }
+      const srs = state.srsData[qId];
+      const ci = q.isCorrect;
+      if (ci === true) {
+        if (srs.repetitions === 0) srs.interval = 1;
+        else if (srs.repetitions === 1) srs.interval = 3;
+        else srs.interval = Math.round(srs.interval * srs.easeFactor);
+        srs.repetitions++;
+      } else {
+        srs.interval = 1; srs.repetitions = 0;
+        srs.easeFactor = Math.max(1.3, srs.easeFactor - 0.2);
+      }
+    });
+  });
+  if (added > 0) saveState();
+  return added;
+}
+// ===== SRS 间隔重复 (SM-2 算法) =====
+function getSRSData(qId) { if (!state.srsData||!state.srsData[qId]) state.srsData[qId]={interval:0,easeFactor:2.5,repetitions:0,nextReview:0}; return state.srsData[qId]; }
+function getSrsDueQuestions() { const now=Date.now(); return Object.keys(state.srsData||{}).filter(id=>state.srsData[id].nextReview>0&&state.srsData[id].nextReview<=now); }
+function getOverdueCount() { return getSrsDueQuestions().length; }
+function updateSrsCard() { /* SRS card moved to subject dashboard, home card removed */ }
+function updateWrongBookBadge() { const el=document.getElementById('wrongbook-count'); if (!el) return; const count=Object.keys(state.wrongBook||{}).length; el.textContent = count ? '('+count+')' : ''; }
+function updateSRSAfterExam(as) { if (!state.srsData) state.srsData={}; const now=Date.now(); as.questions.forEach((q,i)=>{ if (!isObjType(q.type)||as.userAnswers[i]===undefined) return; const qId=getQuestionId(as.setId,q); const ci=getCi(q,as.userAnswers[i]); const srs=getSRSData(qId); if (ci===true) { if (srs.repetitions===0) srs.interval=1; else if (srs.repetitions===1) srs.interval=3; else srs.interval=Math.round(srs.interval*srs.easeFactor); srs.repetitions++; } else { srs.interval=1; srs.repetitions=0; srs.easeFactor=Math.max(1.3,srs.easeFactor-0.2); } const days=srs.interval*86400000; srs.nextReview=now+days; }); saveState(); }
+function startSrsReview() { const due=getSrsDueQuestions(); if (!due.length) { alert('暂无待复习题目'); return; } const questions=[]; due.forEach(qId=>{ for (const cid in state.chapters) { const ch=state.chapters[cid]; if (!ch||!ch.questions) continue; for (const q of ch.questions) { if (getQuestionId(cid,q)===qId) { questions.push({...q,_srsChapterId:cid}); break; } } if (questions.length>0) break; } }); if (!questions.length) { alert('未找到对应题目数据'); return; } const sid=state.currentSubjectId||Object.keys(state.subjects)[0]; const eid='srs_'+Date.now().toString(36); const genExam={id:eid,name:'📅 间隔复习 '+new Date().toLocaleDateString('zh-CN'),type:'srs',subjectId:sid,questions,userAnswers:new Array(questions.length).fill(undefined),currentIdx:0,createdAt:Date.now()}; state.generatedExams[eid]=genExam; state.currentExamId=eid; saveState(); startExamQuiz(eid); }
+function startExamQuiz(eid) { const ex=state.generatedExams[eid]; if (!ex) return; state.currentExamId=eid; saveState(); showScreen('quiz'); renderQuestion(); updateProgress(); }
+function endExamGenerated(as) { updateWrongBookAfterExam(as); updateSRSAfterExam(as); autoBackup(); checkAchievements(); state.currentExamId=null; saveState(); renderExamReport(as); }
+function renderExamReport(as) { const stats=calcStats(as); const c=document.getElementById('report-content'); if (!c) return; const correctTotal=stats.objCorrect+stats.subjCount; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0; let html='<div class="report-grid"><div class="report-stat correct"><div class="num">'+correctTotal+'</div><div class="label">✅ 总正确</div></div><div class="report-stat wrong"><div class="num">'+stats.wrongCount+'</div><div class="label">❌ 错误</div></div><div class="report-stat rate"><div class="num">'+rate+'%</div><div class="label">📊 正确率</div></div><div class="report-stat"><div class="num">'+stats.answered+'/'+stats.total+'</div><div class="label">📝 进度</div></div></div>'; c.innerHTML=html; showScreen('report'); }
+function renderSubjSrsReview(s) {
+  const container = document.getElementById('subj-tab-srs-review'); if (!container) return;
+  const due = getSrsDueQuestions(); const dueCount = due.length;
+  let html = '<div class="card"><h3>📅 间隔复习 — ' + escapeHtml(s.name) + '</h3>';
+  html += '<p style="color:#666;font-size:14px;margin:6px 0 12px;">基于 SM-2 算法自动安排复习时间。答对后间隔延长，答错后重新学习。</p>';
+  html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">';
+  html += '<span style="font-size:15px;font-weight:600;">到期题目：<strong style="color:#e94560;">' + dueCount + '</strong> 道</span>';
+  html += '<button class="btn btn-primary btn-small" onclick="startSrsReviewForSubj(\'' + s.id + '\')">📅 复习到期题目</button>';
+  html += '</div>';
+  html += '<h4 style="font-size:15px;margin:12px 0 8px;">自定义复习 — 选择章节生成复习试卷</h4>';
+  html += '<div class="chapter-select-grid" id="srs-chapter-select">';
+  s.chapterIds.forEach(cid => { const ch = state.chapters[cid]; if (!ch) return; html += '<div class="chapter-select-item"><input type="checkbox" id="srs-chk-' + cid + '" value="' + cid + '"><label for="srs-chk-' + cid + '">' + escapeHtml(ch.name) + '</label><span class="cs-count">' + (ch.questions ? ch.questions.length : 0) + ' 题</span></div>'; });
+  html += '</div>';
+  html += '<div class="type-counts" style="margin-top:10px;">';
+  html += '<div class="type-count-item"><label>📝 单选</label><input type="number" id="srs-tc-single" min="0" value="5"></div>';
+  html += '<div class="type-count-item"><label>⚖️ 判断</label><input type="number" id="srs-tc-judge" min="0" value="3"></div>';
+  html += '</div>';
+  html += '<div style="margin-top:10px;"><button class="btn btn-warning btn-small" onclick="composeSrsCustom(\'' + s.id + '\')">📝 生成复习试卷</button></div>';
+  html += '</div>';
+  // 历史试卷列表
+  html += '<div class="card" style="margin-top:12px;"><h4 style="font-size:15px;margin-bottom:8px;">📋 历史试卷</h4>';
+  html += renderGeneratedExamList(s.id);
+  html += '</div>';
+  container.innerHTML = html;
+}
+function renderGeneratedExamList(subjId, typeFilter) {
+  const exams = state.generatedExams || {};
+  const subjExams = Object.values(exams).filter(e => e.subjectId === subjId && (!typeFilter || e.type === typeFilter)).sort((a, b) => b.createdAt - a.createdAt);
+  if (!subjExams.length) return '<div class="empty-state" style="padding:12px;">暂无历史试卷</div>';
+  const tm = { exam: '大考卷', srs: '间隔复习' };
+  let html = '';
+  subjExams.forEach(e => {
+    const total = e.questions.length;
+    const answered = e.userAnswers.filter(a => a !== undefined).length;
+    const isDone = answered >= total;
+    const isSrs = e.type === 'srs';
+    html += '<div class="restore-list-item" style="cursor:default;">';
+    html += '<div class="rli-info">';
+    html += '<div class="rli-label">' + (isSrs ? '📅' : '📝') + ' ' + escapeHtml(e.name) + ' <span style="color:#888;">(' + total + '题)</span></div>';
+    html += '<div class="rli-date">' + new Date(e.createdAt).toLocaleString('zh-CN') + ' — ' + answered + '/' + total + ' 已答</div>';
+    html += '</div>';
+    if (isDone) {
+      const correctCount = e.questions.filter((q, i) => getCi(q, e.userAnswers[i]) === true).length;
+      const rate = total > 0 ? Math.round(correctCount / total * 100) : 0;
+      html += '<span style="color:#2ed573;font-weight:600;margin-right:8px;">✅ ' + rate + '%</span>';
+      html += '<button class="btn btn-small btn-secondary" onclick="startExamQuiz(\'' + e.id + '\')">查看</button>';
+    } else {
+      html += '<button class="btn btn-small btn-primary" onclick="startExamQuiz(\'' + e.id + '\')">▶️ 继续作答</button>';
+    }
+    html += '</div>';
+  });
+  return html;
+}
+function composeSrsCustom(subjId) {
+  const s = state.subjects[subjId]; if (!s) return;
+  const checkedCids = []; document.querySelectorAll('#srs-chapter-select input[type="checkbox"]:checked').forEach(cb => checkedCids.push(cb.value));
+  if (!checkedCids.length) { alert('请至少选择一个章节'); return; }
+  const ts = parseInt(document.getElementById('srs-tc-single').value) || 0; const tj = parseInt(document.getElementById('srs-tc-judge').value) || 0;
+  if (ts + tj === 0) { alert('请设置至少 1 道题'); return; }
+  const selected = [];
+  checkedCids.forEach(cid => {
+    const ch = state.chapters[cid]; if (!ch || !ch.questions) return;
+    const pool = ch.questions.filter(q => (q.type === 'single' || q.type === 'judge') && !isQuestionIgnored(cid, q));
+    const singlePool = pool.filter(q => q.type === 'single'); const judgePool = pool.filter(q => q.type === 'judge');
+    const sh = [...singlePool]; for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } selected.push(...sh.slice(0, ts));
+    const sh2 = [...judgePool]; for (let i = sh2.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh2[i], sh2[j]] = [sh2[j], sh2[i]]; } selected.push(...sh2.slice(0, tj));
+  });
+  if (!selected.length) { alert('未能抽取题目'); return; }
+  const eid = 'srs_' + Date.now().toString(36);
+  const genExam = { id: eid, name: '📅 自定义复习 ' + new Date().toLocaleDateString('zh-CN'), type: 'srs', subjectId: subjId, questions: selected, userAnswers: new Array(selected.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
+  state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
+  startExamQuiz(eid); renderSubjSrsReview(s);
+  alert('✅ 复习试卷已生成：共 ' + selected.length + ' 题');
+}
+function startSrsReviewForSubj(subjId) {
+  const s = state.subjects[subjId]; if (!s) return;
+  const subjChapterIds = s.chapterIds;
+  const now = Date.now();
+  const due = getSrsDueQuestions().filter(qId => {
+    return subjChapterIds.some(cid => qId.startsWith(cid + ':'));
+  });
+  if (!due.length) { alert('本科目暂无待复习题目'); return; }
+  const questions = [];
+  due.forEach(qId => {
+    for (const cid of subjChapterIds) {
+      const ch = state.chapters[cid]; if (!ch || !ch.questions) continue;
+      for (const q of ch.questions) { if (getQuestionId(cid, q) === qId) { questions.push({ ...q, _srsChapterId: cid }); break; } }
+      if (questions.length > 0) break;
+    }
+  });
+  if (!questions.length) { alert('未找到对应题目数据'); return; }
+  const eid = 'srs_' + Date.now().toString(36);
+  const genExam = { id: eid, name: '📅 间隔复习 ' + new Date().toLocaleDateString('zh-CN'), type: 'srs', subjectId: subjId, questions, userAnswers: new Array(questions.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
+  state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
+  startExamQuiz(eid);
+}
+function showScreen(name){ document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active')); const t=document.getElementById('screen-'+name); if(t)t.classList.add('active'); state.lastScreen=name; saveState(); }
+async function init(){ try{ document.getElementById('app').style.display='flex'; loadState(); try{await tryAutoRestore();}catch(e){console.warn('auto restore skipped',e);} const sids=Object.keys(state.subjects); if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;} else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0]; const s=getSubj(); if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null; renderSubjectList(); const saved=state.lastScreen||'start'; showScreen(saved); const ch=getCh(); if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();} updateQuickActions(); loadChapterStrategyToUI(); checkAchievements(); applyAllFontSizes(); applyDarkMode(); populateWrongBookFromHistory(); populateSRSFromHistory(); updateSrsCard(); updateWrongBookBadge(); console.log('✅ v1.1 初始化完成'); }catch(e){console.error('init failed',e);document.getElementById('app').style.display='flex';} }
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
