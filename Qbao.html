@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Qbao</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; font-size: 17px; }
@@ -123,6 +125,9 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
 .quiz-tag { display: inline-block; background: #e8f4fd; color: #4facfe; padding: 2px 8px; border-radius: 12px; font-size: calc(12 * 1em / 17); }
 .quiz-type { display: inline-block; background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: calc(12 * 1em / 17); }
 .quiz-question { font-size: 17px; line-height: 1.6; margin: 12px 0 16px; }
+.quiz-question code, .quiz-option code, .explanation-box code, .qd-question code, .qd-answer code, .qd-explanation code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; font-family: monospace; }
+body.dark-mode .quiz-question code, body.dark-mode .quiz-option code, body.dark-mode .explanation-box code, body.dark-mode .qd-question code, body.dark-mode .qd-answer code, body.dark-mode .qd-explanation code { background: #333; }
+.katex { font-size: 1em !important; }
 .quiz-options { display: flex; flex-direction: column; gap: 7px; }
 .quiz-option { padding: 11px 14px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; transition: .2s; font-size: 15px; }
 .quiz-option:hover { border-color: #4facfe; background: #f0f8ff; }
@@ -282,6 +287,108 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
   #main { padding: 14px; }
   .subj-tab { padding: 6px 12px; font-size: calc(14 * 1em / 17); }
 }
+/* 夜间模式 */
+body.dark-mode { background: #121212; color: #e0e0e0; }
+body.dark-mode #main { color: #e0e0e0; }
+body.dark-mode h1 { color: #e0e0e0; }
+body.dark-mode .subtitle { color: #aaa; }
+body.dark-mode .progress-bar { background: #333; }
+body.dark-mode .progress-stats { color: #aaa; }
+body.dark-mode .card, body.dark-mode .quiz-card, body.dark-mode .report-card { background: #1e1e1e; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+body.dark-mode .card h3, body.dark-mode .quiz-card h3 { color: #e0e0e0; }
+body.dark-mode .card h4 { color: #bbb; }
+body.dark-mode .prompt-box { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .quiz-question { color: #e0e0e0; }
+body.dark-mode .quiz-option { border-color: #444; color: #e0e0e0; }
+body.dark-mode .quiz-option:hover { border-color: #4facfe; background: #1a2a3a; }
+body.dark-mode .quiz-option.selected { border-color: #4facfe; background: #1a2a4a; }
+body.dark-mode .quiz-option.correct { border-color: #2ed573; background: #1a2e1a; }
+body.dark-mode .quiz-option.wrong { border-color: #e94560; background: #2e1a1a; }
+body.dark-mode .explanation-box { background: #1a2a1a; border-color: #2ed573; }
+body.dark-mode .explanation-box h4 { color: #2ed573; }
+body.dark-mode .explanation-box p { color: #e0e0e0; }
+body.dark-mode .quiz-nav .dot { border-color: #555; color: #ccc; }
+body.dark-mode .quiz-nav .dot:hover { border-color: #4facfe; }
+body.dark-mode .quiz-nav .dot.current { border-color: #4facfe; background: #4facfe; color: #fff; }
+body.dark-mode .quiz-nav .dot.answered { background: #2ed573; color: #fff; border-color: #2ed573; }
+body.dark-mode .quiz-nav .dot.wrong { background: #e94560; color: #fff; border-color: #e94560; }
+body.dark-mode .empty-state { color: #777; }
+body.dark-mode .report-stat { background: #2a2a2a; }
+body.dark-mode .report-stat .label { color: #999; }
+body.dark-mode .subj-tabs { border-bottom-color: #333; }
+body.dark-mode .subj-tab { color: #888; border-bottom-color: transparent; }
+body.dark-mode .subj-tab:hover { color: #e0e0e0; }
+body.dark-mode .subj-tab.active { color: #4facfe; border-bottom-color: #4facfe; }
+body.dark-mode .subj-dash-card { background: #2a2a2a; }
+body.dark-mode .subj-dash-card .label { color: #999; }
+body.dark-mode .qbank-toolbar label { color: #ccc; }
+body.dark-mode .qbank-toolbar .qbank-search input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .qbank-chapter-group { color: #e0e0e0; }
+body.dark-mode .qbc-header { color: #e0e0e0; border-bottom-color: #333; }
+body.dark-mode .qbc-header span { color: #999; }
+body.dark-mode .qbank-round { background: #2a2a2a; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+body.dark-mode .qbank-round-header { color: #bbb; }
+body.dark-mode .qbank-round-detail { border-top-color: #333; }
+body.dark-mode .qbank-question { color: #e0e0e0; }
+body.dark-mode .qbank-question:hover { background: #1a2a3a; }
+body.dark-mode .qbank-question.correct { background: #1a2e1a; }
+body.dark-mode .qbank-question.wrong { background: #2e1a1a; }
+body.dark-mode .qbank-question.unanswered { background: #2a2a2a; }
+body.dark-mode .qbank-question .q-detail { color: #999; }
+body.dark-mode .dialog-overlay, body.dark-mode .qdetail-overlay { background: rgba(0,0,0,0.6); }
+body.dark-mode .dialog-box, body.dark-mode .qdetail-box { background: #1e1e1e; color: #e0e0e0; }
+body.dark-mode .dialog-box h3, body.dark-mode .qdetail-box h3 { color: #e0e0e0; }
+body.dark-mode .dialog-box textarea { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .qdetail-box .qd-answer { background: #2a2a2a; color: #e0e0e0; }
+body.dark-mode .qdetail-box .qd-question { color: #e0e0e0; }
+body.dark-mode .qdetail-box .qd-explanation { background: #1a2a1a; border-color: #2ed573; }
+body.dark-mode .qdetail-box .qd-explanation h4 { color: #2ed573; }
+body.dark-mode .error-box { background: #2e1a1a; border-color: #e94560; }
+body.dark-mode .restore-list-item { border-color: #444; }
+body.dark-mode .restore-list-item:hover { border-color: #4facfe; background: #1a2a3a; }
+body.dark-mode .restore-list-item .rli-info { color: #e0e0e0; }
+body.dark-mode .restore-list-item .rli-info .rli-date { color: #999; }
+body.dark-mode .strategy-values { background: #2a2a2a; }
+body.dark-mode .strategy-values .sv-item .sv-label { color: #999; }
+body.dark-mode .type-count-item { background: #2a2a2a; }
+body.dark-mode .type-count-item label { color: #ccc; }
+body.dark-mode .type-count-item input[type="number"] { background: #333; border-color: #555; color: #e0e0e0; }
+body.dark-mode .tags-list { border-color: #444; background: #222; }
+body.dark-mode .tag-chip { background: #1a2a3a; color: #4facfe; }
+body.dark-mode .tag-chip.active { background: #2e1a1a; color: #e94560; border-color: #e94560; }
+body.dark-mode .tag-add-input input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+body.dark-mode .chapter-select-grid { border-color: #444; }
+body.dark-mode .chapter-select-item label { color: #ccc; }
+body.dark-mode .chapter-select-item .cs-count { color: #999; }
+body.dark-mode .ch-history-card { background: #2a2a2a; box-shadow: 0 1px 3px rgba(0,0,0,0.2); border-left-color: #444; }
+body.dark-mode .ch-history-card.expanded { border-left-color: #4facfe; }
+body.dark-mode .ch-history-card-date { color: #999; }
+body.dark-mode .ch-history-card-detail { border-top-color: #333; }
+body.dark-mode .ch-history-q { color: #e0e0e0; }
+body.dark-mode .ch-history-q.correct { background: #1a2e1a; }
+body.dark-mode .ch-history-q.wrong { background: #2e1a1a; }
+body.dark-mode .ch-history-q-exp { border-top-color: #444; color: #bbb; }
+body.dark-mode .achievement-card { background: #2a2a2a; box-shadow: 0 1px 4px rgba(0,0,0,0.2); border-left-color: #444; }
+body.dark-mode .achievement-card.unlocked { border-left-color: #2ed573; background: linear-gradient(135deg, #1a2a1a, #1e1e1e); }
+body.dark-mode .achievement-card .ach-name { color: #e0e0e0; }
+body.dark-mode .achievement-card .ach-desc { color: #999; }
+body.dark-mode .achievement-card .ach-status { color: #777; }
+body.dark-mode .achievement-card.unlocked .ach-status { color: #2ed573; }
+body.dark-mode .achievement-card .ach-mystery { color: #555; }
+body.dark-mode .settings-section h4 { color: #bbb; }
+body.dark-mode .settings-row { border-bottom-color: #333; }
+body.dark-mode .settings-row label { color: #ccc; }
+body.dark-mode .eo-section { background: #1e1e1e; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+body.dark-mode .eo-section h4 { color: #e0e0e0; }
+body.dark-mode .eo-chapter-name { color: #e0e0e0; }
+body.dark-mode .eo-chapter-bar { background: #333; }
+body.dark-mode .eo-trend-text { color: #aaa; }
+body.dark-mode .eo-type-legend-item { color: #aaa; }
+body.dark-mode .eo-highlight-card { background: #2a2a2a; }
+body.dark-mode .eo-highlight-card .eo-hc-label { color: #999; }
+body.dark-mode .eo-highlight-card .eo-hc-value { color: #e0e0e0; }
+body.dark-mode .btn-secondary { background: #444; color: #e0e0e0; }
+body.dark-mode .btn-secondary:hover { background: #555; }
 </style>
 </head>
 <body>
@@ -302,6 +409,7 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
       <div class="util-label" style="margin-top:6px;">🛠️ 工具</div>
       <button class="btn-util" onclick="renderAchievements();showScreen('achievements')">🏆 成就</button>
       <button class="btn-util" onclick="renderSettings();showScreen('settings')">⚙️ 个性化</button>
+      <button class="btn-util" onclick="renderWrongBook();showScreen('wrongbook')">📕 错题本 <span id="wrongbook-count" style="color:#e94560;"></span></button>
       <div id="backup-status">未设置</div>
     </div>
   </aside>
@@ -322,7 +430,7 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
           <button class="btn btn-primary btn-small" id="btn-continue-quiz" onclick="showScreen('quiz');renderQuestion();updateProgress();">▶️ 继续答题</button>
         </div>
       </div>
-      <div class="card" id="chapter-prompt-card" style="display:none;">
+<div class="card" id="chapter-prompt-card" style="display:none;">
         <h3>🎓 准备新的一轮 — <span id="ch-strategy-name">当前章节</span></h3>
         <h4>📐 第一步：各题型数量</h4>
         <div class="type-counts">
@@ -379,7 +487,8 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
           <button class="btn btn-primary btn-small" id="btn-submit" onclick="submitAnswer()">提交答案</button>
           <button class="btn btn-secondary btn-small" id="btn-next" onclick="nextQuestion()" style="display:none;">下一题 ➡️</button>
           <button class="btn btn-danger btn-small" onclick="endExam()">🏁 结束考试</button>
-          <button class="btn btn-warning btn-small" id="btn-ignore" onclick="ignoreCurrentQuestion()">⏭️ 忽略此题</button>
+          <button class="btn btn-warning btn-small" id="btn-ignore" onclick="ignoreCurrentQuestion()">👍 我会了</button>
+          <button class="btn btn-small" id="btn-favorite" onclick="toggleFavoriteCurrent()" style="background:#f59e0b;color:#fff;">⭐ 收藏</button>
         </div>
       </div>
     </div>
@@ -403,10 +512,12 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
         <div class="subj-tab active" data-tab="overview" onclick="switchSubjTab('overview')">📊 总览</div>
         <div class="subj-tab" data-tab="questionbank" onclick="switchSubjTab('questionbank')">📚 题库</div>
         <div class="subj-tab" data-tab="compose-exam" onclick="switchSubjTab('compose-exam')">📝 大考卷</div>
+        <div class="subj-tab" data-tab="srs-review" onclick="switchSubjTab('srs-review')">📅 间隔复习</div>
       </div>
       <div id="subj-tab-overview" class="subj-tab-content active"></div>
       <div id="subj-tab-questionbank" class="subj-tab-content"></div>
       <div id="subj-tab-compose-exam" class="subj-tab-content"></div>
+      <div id="subj-tab-srs-review" class="subj-tab-content"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-secondary btn-small" onclick="showScreen('start')">← 返回首页</button>
       </div>
@@ -433,6 +544,23 @@ h1 { font-size: calc(27 * 1em / 17); margin-bottom: 5px; color: #1a1a2e; }
           <h4>🔤 答题区域</h4>
           <div class="settings-row"><label>题目字体大小</label><input type="range" id="settings-quiz-font-size" min="14" max="28" value="17" step="1" oninput="onSettingsQuizFontSize()"><span class="settings-val" id="settings-quiz-font-size-val">17px</span></div>
         </div>
+        <div class="settings-section">
+          <h4>🌙 外观</h4>
+          <div class="settings-row"><label>夜间模式</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="settings-dark-mode" onchange="onSettingsDarkMode()" style="width:18px;height:18px;accent-color:#8b5cf6;"> 开启</label></div>
+        </div>
+      </div>
+    </div>
+    <div id="screen-wrongbook" class="screen">
+      <h1>📕 错题本</h1>
+      <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
+      <div class="card">
+        <div class="qbank-toolbar">
+          <label><input type="checkbox" id="wb-only-unsolved" onchange="renderWrongBookList()"> 🔴 仅未掌握</label>
+          <div class="qbank-search">🔍 <input type="text" id="wb-search-input" placeholder="搜索题目/标签..." oninput="renderWrongBookList()"></div>
+          <button class="btn btn-small btn-danger" id="wb-clear-all" onclick="clearWrongBook()">🗑️ 清空错题本</button>
+        </div>
+        <p style="color:#666;font-size:13px;margin-bottom:8px;" id="wb-summary"></p>
+        <div id="wrongbook-list" style="max-height:60vh;overflow-y:auto;"></div>
       </div>
     </div>
     <div class="dialog-overlay" id="import-dialog">
@@ -496,6 +624,8 @@ function loadState() {
 function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {} }
 function getCh() { return state.chapters[state.currentChapterId] || null; }
 function getSubj() { return state.subjects[state.currentSubjectId] || null; }
+function getExam() { return state.generatedExams[state.currentExamId] || null; }
+function getActiveSet() { const ex = getExam(); if (ex) return { questions: ex.questions, userAnswers: ex.userAnswers, currentIdx: ex.currentIdx, setName: ex.name, isExam: true, setId: ex.id, subjectId: ex.subjectId }; const ch = getCh(); if (ch) return { questions: ch.questions, userAnswers: ch.userAnswers, currentIdx: ch.currentIdx, setName: ch.name, isExam: false, setId: ch.id, subjectId: null }; return null; }
 function isObjType(t) { return t === 'single' || t === 'judge'; }
 function getCi(q, answer) {
   if (!q) return false;
@@ -506,6 +636,17 @@ function getCi(q, answer) {
 function escapeHtml(text) {
   if (typeof text !== 'string') return String(text ?? '');
   const d = document.createElement('div'); d.textContent = text; return d.innerHTML;
+}
+function renderMarkdown(text) {
+  if (typeof text !== 'string') return escapeHtml(String(text ?? ''));
+  let s = escapeHtml(text);
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_,m) => { try { return katex.renderToString(m.trim(),{displayMode:true,throwOnError:false}); } catch(e){ return '<code>'+m+'</code>'; } });
+  s = s.replace(/\$([^\$]+?)\$/g, (_,m) => { try { return katex.renderToString(m.trim(),{displayMode:false,throwOnError:false}); } catch(e){ return '<code>'+m+'</code>'; } });
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
 }
 function getChStrategy(cid) {
   const ch = state.chapters[cid];
@@ -534,9 +675,14 @@ function migrateState(s) {
   }
   if (!s.achievements) s.achievements = { unlocked: [], history: [] };
   if (!s.ignoredQuestions) s.ignoredQuestions = [];
-  if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, mainFontSize: 17 };
+  if (!s.favoriteQuestions) s.favoriteQuestions = [];
+  if (!s.wrongBook) s.wrongBook = {};
+  if (!s.srsData) s.srsData = {};
+  if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, mainFontSize: 17, darkMode: false };
   if (!s.settings.sidebarFontSize) s.settings.sidebarFontSize = 13;
   if (!s.settings.mainFontSize) s.settings.mainFontSize = 17;
+  if (typeof s.settings.darkMode !== 'boolean') s.settings.darkMode = false;
+  if (!s.generatedExams) s.generatedExams = {};
   return s;
 }
 // ===== 科目管理 =====
@@ -671,46 +817,47 @@ function confirmImport() {
 function copyImportError() { navigator.clipboard.writeText(document.getElementById('import-error-text').textContent); }
 // ===== 答题 =====
 function renderQuestion() {
-  const ch = getCh(); const area = document.getElementById('question-area'); const tagEl = document.getElementById('quiz-tag'), typeEl = document.getElementById('quiz-type'); const navEl = document.getElementById('quiz-nav'), sb = document.getElementById('btn-submit'), nx = document.getElementById('btn-next');
-  if (!ch||!ch.questions||!ch.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; return; }
-  if (ch.currentIdx>=ch.questions.length) ch.currentIdx=ch.questions.length-1; if (ch.currentIdx<0) ch.currentIdx=0;
-  const q = ch.questions[ch.currentIdx]; if (!q) { if (area) area.innerHTML='<div class="empty-state">🎉 全部完成</div>'; return; }
+  const as = getActiveSet(); const area = document.getElementById('question-area'); const tagEl = document.getElementById('quiz-tag'), typeEl = document.getElementById('quiz-type'); const navEl = document.getElementById('quiz-nav'), sb = document.getElementById('btn-submit'), nx = document.getElementById('btn-next');
+  if (!as||!as.questions||!as.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; return; }
+  if (as.currentIdx>=as.questions.length) as.currentIdx=as.questions.length-1; if (as.currentIdx<0) as.currentIdx=0;
+  const q = as.questions[as.currentIdx]; if (!q) { if (area) area.innerHTML='<div class="empty-state">🎉 全部完成</div>'; return; }
   const typeMap = { single:'单选题', judge:'判断题', term:'名词解释', short:'简答题' };
-  if (tagEl) tagEl.textContent = q.tag||'未标注'; if (typeEl) typeEl.textContent = typeMap[q.type]||q.type;
-  const hasAns = ch.userAnswers[ch.currentIdx] !== undefined; const isCor = hasAns ? getCi(q, ch.userAnswers[ch.currentIdx]) : null;
-  let html = '<div class="quiz-question"><strong>'+(ch.currentIdx+1)+'. </strong>'+escapeHtml(q.question)+'</div>';
+  if (tagEl) tagEl.textContent = as.setName||'未标注'; if (typeEl) typeEl.textContent = typeMap[q.type]||q.type;
+  const hasAns = as.userAnswers[as.currentIdx] !== undefined; const isCor = hasAns ? getCi(q, as.userAnswers[as.currentIdx]) : null;
+  let html = '<div class="quiz-question"><strong>'+(as.currentIdx+1)+'. </strong>'+renderMarkdown(q.question)+'</div>';
   if (q.type==='single'||q.type==='judge') {
     html += '<div class="quiz-options">';
-    q.options.forEach((opt,idx) => { let cls = 'quiz-option'; if (hasAns) cls+=' disabled'; if (hasAns&&idx===ch.userAnswers[ch.currentIdx]) cls+=isCor?' correct':' wrong'; if (hasAns&&idx===q.answer) cls+=' correct'; if (!hasAns&&ch.userAnswers[ch.currentIdx]===idx) cls+=' selected'; html += '<div class="'+cls+'" onclick="'+(hasAns?'':'selectOption('+idx+')')+'">'+String.fromCharCode(65+idx)+'. '+escapeHtml(opt)+'</div>'; });
+    q.options.forEach((opt,idx) => { let cls = 'quiz-option'; if (hasAns) cls+=' disabled'; if (hasAns&&idx===as.userAnswers[as.currentIdx]) cls+=isCor?' correct':' wrong'; if (hasAns&&idx===q.answer) cls+=' correct'; if (!hasAns&&as.userAnswers[as.currentIdx]===idx) cls+=' selected'; html += '<div class="'+cls+'" onclick="'+(hasAns?'':'selectOption('+idx+')')+'">'+String.fromCharCode(65+idx)+'. '+renderMarkdown(opt)+'</div>'; });
     html += '</div>';
-  } else { html += '<div class="quiz-options"><textarea style="width:100%;min-height:60px;padding:8px;border:1px solid #dee2e6;border-radius:5px;font-size:15px;font-family:inherit;" placeholder="输入你的答案..." id="subjective-answer"'+(hasAns?' disabled':'')+'>'+(hasAns?escapeHtml(ch.userAnswers[ch.currentIdx]||''):'')+'</textarea></div>'; }
-  if (hasAns&&q.explanation) html += '<div class="explanation-box"><h4>📖 参考答案</h4><p>'+escapeHtml(q.explanation)+'</p></div>';
+  } else { html += '<div class="quiz-options"><textarea style="width:100%;min-height:60px;padding:8px;border:1px solid #dee2e6;border-radius:5px;font-size:15px;font-family:inherit;" placeholder="输入你的答案..." id="subjective-answer"'+(hasAns?' disabled':'')+'>'+(hasAns?escapeHtml(as.userAnswers[as.currentIdx]||''):'')+'</textarea></div>'; }
+  if (hasAns&&q.explanation) html += '<div class="explanation-box"><h4>📖 参考答案</h4><p>'+renderMarkdown(q.explanation)+'</p></div>';
   if (area) area.innerHTML = html;
-  if (navEl) { navEl.innerHTML = ch.questions.map((q,idx) => { let cls='dot'; if (idx===ch.currentIdx) cls+=' current'; if(isQuestionIgnored(ch.id,q))cls+=' ignored'; if (ch.userAnswers[idx]!==undefined) cls+=getCi(ch.questions[idx],ch.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
-  if (sb) sb.style.display = hasAns?'none':'inline-block'; const ig=document.getElementById('btn-ignore'); if(ig)ig.style.display=(hasAns||isQuestionIgnored(ch.id,q))?'none':'inline-block';
-  if (nx) { if (hasAns&&ch.currentIdx<ch.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&ch.currentIdx>=ch.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
+  if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
+  if (sb) sb.style.display = hasAns?'none':'inline-block'; const ig=document.getElementById('btn-ignore'); if(ig)ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block'; const fv=document.getElementById('btn-favorite'); if(fv){fv.textContent=isQuestionFavorite(as.setId,q)?'★ 已收藏':'⭐ 收藏';fv.style.background=isQuestionFavorite(as.setId,q)?'#2ed573':'#f59e0b';}
+  if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
   applyQuizFontSize();
 }
-function selectOption(idx) { const ch=getCh(); if (!ch||ch.userAnswers[ch.currentIdx]!==undefined) return; ch.userAnswers[ch.currentIdx]=idx; renderQuestion(); }
+function selectOption(idx) { const as=getActiveSet(); if (!as||as.userAnswers[as.currentIdx]!==undefined) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); }
 function submitAnswer() {
-  const ch=getCh(); if (!ch||!ch.questions||!ch.questions.length) return;
-  const q=ch.questions[ch.currentIdx]; if (!q||ch.userAnswers[ch.currentIdx]!==undefined) return;
-  if (q.type==='term'||q.type==='short') { const ta=document.getElementById('subjective-answer'); if (!ta||!ta.value.trim()) { alert('请输入答案'); return; } ch.userAnswers[ch.currentIdx]=ta.value.trim(); }
-  else { if (ch.userAnswers[ch.currentIdx]===undefined) { alert('请选择选项'); return; } }
+  const as=getActiveSet(); if (!as||!as.questions||!as.questions.length) return;
+  const q=as.questions[as.currentIdx]; if (!q||as.userAnswers[as.currentIdx]!==undefined) return;
+  if (q.type==='term'||q.type==='short') { const ta=document.getElementById('subjective-answer'); if (!ta||!ta.value.trim()) { alert('请输入答案'); return; } as.userAnswers[as.currentIdx]=ta.value.trim(); }
+  else { if (as.userAnswers[as.currentIdx]===undefined) { alert('请选择选项'); return; } }
   saveState(); renderQuestion(); updateProgress(); updateQuickActions(); checkAchievements();
 }
-function nextQuestion() { const ch=getCh(); if (!ch) return; if (ch.currentIdx<ch.questions.length-1) { ch.currentIdx++; renderQuestion(); updateProgress(); } }
-function goToQuestion(idx) { const ch=getCh(); if (!ch||idx<0||idx>=ch.questions.length) return; ch.currentIdx=idx; renderQuestion(); updateProgress(); }
-function endExam() { const ch=getCh(); if (!ch) return; autoUpdateChapterWeakTags(); saveQuizHistory(); autoBackup(); checkAchievements(); showScreen('report'); renderReport(); }
-function resetQuiz() { const ch=getCh(); if (!ch) return; ch.userAnswers=new Array(ch.questions.length).fill(undefined); ch.currentIdx=0; saveState(); renderQuestion(); updateProgress(); showScreen('start'); updateQuickActions(); }
+function nextQuestion() { const as=getActiveSet(); if (!as) return; if (as.currentIdx<as.questions.length-1) { as.currentIdx++; saveState(); renderQuestion(); updateProgress(); } }
+function goToQuestion(idx) { const as=getActiveSet(); if (!as||idx<0||idx>=as.questions.length) return; as.currentIdx=idx; saveState(); renderQuestion(); updateProgress(); }
+function endExam() { const as=getActiveSet(); if (!as) return; if (as.isExam) endExamGenerated(as); else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateWrongBookAfterExam(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); showScreen('report'); renderReport(); } }
+function resetQuiz() { const as=getActiveSet(); if (!as) return; as.userAnswers=new Array(as.questions.length).fill(undefined); as.currentIdx=0; saveState(); renderQuestion(); updateProgress(); showScreen('start'); updateQuickActions(); }
 function autoUpdateChapterWeakTags() {
   const ch=getCh(); if (!ch||!ch.questions) return; const s=getChStrategy(ch.id); if (!s) return;
   const tagResults={}; ch.questions.forEach((q,i)=>{ if (!q.tag||!isObjType(q.type)||ch.userAnswers[i]===undefined) return; if (!tagResults[q.tag]) tagResults[q.tag]={correct:0,total:0}; tagResults[q.tag].total++; if (getCi(q,ch.userAnswers[i])===true) tagResults[q.tag].correct++; });
   for (const tag in tagResults) { const r=tagResults[tag]; if (r.correct===r.total) s.weakTags=s.weakTags.filter(t=>t.name!==tag); else if (!s.weakTags.some(t=>t.name===tag)) s.weakTags.push({name:tag,active:true}); }
   saveState(); renderChapterTags(); updateChapterPromptTemplate();
 }
-function calcStats(ch) { if (!ch||!ch.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=ch.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; ch.questions.forEach((q,i)=>{ if(ch.userAnswers[i]!==undefined) answered++; if(isObjType(q.type)){objTotal++;const ci=getCi(q,ch.userAnswers[i]);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;} else {if(ch.userAnswers[i]!==undefined)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
-function updateProgress() { const ch=getCh(); const stats=calcStats(ch); const pct=stats.total>0?Math.round((stats.answered/stats.total)*100):0; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):(stats.total>0&&stats.answered===stats.total?100:0); document.getElementById('progress-fill').style.width=pct+'%'; document.getElementById('rate-display').textContent=rate+'%'; document.getElementById('progress-display').textContent=stats.answered+'/'+stats.total; document.getElementById('wrong-display').textContent=stats.wrongCount; }
+function autoUpdateChapterWeakTags(ch) { if (!ch||!ch.questions) return; const s=getChStrategy(ch.id); if (!s) return; const tagResults={}; ch.questions.forEach((q,i)=>{ if (!q.tag||!isObjType(q.type)||ch.userAnswers[i]===undefined) return; if (!tagResults[q.tag]) tagResults[q.tag]={correct:0,total:0}; tagResults[q.tag].total++; if (getCi(q,ch.userAnswers[i])===true) tagResults[q.tag].correct++; }); for (const tag in tagResults) { const r=tagResults[tag]; if (r.correct===r.total) s.weakTags=s.weakTags.filter(t=>t.name!==tag); else if (!s.weakTags.some(t=>t.name===tag)) s.weakTags.push({name:tag,active:true}); } saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
+function calcStats(as) { if (!as||!as.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=as.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; as.questions.forEach((q,i)=>{ if(as.userAnswers[i]!==undefined) answered++; if(isObjType(q.type)){objTotal++;const ci=getCi(q,as.userAnswers[i]);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;} else {if(as.userAnswers[i]!==undefined)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
+function updateProgress() { const as=getActiveSet(); const stats=calcStats(as); const pct=stats.total>0?Math.round((stats.answered/stats.total)*100):0; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):(stats.total>0&&stats.answered===stats.total?100:0); document.getElementById('progress-fill').style.width=pct+'%'; document.getElementById('rate-display').textContent=rate+'%'; document.getElementById('progress-display').textContent=stats.answered+'/'+stats.total; document.getElementById('wrong-display').textContent=stats.wrongCount; }
 function renderReport() {
   const ch=getCh(); const c=document.getElementById('report-content'); if (!c) return;
   if (!ch||!ch.questions||!ch.questions.length) { c.innerHTML='<div class="empty-state">暂无数据</div>'; return; }
@@ -723,7 +870,7 @@ function renderReport() {
   c.innerHTML=html;
 }
 // ===== 历史 =====
-function saveQuizHistory() { const ch=getCh(); if (!ch||!ch.questions||!ch.questions.length) return; const stats=calcStats(ch); const record={id:Date.now().toString(36),chapterId:ch.id,chapterName:ch.name,date:new Date().toLocaleString('zh-CN'),total:stats.total,correct:stats.objCorrect+stats.subjCount,wrong:stats.wrongCount,rate:stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0,questions:ch.questions.map((q,i)=>({question:q.question,type:q.type,tag:q.tag,userAnswer:ch.userAnswers[i],explanation:q.explanation,options:q.options,isCorrect:getCi(q,ch.userAnswers[i])}))}; if(!state.history)state.history=[];state.history.unshift(record);if(state.history.length>100)state.history=state.history.slice(0,100);saveState(); }
+function saveQuizHistory(ch) { if (!ch||!ch.questions||!ch.questions.length) return; const stats=calcStats(ch); const record={id:Date.now().toString(36),chapterId:ch.id,chapterName:ch.name,date:new Date().toLocaleString('zh-CN'),total:stats.total,correct:stats.objCorrect+stats.subjCount,wrong:stats.wrongCount,rate:stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0,questions:ch.questions.map((q,i)=>({question:q.question,type:q.type,tag:q.tag,userAnswer:ch.userAnswers[i],explanation:q.explanation,options:q.options,isCorrect:getCi(q,ch.userAnswers[i])}))}; if(!state.history)state.history=[];state.history.unshift(record);if(state.history.length>100)state.history=state.history.slice(0,100);saveState(); }
 function renderHistory() { const container=document.getElementById('history-content'); if(!container) return; const history=state.history||[]; if(history.length===0){container.innerHTML='<div class="empty-state">📭 暂无答题记录</div>';return;} const groups={};history.forEach((r,idx)=>{if(!groups[r.chapterId])groups[r.chapterId]={name:r.chapterName,records:[]};groups[r.chapterId].records.push({record:r,idx});}); let html=''; for(const chId in groups){const g=groups[chId];html+='<div class="history-chapter-group"><h3>📂 '+escapeHtml(g.name)+' <span>'+g.records.length+' 次</span></h3>';g.records.forEach(item=>{const r=item.record;html+='<div class="history-session" onclick="toggleSession(event,this)"><div class="history-session-header"><span class="history-session-date">🕐 '+escapeHtml(r.date)+'</span><span class="history-session-stats">✅ '+(r.correct||0)+' / ❌ '+(r.wrong||0)+' / 📊 '+(r.rate||0)+'%</span></div><div class="history-session-detail">'+renderSessionDetail(r,item.idx)+'</div></div>';});html+='</div>';} container.innerHTML=html; }
 function renderSessionDetail(record,sessionIdx){let html='<div class="history-filter-bar" onclick="event.stopPropagation()"><label onclick="event.stopPropagation()"><input type="checkbox" onchange="event.stopPropagation();filterHistorySession('+sessionIdx+',this)" id="filter-wrong-'+sessionIdx+'"> ❌ 只看错题</label><div class="search-box" onclick="event.stopPropagation()">🔍 <input type="text" placeholder="搜索..." id="search-'+sessionIdx+'" oninput="event.stopPropagation();filterHistorySession('+sessionIdx+',null)" onclick="event.stopPropagation()"></div></div><div id="session-qs-'+sessionIdx+'">'+renderSessionQuestions(record,sessionIdx,false,'')+'</div>';return html;}
 function renderSessionQuestions(record,sessionIdx,onlyWrong,keyword){if(!record.questions)return '<div class="empty-state">无数据</div>';let html='';record.questions.forEach((q,i)=>{const ci=q.isCorrect;if(onlyWrong&&ci!==false)return;if(keyword){const kw=keyword.toLowerCase();if(!(q.question&&q.question.toLowerCase().includes(kw))&&!(q.explanation&&q.explanation.toLowerCase().includes(kw)))return;}const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};const icon=ci===true?'✅':(ci===false?'❌':'⏳');html+='<div class="history-q-item '+(ci===true?'correct':ci===false?'wrong':'')+'"><p class="q-text">'+icon+' ['+(tm[q.type]||q.type)+'] '+escapeHtml(q.tag||'')+' 第'+(i+1)+'题：'+escapeHtml(q.question)+'</p>';if(q.explanation)html+='<p class="q-detail">📖 '+escapeHtml(q.explanation)+'</p></div>';});if(!html)html='<div class="empty-state" style="padding:12px;">无匹配</div>';return html;}
@@ -731,10 +878,11 @@ function toggleSession(event,el){if(event)event.stopPropagation();el.classList.t
 function filterHistorySession(sessionIdx,checkbox){const record=(state.history||[])[sessionIdx];if(!record)return;const onlyWrong=checkbox?checkbox.checked:document.getElementById('filter-wrong-'+sessionIdx).checked;const keyword=document.getElementById('search-'+sessionIdx).value.trim();const container=document.getElementById('session-qs-'+sessionIdx);if(container)container.innerHTML=renderSessionQuestions(record,sessionIdx,onlyWrong,keyword);}
 function showChapterHistory(chId){const ch=state.chapters[chId];if(!ch)return;const history=(state.history||[]).filter(r=>r.chapterId===chId);const container=document.getElementById('chapter-history-content');const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};if(history.length===0){container.innerHTML='<div class="empty-state">该章节暂无记录</div>';}else{let html='<p style="color:#666;margin-bottom:8px;font-size:14px;">共 '+history.length+' 轮答题</p>';history.forEach((r,ri)=>{const correctCount=r.questions?r.questions.filter(q=>q.isCorrect===true).length:0;const wrongCount=r.questions?r.questions.filter(q=>q.isCorrect===false).length:0;html+='<div class="ch-history-card" onclick="this.classList.toggle(\'expanded\')"><div class="ch-history-card-header"><span class="ch-round-badge">第'+(ri+1)+'轮</span><span class="ch-history-card-date">'+escapeHtml(r.date)+'</span><span class="ch-history-card-stats">✅'+correctCount+' ❌'+wrongCount+' 📊'+(r.rate||0)+'%</span></div><div class="ch-history-card-detail">';if(r.questions)r.questions.forEach((q,qi)=>{const ci=q.isCorrect;const icon=ci===true?'✅':(ci===false?'❌':'⏳');html+='<div class="ch-history-q '+(ci===true?'correct':ci===false?'wrong':'')+'"><span class="ch-history-q-icon">'+icon+'</span><span>['+(tm[q.type]||q.type)+'] '+escapeHtml(q.tag||'')+' '+escapeHtml(q.question)+'</span>';if(q.explanation)html+='<div class="ch-history-q-exp">📖 '+escapeHtml(q.explanation)+'</div>';html+='</div>';});html+='</div></div>';});container.innerHTML=html;}document.getElementById('chapter-history-dialog').classList.add('active');}
 // ===== 科目仪表板 =====
-function showSubjectDashboard(subjId) { const s=state.subjects[subjId]; if (!s) return; document.getElementById('subj-dash-title').textContent='📊 '+escapeHtml(s.name); document.querySelectorAll('.subj-tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.subj-tab').forEach(el=>el.classList.remove('active')); const ot=document.querySelector('.subj-tab[data-tab="overview"]'); if(ot)ot.classList.add('active'); const oc=document.getElementById('subj-tab-overview'); if(oc)oc.classList.add('active'); renderSubjOverview(s); renderSubjQuestionBank(s); renderSubjComposeExam(s); showScreen('subject-dash'); }
+function showSubjectDashboard(subjId) { const s=state.subjects[subjId]; if (!s) return; document.getElementById('subj-dash-title').textContent='📊 '+escapeHtml(s.name); document.querySelectorAll('.subj-tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.subj-tab').forEach(el=>el.classList.remove('active')); const ot=document.querySelector('.subj-tab[data-tab="overview"]'); if(ot)ot.classList.add('active'); const oc=document.getElementById('subj-tab-overview'); if(oc)oc.classList.add('active'); renderSubjOverview(s); renderSubjQuestionBank(s); renderSubjComposeExam(s); renderSubjSrsReview(s); showScreen('subject-dash'); }
 function switchSubjTab(tab) { document.querySelectorAll('.subj-tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.subj-tab').forEach(el=>el.classList.remove('active')); const te=document.querySelector('.subj-tab[data-tab="'+tab+'"]'); if(te)te.classList.add('active'); const ce=document.getElementById('subj-tab-'+tab); if(ce)ce.classList.add('active'); }
 function renderSubjOverview(s) {
   let totalQs=0,totalAnswered=0,objCorrect=0,objTotal=0,wrongCount=0,totalRounds=0;
+  let histAnswered=0,histCorrect=0,histWrong=0;
   let typeDist={single:0,judge:0,term:0,short:0};
   const chStats=[];
   s.chapterIds.forEach(cid=>{
@@ -742,23 +890,23 @@ function renderSubjOverview(s) {
     const ch=state.chapters[cid];if(!ch||!ch.questions)return;
     totalQs+=ch.questions.length;let cCor=0,cTot=0,cAns=0,cWr=0;
     ch.questions.forEach((q,i)=>{typeDist[q.type]=(typeDist[q.type]||0)+1;
-    if(ch.userAnswers[i]!==undefined){cAns++;totalAnswered++;}
-    if(isObjType(q.type)){cTot++;objTotal++;const ci=getCi(q,ch.userAnswers[i]);if(ci===true){cCor++;objCorrect++;}else if(ci===false){cWr++;wrongCount++;}}});
+    if(ch.userAnswers[i]!==undefined){cAns++;}
+    if(isObjType(q.type)){cTot++;const ci=getCi(q,ch.userAnswers[i]);if(ci===true){cCor++;}else if(ci===false){cWr++;}}});
     chStats.push({name:ch.name,rate:cTot>0?Math.round(cCor/cTot*100):0,total:cTot,correct:cCor,wrong:cWr,answered:cAns});
   });
   (state.history||[]).forEach(r=>{if(!s.chapterIds.includes(r.chapterId)||!r.questions)return;
-  totalQs+=r.questions.length;r.questions.forEach(q=>{typeDist[q.type]=(typeDist[q.type]||0)+1;
-  if(q.userAnswer!==undefined)totalAnswered++;if(isObjType(q.type)){objTotal++;if(q.isCorrect===true)objCorrect++;else if(q.isCorrect===false)wrongCount++;}});});
+  r.questions.forEach(q=>{if(q.userAnswer!==undefined)histAnswered++;if(isObjType(q.type)){if(q.isCorrect===true)histCorrect++;else if(q.isCorrect===false)histWrong++;}});});
+  objCorrect=histCorrect; objTotal=histCorrect+histWrong; wrongCount=histWrong; totalAnswered=histAnswered;
   const rate=objTotal>0?Math.round(objCorrect/objTotal*100):(totalAnswered>0?100:0);
   const o=document.getElementById('subj-tab-overview');if(!o)return;
   let h='<div class="enhanced-overview">';
   h+='<div class="eo-section"><h4>📊 总览</h4><div class="subj-dash-grid">';
   h+='<div class="subj-dash-card"><div class="num">'+s.chapterIds.length+'</div><div class="label">📂 章节</div></div>';
-  h+='<div class="subj-dash-card"><div class="num">'+totalQs+'</div><div class="label">📝 总题数（含历史）</div></div>';
+  h+='<div class="subj-dash-card"><div class="num">'+totalQs+'</div><div class="label">📝 当前题数</div></div>';
   h+='<div class="subj-dash-card"><div class="num">'+totalRounds+'</div><div class="label">🔄 总轮次</div></div>';
-  h+='<div class="subj-dash-card"><div class="num">'+totalAnswered+'</div><div class="label">✍️ 已答题</div></div>';
-  h+='<div class="subj-dash-card"><div class="num" style="color:#2ed573">'+objCorrect+'</div><div class="label">✅ 正确</div></div>';
-  h+='<div class="subj-dash-card"><div class="num" style="color:#e94560">'+wrongCount+'</div><div class="label">❌ 错误</div></div>';
+  h+='<div class="subj-dash-card"><div class="num">'+histAnswered+'</div><div class="label">✍️ 累计答题</div></div>';
+  h+='<div class="subj-dash-card"><div class="num" style="color:#2ed573">'+histCorrect+'</div><div class="label">✅ 正确</div></div>';
+  h+='<div class="subj-dash-card"><div class="num" style="color:#e94560">'+histWrong+'</div><div class="label">❌ 错误</div></div>';
   h+='<div class="subj-dash-card"><div class="num" style="color:#4facfe">'+rate+'%</div><div class="label">📊 正确率</div></div>';
   h+='</div></div>';
   if(chStats.length>0){
@@ -802,7 +950,7 @@ function renderSubjOverview(s) {
 }
 function renderSubjQuestionBank(s) { const container=document.getElementById('subj-tab-questionbank'); if(!container) return; container.innerHTML='<div class="qbank-toolbar"><label><input type="checkbox" id="qbank-only-wrong" onchange="renderSubjQuestionBankContent()"> ❌ 仅显示错题</label><div class="qbank-search">🔍 <input type="text" id="qbank-search-input" placeholder="搜索题目/标签..." oninput="renderSubjQuestionBankContent()"></div></div><div id="qbank-content"></div>'; renderSubjQuestionBankContent(s); }
 function renderSubjQuestionBankContent(subjOverride) { const s=subjOverride||getSubj(); if(!s) return; const onlyWrong=document.getElementById('qbank-only-wrong')?.checked||false; const keyword=(document.getElementById('qbank-search-input')?.value||'').trim().toLowerCase(); const container=document.getElementById('qbank-content'); if(!container) return; let html=''; s.chapterIds.forEach(cid=>{const ch=state.chapters[cid];if(!ch)return;const history=(state.history||[]).filter(r=>r.chapterId===cid);let chHtml='<div class="qbank-chapter-group"><div class="qbc-header">📂 '+escapeHtml(ch.name)+' <span>'+(ch.questions?ch.questions.length:0)+' 题 · '+history.length+' 次答题</span></div>';if(history.length===0&&(!ch.questions||ch.questions.length===0)){chHtml+='<div class="empty-state" style="padding:12px;">无数据</div></div>';html+=chHtml;return;}history.forEach((r,ri)=>{let hasVisible=false,roundHtml='';if(r.questions){r.questions.forEach((q,qi)=>{const ci=q.isCorrect;if(onlyWrong&&ci!==false)return;if(keyword&&!(q.question&&q.question.toLowerCase().includes(keyword))&&!(q.tag&&q.tag.toLowerCase().includes(keyword))&&!(q.explanation&&q.explanation.toLowerCase().includes(keyword)))return;hasVisible=true;const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};const icon=ci===true?'✅':(ci===false?'❌':'⏳');roundHtml+='<div class="qbank-question '+(ci===true?'correct':ci===false?'wrong':'unanswered')+'" onclick="showQDetailFromBank('+JSON.stringify(q).replace(/"/g,'&quot;')+','+ri+','+qi+')"><p class="q-text">'+icon+' ['+(tm[q.type]||q.type)+'] '+escapeHtml(q.tag||'')+'：'+escapeHtml((q.question||'').substring(0,60))+((q.question||'').length>60?'...':'')+'</p>';if(q.explanation)roundHtml+='<p class="q-detail">📖 '+escapeHtml(q.explanation.substring(0,80))+'</p>';roundHtml+='</div>';});}if(hasVisible){chHtml+='<div class="qbank-round" onclick="this.classList.toggle(\'expanded\')"><div class="qbank-round-header"><span>🕐 '+escapeHtml(r.date)+'</span><span>✅ '+(r.correct||0)+' / ❌ '+(r.wrong||0)+' / 📊 '+(r.rate||0)+'%</span></div><div class="qbank-round-detail">'+roundHtml+'</div></div>';}});if(!onlyWrong&&ch.questions&&ch.questions.length>0){const unanswered=ch.questions.filter((q,i)=>ch.userAnswers[i]===undefined);if(unanswered.length>0){let pendingHtml='';unanswered.forEach((q,i)=>{if(keyword&&!q.question.toLowerCase().includes(keyword)&&!(q.tag&&q.tag.toLowerCase().includes(keyword)))return;pendingHtml+='<div class="qbank-question unanswered" onclick="showQDetailFromBank('+JSON.stringify(q).replace(/"/g,'&quot;')+',-1,'+i+')"><p class="q-text">⏳ ['+(q.type==='single'?'单选':q.type==='judge'?'判断':q.type==='term'?'名词解释':'简答')+'] '+escapeHtml(q.tag||'')+'：'+escapeHtml(q.question.substring(0,60))+'</p></div>';});if(pendingHtml){chHtml+='<div class="qbank-round" onclick="this.classList.toggle(\'expanded\')"><div class="qbank-round-header"><span>⏳ 未答题 ('+unanswered.length+' 题)</span></div><div class="qbank-round-detail">'+pendingHtml+'</div></div>';}}}chHtml+='</div>';html+=chHtml;});if(!html)html='<div class="empty-state">没有符合条件的题目</div>';container.innerHTML=html;}
-function showQDetailFromBank(q,roundIdx,qIdx){if(!q)return;const tm={single:'单选题',judge:'判断题',term:'名词解释',short:'简答题'};let html='<div class="qd-question"><strong>第'+(qIdx+1)+'题 ['+(tm[q.type]||q.type)+']</strong> '+(q.tag?'🏷️ '+escapeHtml(q.tag):'')+'</div><div class="qd-question">'+escapeHtml(q.question)+'</div>';if(q.type==='single'||q.type==='judge'){html+='<div class="qd-answer"><strong>选项：</strong><br>';(q.options||[]).forEach((opt,i)=>{html+=String.fromCharCode(65+i)+'. '+escapeHtml(opt)+(i===q.answer?' <span style="color:#2ed573;">✓</span>':'')+'<br>';});html+='</div>';}if(q.userAnswer!==undefined){const ci=getCi(q,q.userAnswer);html+='<div class="qd-answer"><strong>你的答案：</strong> '+(ci===true?'✅ ':ci===false?'❌ ':'')+escapeHtml(String(q.userAnswer))+'</div>';}if(q.explanation)html+='<div class="qd-explanation"><h4>📖 解析</h4>'+escapeHtml(q.explanation)+'</div>';document.getElementById('qd-title').textContent='📖 题目详情'+(roundIdx>=0?' (第'+(roundIdx+1)+'轮)':' (未答题)');document.getElementById('qd-content').innerHTML=html;document.getElementById('qdetail-dialog').classList.add('active');}
+function showQDetailFromBank(q,roundIdx,qIdx){if(!q)return;const tm={single:'单选题',judge:'判断题',term:'名词解释',short:'简答题'};let html='<div class="qd-question"><strong>第'+(qIdx+1)+'题 ['+(tm[q.type]||q.type)+']</strong> '+(q.tag?'🏷️ '+escapeHtml(q.tag):'')+'</div><div class="qd-question">'+renderMarkdown(q.question)+'</div>';if(q.type==='single'||q.type==='judge'){html+='<div class="qd-answer"><strong>选项：</strong><br>';(q.options||[]).forEach((opt,i)=>{html+=String.fromCharCode(65+i)+'. '+renderMarkdown(opt)+(i===q.answer?' <span style="color:#2ed573;">✓</span>':'')+'<br>';});html+='</div>';}if(q.userAnswer!==undefined){const ci=getCi(q,q.userAnswer);html+='<div class="qd-answer"><strong>你的答案：</strong> '+(ci===true?'✅ ':ci===false?'❌ ':'')+escapeHtml(String(q.userAnswer))+'</div>';}if(q.explanation)html+='<div class="qd-explanation"><h4>📖 解析</h4>'+renderMarkdown(q.explanation)+'</div>';document.getElementById('qd-title').textContent='📖 题目详情'+(roundIdx>=0?' (第'+(roundIdx+1)+'轮)':' (未答题)');document.getElementById('qd-content').innerHTML=html;document.getElementById('qdetail-dialog').classList.add('active');}
 // ===== 大考卷 - v8.2 全新累积滑条 =====
 const EXAM_COLORS = ['#e94560','#f59e0b','#2ed573','#4facfe','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
 function renderSubjComposeExam(s) {
@@ -821,6 +969,9 @@ function renderSubjComposeExam(s) {
   // 出题策略
   html += '<h4 style="font-size:15px;margin:10px 0 6px;">4. 出题策略</h4><div class="strategy-group" style="margin:4px 0;"><div class="strategy-labels" style="font-size:13px;"><span>🔴 针对错题 <span class="val" id="exam-dv-err">60</span>%</span><span>🟡 滚动复习 <span class="val" id="exam-dv-review">20</span>%</span><span>🟢 新考点 <span class="val" id="exam-dv-new">20</span>%</span></div><div class="dual-range-wrap" style="height:36px;"><div class="dual-track-bg"></div><div class="dual-track-fill err" id="exam-fill-err" style="width:60%"></div><div class="dual-track-fill review" id="exam-fill-review" style="width:20%;left:60%"></div><div class="dual-track-fill new" id="exam-fill-new" style="width:20%;left:80%"></div><input type="range" class="exam-s-err" id="exam-s-err" min="0" max="100" value="60" step="1" oninput="updateExamDualSlider()"><input type="range" class="exam-s-review" id="exam-s-review" min="0" max="100" value="80" step="1" oninput="updateExamDualSlider()"></div></div>';
   html += '<div style="margin-top:12px;"><button class="btn btn-success btn-small" onclick="composeSubjExam(\'' + s.id + '\')">📝 生成大考卷</button></div></div>';
+  html += '<div class="card" style="margin-top:12px;"><h4 style="font-size:15px;margin-bottom:8px;">📋 历史试卷</h4>';
+  html += renderGeneratedExamList(s.id, 'exam');
+  html += '</div>';
   container.innerHTML = html;
   updateExamTotal(); updateExamDualSlider(); updateExamSlidersFromSubj();
 }
@@ -951,10 +1102,11 @@ function composeSubjExam(subjId) {
   function pick(chId, type, count) { if (count <= 0) return []; let pool = []; (state.history||[]).filter(r=>r.chapterId===chId).forEach(r => { if (r.questions) r.questions.forEach(q => { if (q.type === type) pool.push({...q}); }); }); const ch = state.chapters[chId]; if (ch && ch.questions) { ch.questions.forEach((q, idx) => { if (q.type === type && ch.userAnswers[idx] === undefined) pool.push({...q}); }); if (pool.length < count) ch.questions.forEach((q, idx) => { if (q.type === type && ch.userAnswers[idx] !== undefined) pool.push({...q}); }); } pool = pool.filter(q => !isQuestionIgnored(chId, q)); const shuffled = [...pool]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } return shuffled.slice(0, count); }
   const selected = []; cids.forEach((cid, idx) => { selected.push(...pick(cid, 'single', sD[idx])); selected.push(...pick(cid, 'judge', jD[idx])); selected.push(...pick(cid, 'term', tD[idx])); selected.push(...pick(cid, 'short', shD[idx])); });
   if (selected.length === 0) { alert('未能抽取题目'); return; }
-  const eid = 'exam_' + Date.now().toString(36); const en = '大考卷 ' + new Date().toLocaleString('zh-CN');
-  state.chapters[eid] = { id: eid, name: en, questions: selected, userAnswers: new Array(selected.length).fill(undefined), currentIdx: 0, createdAt: Date.now(), strategy: { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: ts, judge: tj, term: tt, short: tsh }, weakTags: [] } };
-  s.chapterIds.push(eid); state.currentChapterId = eid;
-  saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); showScreen('quiz'); renderQuestion(); updateProgress();
+  const eid = 'exam_' + Date.now().toString(36);
+  const genExam = { id: eid, name: '大考卷 ' + new Date().toLocaleString('zh-CN'), type: 'exam', subjectId: subjId, questions: selected, userAnswers: new Array(selected.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
+  state.generatedExams[eid] = genExam;
+  state.currentExamId = eid;
+  saveState(); startExamQuiz(eid); renderSubjComposeExam(s);
   alert('✅ 大考卷已生成：共 ' + selected.length + ' 题');
 }
 // ===== 备份系统 =====
@@ -970,8 +1122,8 @@ async function setupBackupFromDialog(){if(!window.showDirectoryPicker){alert('�
 async function changeBackupFolder(){await clearDirHandle();backupDirHandle=null;await setupBackupFromDialog();}
 async function refreshBackupMeta(){if(!backupDirHandle)return;try{const mh=await backupDirHandle.getFileHandle(BACKUP_META).catch(()=>null);if(mh)backupMeta=JSON.parse(await (await mh.getFile()).text());else backupMeta=[];updateBackupStatus('✅ '+backupMeta.length+' 份备份','ok');}catch(e){backupMeta=[];updateBackupStatus('✅ 就绪','ok');}}
 async function doManualBackup(){if(!backupDirHandle){alert('请先设置备份文件夹');return;}updateBackupStatus('⏳ 备份中...');await autoBackup();}
-async function autoBackup(){if(!backupDirHandle)return;try{const perm=await backupDirHandle.requestPermission({mode:'readwrite'});if(perm!=='granted'){updateBackupStatus('⚠️ 权限失效','warn');backupDirHandle=null;await clearDirHandle();return;}let backups=[];try{const mh=await backupDirHandle.getFileHandle(BACKUP_META).catch(()=>null);if(mh)backups=JSON.parse(await (await mh.getFile()).text());}catch(e){backups=[];}const idx=backups.length+1;const ts=new Date();const tsStr=ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0')+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0');const filename='做题引擎备份_'+String(idx).padStart(3,'0')+'.json';const label='第'+idx+'次备份';const fh=await backupDirHandle.getFileHandle(filename,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify({backupVersion:5,createdAt:ts.toISOString(),state},null,2));await w.close();backups.push({filename,label,timestamp:ts.toISOString(),dateStr:tsStr});while(backups.length>MAX_BACKUPS){const r=backups.shift();try{await backupDirHandle.removeEntry(r.filename);}catch(e){}}const mh2=await backupDirHandle.getFileHandle(BACKUP_META,{create:true});const w2=await mh2.createWritable();await w2.write(JSON.stringify(backups,null,2));await w2.close();backupMeta=backups;updateBackupStatus('✅ 备份: '+label,'ok');}catch(e){updateBackupStatus('⚠️ 备份失败: '+e.message,'warn');}}
-async function tryAutoRestore(){const handle=await loadDirHandle();if(!handle)return false;try{const perm=await handle.queryPermission({mode:'readwrite'});if(perm!=='granted'){if((await handle.requestPermission({mode:'readwrite'}))!=='granted'){await clearDirHandle();return false;}}}catch(e){await clearDirHandle();return false;}backupDirHandle=handle;await refreshBackupMeta();if(backupMeta.length===0)return false;const latest=backupMeta[backupMeta.length-1];try{const fh=await backupDirHandle.getFileHandle(latest.filename).catch(()=>null);if(!fh)return false;const data=JSON.parse(await (await fh.getFile()).text());if(data&&data.state){state=migrateState(data.state);saveState();updateBackupStatus('✅ 已恢复: '+latest.label,'ok');return true;}}catch(e){console.warn('auto restore err',e);}return false;}
+async function autoBackup(){if(!backupDirHandle)return;try{const perm=await backupDirHandle.requestPermission({mode:'readwrite'});if(perm!=='granted'){updateBackupStatus('⚠️ 权限失效','warn');backupDirHandle=null;await clearDirHandle();return;}let backups=[];try{const mh=await backupDirHandle.getFileHandle(BACKUP_META).catch(()=>null);if(mh)backups=JSON.parse(await (await mh.getFile()).text());}catch(e){backups=[];}const idx=backups.length+1;const ts=new Date();const tsStr=ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0')+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0');const filename='做题引擎备份_'+String(idx).padStart(3,'0')+'.json';const label='第'+idx+'次备份';const fh=await backupDirHandle.getFileHandle(filename,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify({backupVersion:8,createdAt:ts.toISOString(),state},null,2));await w.close();backups.push({filename,label,timestamp:ts.toISOString(),dateStr:tsStr});while(backups.length>MAX_BACKUPS){const r=backups.shift();try{await backupDirHandle.removeEntry(r.filename);}catch(e){}}const mh2=await backupDirHandle.getFileHandle(BACKUP_META,{create:true});const w2=await mh2.createWritable();await w2.write(JSON.stringify(backups,null,2));await w2.close();backupMeta=backups;updateBackupStatus('✅ 备份: '+label,'ok');}catch(e){updateBackupStatus('⚠️ 备份失败: '+e.message,'warn');}}
+async function tryAutoRestore(){if(location.protocol==='file:')return false;const handle=await loadDirHandle();if(!handle)return false;try{const perm=await handle.queryPermission({mode:'readwrite'});if(perm!=='granted'){if((await handle.requestPermission({mode:'readwrite'}))!=='granted'){await clearDirHandle();return false;}}}catch(e){await clearDirHandle();return false;}backupDirHandle=handle;await refreshBackupMeta();if(backupMeta.length===0)return false;const latest=backupMeta[backupMeta.length-1];try{const fh=await backupDirHandle.getFileHandle(latest.filename).catch(()=>null);if(!fh)return false;const data=JSON.parse(await (await fh.getFile()).text());if(data&&data.state){state=migrateState(data.state);saveState();updateBackupStatus('✅ 已恢复: '+latest.label,'ok');return true;}}catch(e){console.warn('auto restore err',e);}return false;}
 async function openRestoreDialog(){if(!backupDirHandle||backupMeta.length===0){alert(backupDirHandle?'暂无备份':'请先设置备份文件夹');return;}await refreshBackupMeta();const container=document.getElementById('restore-list');if(backupMeta.length===0){container.innerHTML='<div class="empty-state">暂无备份</div>';}else{const sorted=[...backupMeta].reverse();container.innerHTML=sorted.map(b=>{const isLatest=b.filename===backupMeta[backupMeta.length-1].filename;return '<div class="restore-list-item"><div class="rli-info"><div class="rli-label">'+escapeHtml(b.label)+(isLatest?' ⭐最新':'')+'</div><div class="rli-date">'+escapeHtml(b.dateStr||b.timestamp)+'</div></div><button class="btn btn-small btn-warning" onclick="restoreFromBackup(\''+b.filename+'\')">⏪ 回档</button></div>';}).join('');}document.getElementById('restore-dialog').classList.add('active');}
 function closeRestoreDialog(){document.getElementById('restore-dialog').classList.remove('active');}
 async function restoreFromBackup(filename){if(!confirm('回档后当前数据将被替换。建议先做一次立即备份。'))return;try{const fh=await backupDirHandle.getFileHandle(filename);const data=JSON.parse(await(await fh.getFile()).text());if(!data||!data.state)throw new Error('格式错误');state=migrateState(data.state);saveState();closeRestoreDialog();renderSubjectList();const sids=Object.keys(state.subjects);if(sids.length>0){if(!state.currentSubjectId||!state.subjects[state.currentSubjectId])state.currentSubjectId=sids[0];const s=getSubj();if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId]))state.currentChapterId=s.chapterIds[0]||null;}const ch=getCh();if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();}renderHistory();updateQuickActions();loadChapterStrategyToUI();showScreen(state.lastScreen||'start');updateBackupStatus('✅ 已回档','ok');alert('✅ 回档成功');}catch(e){alert('❌ 回档失败: '+e.message);}}
@@ -998,21 +1150,234 @@ const ACTIONS = [
   { id:'thousand_questions', name:'题海大师', icon:'🏆', desc:'累计答题1000道', check:g=>g.totalAnswered>=1000 },
   { id:'streak_50', name:'神话传说', icon:'🐉', desc:'连续答对50题', check:g=>g.maxStreak>=50 }
 ];
-function computeGlobalStats() { let totalAnswered=0,totalCorrect=0,totalWrong=0,totalRounds=state.history?state.history.length:0,maxStreak=0,currentStreak=0,hasPerfectSession=false; let typeDist={single:0,judge:0,term:0,short:0}; (state.history||[]).forEach(r=>{if(!r.questions)return; r.questions.forEach(q=>{typeDist[q.type]=(typeDist[q.type]||0)+1; if(q.userAnswer!==undefined){totalAnswered++; if(isObjType(q.type)){if(q.isCorrect===true){totalCorrect++;currentStreak++;if(currentStreak>maxStreak)maxStreak=currentStreak;}else{totalWrong++;currentStreak=0;}}}}); if(r.total>=10&&r.wrong===0)hasPerfectSession=true; }); Object.values(state.chapters).forEach(ch=>{if(!ch.questions)return; ch.questions.forEach((q,i)=>{typeDist[q.type]=(typeDist[q.type]||0)+1; if(ch.userAnswers[i]!==undefined){totalAnswered++; if(isObjType(q.type)){const ci=getCi(q,ch.userAnswers[i]);if(ci===true){totalCorrect++;currentStreak++;if(currentStreak>maxStreak)maxStreak=currentStreak;}else{totalWrong++;currentStreak=0;}}}}); }); const totalChapters=Object.values(state.chapters).filter(ch=>ch.questions&&ch.questions.length>0).length; return { totalAnswered, totalCorrect, totalWrong, totalRounds, maxStreak, hasPerfectSession, totalSubjects:Object.keys(state.subjects).length, totalChapters, typeDist }; }
+function computeGlobalStats() { let totalAnswered=0,totalCorrect=0,totalWrong=0,totalRounds=state.history?state.history.length:0,maxStreak=0,hasPerfectSession=false; let typeDist={single:0,judge:0,term:0,short:0}; (state.history||[]).forEach(r=>{if(!r.questions)return; let streak=0; r.questions.forEach(q=>{typeDist[q.type]=(typeDist[q.type]||0)+1; if(q.userAnswer!==undefined){totalAnswered++; if(isObjType(q.type)){if(q.isCorrect===true){totalCorrect++;streak++;if(streak>maxStreak)maxStreak=streak;}else{totalWrong++;streak=0;}}}}); if(r.total>=10&&r.wrong===0)hasPerfectSession=true; }); const totalChapters=Object.values(state.chapters).filter(ch=>ch.questions&&ch.questions.length>0).length; return { totalAnswered, totalCorrect, totalWrong, totalRounds, maxStreak, hasPerfectSession, totalSubjects:Object.keys(state.subjects).length, totalChapters, typeDist }; }
 function checkAchievements() { if(!state.achievements)state.achievements={unlocked:[],history:[]}; const g=computeGlobalStats(); let newUnlock=false; ACTIONS.forEach(a=>{ if(!state.achievements.unlocked.includes(a.id)&&a.check(g)){ state.achievements.unlocked.push(a.id); state.achievements.history.push({id:a.id,date:new Date().toLocaleString('zh-CN')}); newUnlock=true; } }); if(newUnlock){saveState();} return newUnlock; }
 function renderAchievements() { const unlocked=state.achievements?state.achievements.unlocked:[]; const history=state.achievements?state.achievements.history:[]; const countEl=document.getElementById('ach-count-display'); if(countEl)countEl.innerHTML='已解锁 <strong>'+unlocked.length+'</strong> / '+ACTIONS.length; const grid=document.getElementById('achievements-grid'); if(!grid)return; grid.innerHTML=ACTIONS.map(a=>{ const isUnlocked=unlocked.includes(a.id); const rec=history.find(h=>h.id===a.id); if(isUnlocked){ return '<div class="achievement-card unlocked"><div class="ach-icon">'+a.icon+'</div><div class="ach-name">'+escapeHtml(a.name)+'</div><div class="ach-desc">'+escapeHtml(a.desc)+'</div><div class="ach-status">🔓 '+escapeHtml(rec?rec.date:'已解锁')+'</div></div>'; } else { return '<div class="achievement-card locked"><div class="ach-mystery">❓</div><div class="ach-status">未解锁</div></div>'; } }).join(''); }
-function renderSettings() { const quizFs=state.settings?state.settings.quizFontSize:17; const sidebarFs=state.settings?state.settings.sidebarFontSize:13; const mainFs=state.settings?state.settings.mainFontSize:17; const s1=document.getElementById('settings-quiz-font-size');const v1=document.getElementById('settings-quiz-font-size-val');if(s1)s1.value=quizFs;if(v1)v1.textContent=quizFs+'px';const s2=document.getElementById('settings-sidebar-font-size');const v2=document.getElementById('settings-sidebar-font-size-val');if(s2)s2.value=sidebarFs;if(v2)v2.textContent=sidebarFs+'px';const s3=document.getElementById('settings-main-font-size');const v3=document.getElementById('settings-main-font-size-val');if(s3)s3.value=mainFs;if(v3)v3.textContent=mainFs+'px';applyAllFontSizes(); }
+function renderSettings() { const quizFs=state.settings?state.settings.quizFontSize:17; const sidebarFs=state.settings?state.settings.sidebarFontSize:13; const mainFs=state.settings?state.settings.mainFontSize:17; const s1=document.getElementById('settings-quiz-font-size');const v1=document.getElementById('settings-quiz-font-size-val');if(s1)s1.value=quizFs;if(v1)v1.textContent=quizFs+'px';const s2=document.getElementById('settings-sidebar-font-size');const v2=document.getElementById('settings-sidebar-font-size-val');if(s2)s2.value=sidebarFs;if(v2)v2.textContent=sidebarFs+'px';const s3=document.getElementById('settings-main-font-size');const v3=document.getElementById('settings-main-font-size-val');if(s3)s3.value=mainFs;if(v3)v3.textContent=mainFs+'px';const dm=document.getElementById('settings-dark-mode');if(dm)dm.checked=state.settings?state.settings.darkMode:false;applyAllFontSizes(); }
 function onSettingsQuizFontSize() { const fs=parseInt(document.getElementById('settings-quiz-font-size').value)||17; state.settings.quizFontSize=fs; document.getElementById('settings-quiz-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); }
 function onSettingsSidebarFontSize() { const fs=parseInt(document.getElementById('settings-sidebar-font-size').value)||13; state.settings.sidebarFontSize=fs; document.getElementById('settings-sidebar-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); }
 function onSettingsMainFontSize() { const fs=parseInt(document.getElementById('settings-main-font-size').value)||17; state.settings.mainFontSize=fs; document.getElementById('settings-main-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); }
 function applyQuizFontSize() { const fs=state.settings?state.settings.quizFontSize:17; document.querySelectorAll('.quiz-question').forEach(el=>el.style.fontSize=fs+'px'); document.querySelectorAll('.quiz-option').forEach(el=>el.style.fontSize=(fs-2)+'px'); }
 function applyAllFontSizes() { applyQuizFontSize(); const sidebarFs=state.settings?state.settings.sidebarFontSize:13; const mainFs=state.settings?state.settings.mainFontSize:17; document.getElementById('sidebar').style.fontSize=sidebarFs+'px'; document.getElementById('main').style.fontSize=mainFs+'px'; }
+function onSettingsDarkMode() { state.settings.darkMode=document.getElementById('settings-dark-mode').checked; saveState(); applyDarkMode(); }
+function applyDarkMode() { const enabled=state.settings&&state.settings.darkMode; document.body.classList.toggle('dark-mode', enabled); const cb=document.getElementById('settings-dark-mode'); if(cb)cb.checked=enabled; }
 function simpleHash(str) { let h=0; for(let i=0;i<str.length;i++) h=((h<<5)-h+str.charCodeAt(i))|0; return h.toString(36); }
-function getQuestionId(chId,q) { return chId+':'+simpleHash((q.question||'').substring(0,30)); }
+function getQuestionId(chId,q) { return chId+':'+simpleHash((q.question||'')); }
 function isQuestionIgnored(chId,q) { return state.ignoredQuestions&&state.ignoredQuestions.includes(getQuestionId(chId,q)); }
+function isQuestionFavorite(chId,q) { return state.favoriteQuestions&&state.favoriteQuestions.includes(getQuestionId(chId,q)); }
+function toggleFavorite(chId,q) { const qId=getQuestionId(chId,q); if(!state.favoriteQuestions)state.favoriteQuestions=[]; const idx=state.favoriteQuestions.indexOf(qId); if(idx>=0) state.favoriteQuestions.splice(idx,1); else state.favoriteQuestions.push(qId); saveState(); renderQuestion(); }
+function toggleFavoriteCurrent() { const ch=getCh(); if(!ch)return; const q=ch.questions[ch.currentIdx]; if(!q)return; toggleFavorite(ch.id,q); }
 function ignoreCurrentQuestion() { const ch=getCh(); if(!ch)return; const q=ch.questions[ch.currentIdx]; if(!q)return; if(!state.ignoredQuestions)state.ignoredQuestions=[]; const qId=getQuestionId(ch.id,q); if(!state.ignoredQuestions.includes(qId)){state.ignoredQuestions.push(qId);} saveState(); if(ch.currentIdx<ch.questions.length-1){ch.currentIdx++;} renderQuestion(); updateProgress(); }
+// ===== 错题本 =====
+function updateWrongBookAfterExam(as) {
+  if (!state.wrongBook) state.wrongBook = {};
+  as.questions.forEach((q, i) => {
+    if (!isObjType(q.type) || as.userAnswers[i] === undefined) return;
+    if (getCi(q, as.userAnswers[i]) === false) {
+      const qId = getQuestionId(as.setId, q);
+      if (!state.wrongBook[qId]) {
+        state.wrongBook[qId] = { question: q.question, type: q.type, options: q.options, answer: q.answer, tag: q.tag, explanation: q.explanation, chapterId: as.setId, chapterName: as.setName, wrongCount: 0, mastered: false, addedAt: Date.now() };
+      }
+      const entry = state.wrongBook[qId];
+      entry.wrongCount++;
+      entry.lastWrong = Date.now();
+      entry.mastered = false;
+    }
+  });
+  saveState();
+}
+function renderWrongBook() {
+  const countEl = document.getElementById('wrongbook-count');
+  const entries = Object.values(state.wrongBook || {});
+  if (countEl) countEl.textContent = entries.length ? '(' + entries.length + ')' : '';
+  renderWrongBookList();
+}
+function renderWrongBookList() {
+  const container = document.getElementById('wrongbook-list');
+  const summary = document.getElementById('wb-summary');
+  const onlyUn = document.getElementById('wb-only-unsolved')?.checked || false;
+  const keyword = (document.getElementById('wb-search-input')?.value || '').trim().toLowerCase();
+  let entries = Object.values(state.wrongBook || {});
+  if (onlyUn) entries = entries.filter(e => !e.mastered);
+  if (keyword) entries = entries.filter(e => (e.question||'').toLowerCase().includes(keyword) || (e.tag||'').toLowerCase().includes(keyword) || (e.chapterName||'').toLowerCase().includes(keyword));
+  const mastered = Object.values(state.wrongBook||{}).filter(e=>e.mastered).length;
+  if (summary) summary.textContent = entries.length
+    ? '共 ' + (state.wrongBook?Object.keys(state.wrongBook).length:0) + ' 道错题，已掌握 ' + mastered + ' 道'
+    : '错题本为空，答错题会自动收录到这里';
+  if (!entries.length) { container.innerHTML = '<div class="empty-state">📭 暂无错题' + (keyword||onlyUn?'（过滤后无结果）':'，继续保持！') + '</div>'; return; }
+  const tm = {single:'单选',judge:'判断',term:'名词解释',short:'简答'};
+  let html = '';
+  entries.forEach(e => {
+    const qId = getQuestionId(e.chapterId, {question: e.question});
+    html += '<div class="qbank-round' + (e.mastered?' mastered':'') + '" onclick="this.classList.toggle(\'expanded\')"><div class="qbank-round-header"><span>[' + (tm[e.type]||e.type) + '] ' + escapeHtml(e.chapterName||'') + ' ' + escapeHtml((e.question||'').substring(0,50)) + '</span><span style="color:#e94560;">错 ' + e.wrongCount + ' 次</span></div><div class="qbank-round-detail">';
+    html += '<div class="qbank-question wrong"><p class="q-text">' + escapeHtml(e.question) + '</p>';
+    if (e.tag) html += '<p class="q-detail">🏷️ ' + escapeHtml(e.tag) + '</p>';
+    if (e.options) { (e.options||[]).forEach((opt,i) => { html += String.fromCharCode(65+i)+'. '+escapeHtml(opt)+(i===e.answer?' <span style="color:#2ed573;">✓</span>':'')+'<br>'; }); }
+    if (e.explanation) html += '<p class="q-detail" style="margin-top:4px;">📖 ' + escapeHtml(e.explanation) + '</p>';
+    html += '</div></div>';
+    html += '<div style="padding:4px 8px;display:flex;gap:6px;"><button class="btn btn-small btn-success" onclick="event.stopPropagation();markWrongBookMastered(\'' + qId.replace(/'/g,"\\'") + '\')">✅ 标记已掌握</button><button class="btn btn-small btn-danger" onclick="event.stopPropagation();removeWrongBook(\'' + qId.replace(/'/g,"\\'") + '\')">🗑️ 移除</button></div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+function markWrongBookMastered(qId) { if (state.wrongBook && state.wrongBook[qId]) { state.wrongBook[qId].mastered = true; saveState(); renderWrongBook(); } }
+function removeWrongBook(qId) { if (state.wrongBook && state.wrongBook[qId]) { delete state.wrongBook[qId]; saveState(); renderWrongBook(); } }
+function clearWrongBook() { if (!state.wrongBook || !Object.keys(state.wrongBook).length) return; if (!confirm('清空错题本？')) return; state.wrongBook = {}; saveState(); renderWrongBook(); }
+function populateWrongBookFromHistory() {
+  if (!state.wrongBook) state.wrongBook = {};
+  let added = 0;
+  (state.history || []).forEach(r => {
+    if (!r.questions) return;
+    r.questions.forEach((q, qi) => {
+      if (!isObjType(q.type) || q.isCorrect !== false) return;
+      const qId = getQuestionId(r.chapterId, q);
+      if (!state.wrongBook[qId]) {
+        state.wrongBook[qId] = { question: q.question, type: q.type, options: q.options, answer: q.answer, tag: q.tag, explanation: q.explanation, chapterId: r.chapterId, chapterName: r.chapterName, wrongCount: 0, mastered: false, addedAt: Date.now() };
+        added++;
+      }
+      state.wrongBook[qId].wrongCount++;
+    });
+  });
+  if (added > 0) saveState();
+  return added;
+}
+function populateSRSFromHistory() {
+  if (!state.srsData) state.srsData = {};
+  let added = 0;
+  (state.history || []).forEach(r => {
+    if (!r.questions) return;
+    r.questions.forEach(q => {
+      if (!isObjType(q.type) || q.userAnswer === undefined) return;
+      const qId = getQuestionId(r.chapterId, q);
+      if (!state.srsData[qId]) {
+        state.srsData[qId] = { interval: 0, easeFactor: 2.5, repetitions: 0, nextReview: 0 };
+        added++;
+      }
+      const srs = state.srsData[qId];
+      const ci = q.isCorrect;
+      if (ci === true) {
+        if (srs.repetitions === 0) srs.interval = 1;
+        else if (srs.repetitions === 1) srs.interval = 3;
+        else srs.interval = Math.round(srs.interval * srs.easeFactor);
+        srs.repetitions++;
+      } else {
+        srs.interval = 1; srs.repetitions = 0;
+        srs.easeFactor = Math.max(1.3, srs.easeFactor - 0.2);
+      }
+    });
+  });
+  if (added > 0) saveState();
+  return added;
+}
+// ===== SRS 间隔重复 (SM-2 算法) =====
+function getSRSData(qId) { if (!state.srsData||!state.srsData[qId]) state.srsData[qId]={interval:0,easeFactor:2.5,repetitions:0,nextReview:0}; return state.srsData[qId]; }
+function getSrsDueQuestions() { const now=Date.now(); return Object.keys(state.srsData||{}).filter(id=>state.srsData[id].nextReview>0&&state.srsData[id].nextReview<=now); }
+function getOverdueCount() { return getSrsDueQuestions().length; }
+function updateSrsCard() { /* SRS card moved to subject dashboard, home card removed */ }
+function updateWrongBookBadge() { const el=document.getElementById('wrongbook-count'); if (!el) return; const count=Object.keys(state.wrongBook||{}).length; el.textContent = count ? '('+count+')' : ''; }
+function updateSRSAfterExam(as) { if (!state.srsData) state.srsData={}; const now=Date.now(); as.questions.forEach((q,i)=>{ if (!isObjType(q.type)||as.userAnswers[i]===undefined) return; const qId=getQuestionId(as.setId,q); const ci=getCi(q,as.userAnswers[i]); const srs=getSRSData(qId); if (ci===true) { if (srs.repetitions===0) srs.interval=1; else if (srs.repetitions===1) srs.interval=3; else srs.interval=Math.round(srs.interval*srs.easeFactor); srs.repetitions++; } else { srs.interval=1; srs.repetitions=0; srs.easeFactor=Math.max(1.3,srs.easeFactor-0.2); } const days=srs.interval*86400000; srs.nextReview=now+days; }); saveState(); }
+function startSrsReview() { const due=getSrsDueQuestions(); if (!due.length) { alert('暂无待复习题目'); return; } const questions=[]; due.forEach(qId=>{ for (const cid in state.chapters) { const ch=state.chapters[cid]; if (!ch||!ch.questions) continue; for (const q of ch.questions) { if (getQuestionId(cid,q)===qId) { questions.push({...q,_srsChapterId:cid}); break; } } if (questions.length>0) break; } }); if (!questions.length) { alert('未找到对应题目数据'); return; } const sid=state.currentSubjectId||Object.keys(state.subjects)[0]; const eid='srs_'+Date.now().toString(36); const genExam={id:eid,name:'📅 间隔复习 '+new Date().toLocaleDateString('zh-CN'),type:'srs',subjectId:sid,questions,userAnswers:new Array(questions.length).fill(undefined),currentIdx:0,createdAt:Date.now()}; state.generatedExams[eid]=genExam; state.currentExamId=eid; saveState(); startExamQuiz(eid); }
+function startExamQuiz(eid) { const ex=state.generatedExams[eid]; if (!ex) return; state.currentExamId=eid; saveState(); showScreen('quiz'); renderQuestion(); updateProgress(); }
+function endExamGenerated(as) { updateWrongBookAfterExam(as); updateSRSAfterExam(as); autoBackup(); checkAchievements(); state.currentExamId=null; saveState(); renderExamReport(as); }
+function renderExamReport(as) { const stats=calcStats(as); const c=document.getElementById('report-content'); if (!c) return; const correctTotal=stats.objCorrect+stats.subjCount; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0; let html='<div class="report-grid"><div class="report-stat correct"><div class="num">'+correctTotal+'</div><div class="label">✅ 总正确</div></div><div class="report-stat wrong"><div class="num">'+stats.wrongCount+'</div><div class="label">❌ 错误</div></div><div class="report-stat rate"><div class="num">'+rate+'%</div><div class="label">📊 正确率</div></div><div class="report-stat"><div class="num">'+stats.answered+'/'+stats.total+'</div><div class="label">📝 进度</div></div></div>'; c.innerHTML=html; showScreen('report'); }
+function renderSubjSrsReview(s) {
+  const container = document.getElementById('subj-tab-srs-review'); if (!container) return;
+  const due = getSrsDueQuestions(); const dueCount = due.length;
+  let html = '<div class="card"><h3>📅 间隔复习 — ' + escapeHtml(s.name) + '</h3>';
+  html += '<p style="color:#666;font-size:14px;margin:6px 0 12px;">基于 SM-2 算法自动安排复习时间。答对后间隔延长，答错后重新学习。</p>';
+  html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">';
+  html += '<span style="font-size:15px;font-weight:600;">到期题目：<strong style="color:#e94560;">' + dueCount + '</strong> 道</span>';
+  html += '<button class="btn btn-primary btn-small" onclick="startSrsReviewForSubj(\'' + s.id + '\')">📅 复习到期题目</button>';
+  html += '</div>';
+  html += '<h4 style="font-size:15px;margin:12px 0 8px;">自定义复习 — 选择章节生成复习试卷</h4>';
+  html += '<div class="chapter-select-grid" id="srs-chapter-select">';
+  s.chapterIds.forEach(cid => { const ch = state.chapters[cid]; if (!ch) return; html += '<div class="chapter-select-item"><input type="checkbox" id="srs-chk-' + cid + '" value="' + cid + '"><label for="srs-chk-' + cid + '">' + escapeHtml(ch.name) + '</label><span class="cs-count">' + (ch.questions ? ch.questions.length : 0) + ' 题</span></div>'; });
+  html += '</div>';
+  html += '<div class="type-counts" style="margin-top:10px;">';
+  html += '<div class="type-count-item"><label>📝 单选</label><input type="number" id="srs-tc-single" min="0" value="5"></div>';
+  html += '<div class="type-count-item"><label>⚖️ 判断</label><input type="number" id="srs-tc-judge" min="0" value="3"></div>';
+  html += '</div>';
+  html += '<div style="margin-top:10px;"><button class="btn btn-warning btn-small" onclick="composeSrsCustom(\'' + s.id + '\')">📝 生成复习试卷</button></div>';
+  html += '</div>';
+  // 历史试卷列表
+  html += '<div class="card" style="margin-top:12px;"><h4 style="font-size:15px;margin-bottom:8px;">📋 历史试卷</h4>';
+  html += renderGeneratedExamList(s.id);
+  html += '</div>';
+  container.innerHTML = html;
+}
+function renderGeneratedExamList(subjId, typeFilter) {
+  const exams = state.generatedExams || {};
+  const subjExams = Object.values(exams).filter(e => e.subjectId === subjId && (!typeFilter || e.type === typeFilter)).sort((a, b) => b.createdAt - a.createdAt);
+  if (!subjExams.length) return '<div class="empty-state" style="padding:12px;">暂无历史试卷</div>';
+  const tm = { exam: '大考卷', srs: '间隔复习' };
+  let html = '';
+  subjExams.forEach(e => {
+    const total = e.questions.length;
+    const answered = e.userAnswers.filter(a => a !== undefined).length;
+    const isDone = answered >= total;
+    const isSrs = e.type === 'srs';
+    html += '<div class="restore-list-item" style="cursor:default;">';
+    html += '<div class="rli-info">';
+    html += '<div class="rli-label">' + (isSrs ? '📅' : '📝') + ' ' + escapeHtml(e.name) + ' <span style="color:#888;">(' + total + '题)</span></div>';
+    html += '<div class="rli-date">' + new Date(e.createdAt).toLocaleString('zh-CN') + ' — ' + answered + '/' + total + ' 已答</div>';
+    html += '</div>';
+    if (isDone) {
+      const correctCount = e.questions.filter((q, i) => getCi(q, e.userAnswers[i]) === true).length;
+      const rate = total > 0 ? Math.round(correctCount / total * 100) : 0;
+      html += '<span style="color:#2ed573;font-weight:600;margin-right:8px;">✅ ' + rate + '%</span>';
+      html += '<button class="btn btn-small btn-secondary" onclick="startExamQuiz(\'' + e.id + '\')">查看</button>';
+    } else {
+      html += '<button class="btn btn-small btn-primary" onclick="startExamQuiz(\'' + e.id + '\')">▶️ 继续作答</button>';
+    }
+    html += '</div>';
+  });
+  return html;
+}
+function composeSrsCustom(subjId) {
+  const s = state.subjects[subjId]; if (!s) return;
+  const checkedCids = []; document.querySelectorAll('#srs-chapter-select input[type="checkbox"]:checked').forEach(cb => checkedCids.push(cb.value));
+  if (!checkedCids.length) { alert('请至少选择一个章节'); return; }
+  const ts = parseInt(document.getElementById('srs-tc-single').value) || 0; const tj = parseInt(document.getElementById('srs-tc-judge').value) || 0;
+  if (ts + tj === 0) { alert('请设置至少 1 道题'); return; }
+  const selected = [];
+  checkedCids.forEach(cid => {
+    const ch = state.chapters[cid]; if (!ch || !ch.questions) return;
+    const pool = ch.questions.filter(q => (q.type === 'single' || q.type === 'judge') && !isQuestionIgnored(cid, q));
+    const singlePool = pool.filter(q => q.type === 'single'); const judgePool = pool.filter(q => q.type === 'judge');
+    const sh = [...singlePool]; for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } selected.push(...sh.slice(0, ts));
+    const sh2 = [...judgePool]; for (let i = sh2.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh2[i], sh2[j]] = [sh2[j], sh2[i]]; } selected.push(...sh2.slice(0, tj));
+  });
+  if (!selected.length) { alert('未能抽取题目'); return; }
+  const eid = 'srs_' + Date.now().toString(36);
+  const genExam = { id: eid, name: '📅 自定义复习 ' + new Date().toLocaleDateString('zh-CN'), type: 'srs', subjectId: subjId, questions: selected, userAnswers: new Array(selected.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
+  state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
+  startExamQuiz(eid); renderSubjSrsReview(s);
+  alert('✅ 复习试卷已生成：共 ' + selected.length + ' 题');
+}
+function startSrsReviewForSubj(subjId) {
+  const s = state.subjects[subjId]; if (!s) return;
+  const subjChapterIds = s.chapterIds;
+  const now = Date.now();
+  const due = getSrsDueQuestions().filter(qId => {
+    return subjChapterIds.some(cid => qId.startsWith(cid + ':'));
+  });
+  if (!due.length) { alert('本科目暂无待复习题目'); return; }
+  const questions = [];
+  due.forEach(qId => {
+    for (const cid of subjChapterIds) {
+      const ch = state.chapters[cid]; if (!ch || !ch.questions) continue;
+      for (const q of ch.questions) { if (getQuestionId(cid, q) === qId) { questions.push({ ...q, _srsChapterId: cid }); break; } }
+      if (questions.length > 0) break;
+    }
+  });
+  if (!questions.length) { alert('未找到对应题目数据'); return; }
+  const eid = 'srs_' + Date.now().toString(36);
+  const genExam = { id: eid, name: '📅 间隔复习 ' + new Date().toLocaleDateString('zh-CN'), type: 'srs', subjectId: subjId, questions, userAnswers: new Array(questions.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
+  state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
+  startExamQuiz(eid);
+}
 function showScreen(name){ document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active')); const t=document.getElementById('screen-'+name); if(t)t.classList.add('active'); state.lastScreen=name; saveState(); }
-async function init(){ document.getElementById('app').style.display='flex'; loadState(); await tryAutoRestore(); const sids=Object.keys(state.subjects); if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;} else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0]; const s=getSubj(); if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null; renderSubjectList(); const saved=state.lastScreen||'start'; showScreen(saved); const ch=getCh(); if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();} updateQuickActions(); loadChapterStrategyToUI(); checkAchievements(); applyAllFontSizes(); console.log('✅ v8.4 初始化完成 — 成就系统、个性化、忽略题目、多维统计、备份兼容'); }
+async function init(){ try{ document.getElementById('app').style.display='flex'; loadState(); try{await tryAutoRestore();}catch(e){console.warn('auto restore skipped',e);} const sids=Object.keys(state.subjects); if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;} else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0]; const s=getSubj(); if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null; renderSubjectList(); const saved=state.lastScreen||'start'; showScreen(saved); const ch=getCh(); if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();} updateQuickActions(); loadChapterStrategyToUI(); checkAchievements(); applyAllFontSizes(); applyDarkMode(); populateWrongBookFromHistory(); populateSRSFromHistory(); updateSrsCard(); updateWrongBookBadge(); console.log('✅ v1.1 初始化完成'); }catch(e){console.error('init failed',e);document.getElementById('app').style.display='flex';} }
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
