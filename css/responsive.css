@@ -1,0 +1,108 @@
+/* ===== Responsive (max-width: 768px) ===== */
+/* Footer beian */
+@media (max-width: 768px) {
+  #footer-beian {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 999;
+    margin-top: 0;
+    padding: 6px 12px;
+    font-size: 11px;
+    background: #f0f2f5;
+    border-top: 1px solid #ddd;
+    line-height: 1;
+  }
+}
+@media (max-width: 768px) {
+  #topbar { padding: 0 10px; gap: 8px; }
+  #topbar .tb-brand { font-size: calc(15 * 1em / 14); }
+  .tb-item { padding: 4px 6px; font-size: calc(12 * 1em / 14); }
+  .tb-divider { display: none; }
+
+  /* Sidebar drawer */
+  #sidebar { position: fixed; left: 0; top: 44px; width: 280px; height: calc(100vh - 44px); z-index: 997; transform: translateX(-100%); transition: transform 0.3s ease; overflow-y: auto; }
+  #sidebar.mobile-open { transform: translateX(0); }
+  #sidebar-header { padding: 10px 12px; }
+  #sidebar-header h2 { font-size: calc(16 * 1em / 13); }
+  #sidebar-footer { display: block; }
+  .sidebar-overlay { display: none; position: fixed; top: 44px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 996; }
+  .sidebar-overlay.active { display: block; }
+  #sidebar-toggle { display: inline-flex !important; }
+
+  /* Main */
+  #main { padding: 14px 14px 36px; }
+  .subj-tab { padding: 6px 12px; font-size: calc(14 * 1em / 17); }
+  h1 { font-size: calc(22 * 1em / 17); }
+  .card, .quiz-card, .report-card { padding: 16px 14px; }
+
+  /* Dialogs */
+  .dialog-box, .qdetail-box { padding: 16px 12px; width: 96%; max-height: 85vh; }
+  .dialog-box h3, .qdetail-box h3 { font-size: 16px; }
+
+  /* Quiz */
+  .quiz-question { font-size: 15px; }
+  .quiz-option { padding: 10px 12px; font-size: 14px; }
+  .btn { padding: 8px 14px; font-size: calc(13 * 1em / 17); }
+
+  /* Strategy */
+  .strategy-labels { flex-wrap: wrap; gap: 4px; }
+  .strategy-labels span { font-size: calc(12 * 1em / 17); }
+  .dual-range-wrap, .multi-range-wrap { height: 48px; }
+  .dual-range-wrap input[type="range"]::-webkit-slider-thumb,
+  .multi-range-wrap input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; }
+  .dual-range-wrap input[type="range"]::-moz-range-thumb,
+  .multi-range-wrap input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; }
+  .strategy-values { padding: 8px 4px; }
+  .strategy-values .sv-item .sv-num { font-size: calc(16 * 1em / 17); }
+
+  /* Type counts */
+  .type-counts { gap: 6px; }
+  .type-count-item { padding: 3px 6px; }
+
+  /* Settings */
+  .settings-row { flex-wrap: wrap; gap: 8px; }
+  .settings-row label { min-width: auto; flex: 1 1 100%; margin-bottom: 4px; }
+  .settings-row input[type="range"] { max-width: 100%; }
+
+  /* Achievements */
+  .achievements-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .achievement-card { padding: 14px 10px; }
+
+  /* User center */
+  .user-center-dropdown { width: calc(100vw - 20px) !important; left: 10px !important; right: 10px !important; max-width: none !important; }
+
+  /* Enhanced overview */
+  .eo-highlight { flex-direction: column; }
+  .eo-highlight-card { min-width: auto; }
+  .eo-sparkline { height: 30px; }
+
+  /* Edge bubble */
+  .edge-bubble-trigger { bottom: 16px; }
+  .edge-bubble { width: 48px; height: 48px; }
+  .edge-bubble-icon { font-size: 22px; }
+
+  /* Reports */
+  .report-grid { grid-template-columns: repeat(2, 1fr); }
+  .subj-dash-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Dialog buttons */
+  .dialog-actions { flex-direction: column; }
+  .dialog-actions .btn { width: 100%; text-align: center; }
+
+  .quiz-nav .dot { width: 20px; height: 20px; font-size: 10px; }
+  .restore-list-item { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .chapter-select-grid { max-height: 150px; }
+  .avatar-upload-area { flex-direction: column; }
+  .avatar-preview { width: 56px; height: 56px; }
+
+  /* Admin */
+  .admin-cards-grid { grid-template-columns: 1fr !important; }
+  #uc-user-stats-bar { flex-wrap: wrap !important; gap: 6px !important; }
+  #uc-user-list-container button { width: 100%; margin-top: 6px; text-align: center; }
+  #uc-notice-list-container > div > div:first-child { display: none !important; }
+  #uc-notice-list-container [data-id] { flex-direction: column !important; align-items: flex-start !important; gap: 6px; }
+  #uc-notice-list-container [data-id] > span { width: 100% !important; text-align: left !important; }
+  .admin-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
