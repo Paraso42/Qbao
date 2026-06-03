@@ -12,8 +12,8 @@
 }
 
 .edge-bubble {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -21,8 +21,8 @@
   color: #fff;
   flex-shrink: 0;
   clip-path: inset(0 50% 0 0);
-  margin-right: -28px;
-  transition: clip-path 0.3s ease-out, margin-right 0.3s ease-out;
+  margin-right: -26px;
+  transition: clip-path 0.3s ease-out, margin-right 0.3s ease-out, box-shadow 0.3s ease-out;
   box-shadow: none;
   cursor: pointer;
   pointer-events: auto;
@@ -31,26 +31,28 @@
 .edge-bubble--expanded {
   clip-path: inset(0 0 0 0);
   margin-right: 0;
+  box-shadow: var(--shadow-lg);
 }
 
 .edge-bubble-icon {
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1;
   pointer-events: none;
   user-select: none;
 }
 
 .edge-bubble-card {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
   opacity: 0;
   transform: translateY(12px);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
   pointer-events: none;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: -4px 8px 24px rgba(0, 0, 0, 0.12);
-  background: #fff;
+  box-shadow: var(--shadow-lg);
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
   cursor: pointer;
 }
 
