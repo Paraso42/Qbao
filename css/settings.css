@@ -1,12 +1,12 @@
 /* ===== Settings ===== */
-.settings-section { margin-bottom: 20px; }
-.settings-section h4 { font-size: calc(15 * 1em / 17); margin-bottom: 8px; color: #555; }
+.settings-section { margin-bottom: var(--space-xl); }
+.settings-section h4 { font-size: var(--fs-base); margin-bottom: var(--space-sm); color: var(--text-secondary); font-weight: 600; }
 
-.settings-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eee; }
-.settings-row label { min-width: 140px; font-size: calc(14 * 1em / 17); }
-.settings-row input[type="range"] { flex: 1; max-width: 300px; }
-.settings-row .settings-val { font-size: calc(15 * 1em / 17); font-weight: 600; min-width: 50px; color: #4facfe; }
+.settings-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) 0; border-bottom: 1px solid var(--border-light); }
+.settings-row label { min-width: 120px; font-size: var(--fs-base); color: var(--text-primary); }
+.settings-row input[type="range"] { flex: 1; max-width: 260px; accent-color: var(--color-primary); }
+.settings-row .settings-val { font-size: var(--fs-base); font-weight: 600; min-width: 48px; color: var(--color-primary); }
 
-.settings-future { background: #f8f9fa; border-radius: 8px; padding: 14px; margin-top: 12px; color: #999; font-size: 13px; text-align: center; }
+.settings-future { background: var(--surface-hover); border-radius: var(--radius-md); padding: var(--space-lg); margin-top: var(--space-md); color: var(--text-muted); font-size: var(--fs-sm); text-align: center; }
 .settings-subtab { display: none; }
 .settings-subtab.active { display: block; }

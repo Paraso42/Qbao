@@ -1,66 +1,120 @@
-/* ===== Qbao Design Tokens ===== */
+/* ===== Qbao Design Tokens v3 ===== */
 :root {
-  /* Colors */
-  --color-primary: #4facfe;
-  --color-primary-hover: #3d8fd9;
-  --color-danger: #e94560;
-  --color-danger-hover: #d63851;
-  --color-success: #2ed573;
-  --color-success-hover: #26b863;
-  --color-warning: #f59e0b;
-  --color-warning-hover: #d97706;
-  --color-secondary: #6c757d;
-  --color-secondary-hover: #5a6268;
-  --color-purple: #8b5cf6;
+  /* === Primary Palette === */
+  --color-primary: #5b8fd4;
+  --color-primary-light: #eef4fb;
+  --color-primary-hover: #4a7dbf;
+  --color-primary-dark: #3d6ba8;
 
-  /* Sidebar */
-  --sidebar-bg: #1a1a2e;
-  --sidebar-text: #eee;
-  --sidebar-width: 268px;
+  --color-danger: #e5534b;
+  --color-danger-light: #fef2f1;
+  --color-danger-hover: #d9443c;
+
+  --color-success: #2ea856;
+  --color-success-light: #eefaf1;
+  --color-success-hover: #26914a;
+
+  --color-warning: #e09b2c;
+  --color-warning-light: #fef9f0;
+  --color-warning-hover: #c98920;
+
+  --color-secondary: #787f8a;
+  --color-secondary-hover: #656b75;
+
+  --color-purple: #7c6ff0;
+  --color-purple-light: #f2f0fd;
+
+  /* === Surfaces === */
+  --surface-bg: #f6f6f8;
+  --surface-card: #ffffff;
+  --surface-hover: #f3f4f6;
+  --surface-sidebar: #fafbfc;
+  --surface-topbar: #ffffff;
+
+  /* === Text === */
+  --text-primary: #1d1d1f;
+  --text-secondary: #6b6b7b;
+  --text-muted: #9b9baa;
+  --text-inverse: #ffffff;
+
+  /* === Borders === */
+  --border-light: #ebebef;
+  --border-default: #dcdce4;
+  --border-focus: #5b8fd4;
+
+  /* === Sidebar === */
+  --sidebar-bg: #fafbfc;
+  --sidebar-text: #3d3d4f;
+  --sidebar-width: 264px;
   --sidebar-font-size: 13px;
+  --sidebar-border: #ebebef;
+  --sidebar-active-bg: #eef4fb;
+  --sidebar-active-text: #5b8fd4;
+  --sidebar-hover-bg: #f3f4f6;
 
-  /* Topbar */
-  --topbar-bg: #1a1a2e;
-  --topbar-height: 44px;
+  /* === Topbar === */
+  --topbar-bg: #ffffff;
+  --topbar-text: #3d3d4f;
+  --topbar-height: 46px;
   --topbar-font-size: 14px;
+  --topbar-border: #ebebef;
+  --topbar-brand-color: #5b8fd4;
 
-  /* Main */
-  --main-bg: #f0f2f5;
-  --main-font-size: 17px;
-  --main-max-width: 1000px;
+  /* === Main === */
+  --main-bg: #f6f6f8;
+  --main-font-size: 16px;
+  --main-max-width: 960px;
 
-  /* Text */
-  --text-primary: #333;
-  --text-secondary: #888;
-  --text-muted: #999;
-  --text-light: #ccc;
+  /* === Typography Scale (based on 16px) === */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-xxl: 28px;
+  --fs-h1: 26px;
+  --lh-tight: 1.3;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.7;
 
-  /* Borders */
-  --border-color: #dee2e6;
-  --border-light: #eee;
+  /* === Spacing Scale === */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
 
-  /* Cards */
-  --card-bg: #fff;
-  --card-radius: 12px;
-  --card-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  /* === Border Radius === */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-full: 9999px;
 
-  /* Modals */
-  --modal-overlay: rgba(0,0,0,0.4);
-  --modal-radius: 14px;
+  /* === Shadows === */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-xl: 0 12px 36px rgba(0,0,0,0.10), 0 4px 10px rgba(0,0,0,0.04);
 
-  /* Transitions */
-  --transition-fast: .2s;
-  --transition-normal: .3s;
+  /* === Transitions === */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
 
-  /* Exam colors */
-  --exam-color-0: #e94560;
-  --exam-color-1: #f59e0b;
-  --exam-color-2: #2ed573;
-  --exam-color-3: #4facfe;
-  --exam-color-4: #8b5cf6;
-  --exam-color-5: #ec4899;
-  --exam-color-6: #14b8a6;
-  --exam-color-7: #f97316;
-  --exam-color-8: #6366f1;
-  --exam-color-9: #84cc16;
+  /* === Exam/Chart Colors === */
+  --exam-color-0: #e5534b;
+  --exam-color-1: #e09b2c;
+  --exam-color-2: #2ea856;
+  --exam-color-3: #5b8fd4;
+  --exam-color-4: #7c6ff0;
+  --exam-color-5: #e04e8b;
+  --exam-color-6: #20b2a0;
+  --exam-color-7: #f07d3b;
+  --exam-color-8: #5c6bc0;
+  --exam-color-9: #8bbf3c;
 }
