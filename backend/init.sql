@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(64) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  display_name VARCHAR(128) NOT NULL DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS user_data (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  state_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  synced_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT user_data_unique_user UNIQUE (user_id)
+);
+CREATE TABLE IF NOT EXISTS backups (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label VARCHAR(256) NOT NULL DEFAULT '',
+  state_json JSONB NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_backups_uid ON backups(user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS shared_banks (
+  id SERIAL PRIMARY KEY,
+  share_code VARCHAR(16) UNIQUE NOT NULL,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(256) NOT NULL,
+  questions JSONB NOT NULL,
+  password VARCHAR(255),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMP,
+  download_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ai_request_log (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  model VARCHAR(128),
+  status VARCHAR(32) NOT NULL DEFAULT 'ok',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
