@@ -1,6 +1,11 @@
 const { pool } = require('../db');
 const { hashPassword, signToken } = require('../auth');
 const { requireAuth, requireAdmin, addToBlacklist, invalidateBannedCache } = require('../middleware');
+const fs = require('fs');
+const path = require('path');
+
+const AVATAR_DIR = path.join(__dirname, '../../../uploads/avatars');
+if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 // 将用户行转为返回对象
 function userRow(row) {
@@ -71,13 +76,42 @@ module.exports = function (app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // PUT /api/v1/users/me/avatar — 设置头像
+  // PUT /api/v1/users/me/avatar — 上传头像（保存为文件，仅保留最新）
   app.put('/api/v1/users/me/avatar', requireAuth, async (req, res) => {
     try {
       const { avatar } = req.body;
       if (!avatar) return res.status(422).json({ error: '缺少 avatar 字段' });
-      const result = await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2 RETURNING id, avatar_url', [avatar, req.userId]);
-      res.json({ user: { id: result.rows[0].id, avatarUrl: result.rows[0].avatar_url || null } });
+
+      // Decode base64 data URL and write to disk
+      var avatarPath = null;
+      if (typeof avatar === 'string' && avatar.startsWith('data:')) {
+        var matches = avatar.match(/^data:image\/(jpeg|png|gif|webp);base64,(.+)$/);
+        if (matches) {
+          var ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+          var base64Data = matches[2];
+          var buf = Buffer.from(base64Data, 'base64');
+          var fileName = req.userId + '.' + ext;
+          var filePath = path.join(AVATAR_DIR, fileName);
+          // Remove old avatar files for this user (any extension)
+          try {
+            var oldFiles = fs.readdirSync(AVATAR_DIR);
+            oldFiles.forEach(function(f) {
+              if (f.startsWith(String(req.userId) + '.')) {
+                fs.unlinkSync(path.join(AVATAR_DIR, f));
+              }
+            });
+          } catch (_) {}
+          fs.writeFileSync(filePath, buf);
+          avatarPath = 'avatars/' + fileName;
+        }
+      }
+
+      var storedUrl = avatarPath || avatar;
+      const result = await pool.query(
+        'UPDATE users SET avatar_url = $1 WHERE id = $2 RETURNING id, avatar_url',
+        [storedUrl, req.userId]
+      );
+      res.json({ user: { id: result.rows[0].id, avatarUrl: storedUrl } });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

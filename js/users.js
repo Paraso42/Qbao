@@ -356,13 +356,17 @@ async function saveAccountChanges() {
     if (newPw !== newPw2) { showAccMsg('两次输入的新密码不一致', false); return; }
   }
   try {
+    // Save avatar fields before server response replaces authUser
+    var savedAvatar = authUser.avatar;
+    var savedAvatarUrl = authUser.avatarUrl;
+
     // Upload avatar if changed (data URL from canvas compression)
-    if (authUser.avatar && authUser.avatar.startsWith('data:')) {
-      var avRes = await fetchWithAuth('/users/me/avatar', { method: 'PUT', body: JSON.stringify({ avatar: authUser.avatar }) });
+    if (savedAvatar && savedAvatar.startsWith('data:')) {
+      var avRes = await fetchWithAuth('/users/me/avatar', { method: 'PUT', body: JSON.stringify({ avatar: savedAvatar }) });
       if (avRes && avRes.ok) {
         var avJson = await avRes.json().catch(function() { return {}; });
         if (avJson.user) {
-          authUser.avatarUrl = avJson.user.avatarUrl;
+          savedAvatarUrl = avJson.user.avatarUrl;
         }
       }
     }
@@ -372,10 +376,10 @@ async function saveAccountChanges() {
     if (!res.ok) { showAccMsg(json.error || '保存失败', false); return; }
     if (json.user) {
       authUser = json.user;
-      // Preserve avatar data URL if server doesn't return one
-      if (!authUser.avatarUrl && authUser.avatar && authUser.avatar.startsWith('data:')) {
-        authUser.avatarUrl = authUser.avatar;
-      }
+      // Restore avatar fields that server response may not include
+      if (savedAvatarUrl) authUser.avatarUrl = savedAvatarUrl;
+      if (savedAvatar && savedAvatar.startsWith('data:')) authUser.avatar = savedAvatar;
+      if (!authUser.avatarUrl && savedAvatar) authUser.avatarUrl = savedAvatar;
       setUser(authUser);
       updateAuthUI();
       // Refresh account page UI in-place instead of reopening modal
@@ -494,9 +498,6 @@ async function renderFilesPage() {
       html += '<div class="file-meta">' + formatFileSize(f.fileSize) + ' · <span class="file-expiry' + (expired ? ' expired-text' : '') + '">' + (expired ? '已过期' : formatDuration(expiry) + ' 后过期') + '</span></div>';
       html += '</div>';
       html += '<div class="file-actions">';
-      if (ch && !expired) {
-        html += '<button class="btn btn-primary btn-small" onclick="assignFileToChapter(' + f.id + ')" style="font-size:11px;">分配到当前章节</button>';
-      }
       html += '<button class="btn btn-warning btn-small" onclick="extendFileInPool(' + f.id + ')" style="font-size:11px;' + (f.pointsExtended ? 'opacity:0.5;' : '') + '" title="续期 7 天（需 10 积分，功能预留）">续期 (10积分)</button>';
       html += '<button class="btn btn-danger btn-small" onclick="deleteFileFromPool(' + f.id + ')" style="font-size:11px;">删除</button>';
       html += '</div></div>';

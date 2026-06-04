@@ -7,29 +7,33 @@ async function restoreQuizFromServer() {
   var chapterId = as.setId || (ch ? ch.id : null);
   if (!chapterId) return;
   try {
-    var sRes = await fetchWithAuth('/quiz/sessions');
+    // Only fetch in_progress sessions for recovery
+    var sRes = await fetchWithAuth('/quiz/sessions?status=in_progress');
     if (!sRes || !sRes.ok) return;
     var sData = await sRes.json();
     var sessions = sData.sessions || [];
+    // Find session matching this chapter, prefer most recent (already sorted by updated_at DESC)
+    var targetSession = null;
     for (var i = 0; i < sessions.length; i++) {
       if (sessions[i].chapterId === chapterId) {
-        var dRes = await fetchWithAuth('/quiz/session/' + sessions[i].id);
-        if (!dRes || !dRes.ok) return;
-        var dData = await dRes.json();
-        var srv = dData.session;
-        if (srv && srv.userAnswers && Array.isArray(srv.userAnswers)) {
-          // Merge: server answers win for already-answered positions
-          // Also restore from server if local has fewer answers
-          for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
-            var srvAns = srv.userAnswers[j];
-            if (srvAns !== null && srvAns !== undefined) {
-              as.userAnswers[j] = srvAns;
-            }
-          }
-          saveState();
-        }
+        targetSession = sessions[i];
         break;
       }
+    }
+    if (!targetSession) return;
+    var dRes = await fetchWithAuth('/quiz/session/' + targetSession.id);
+    if (!dRes || !dRes.ok) return;
+    var dData = await dRes.json();
+    var srv = dData.session;
+    if (srv && srv.userAnswers && Array.isArray(srv.userAnswers)) {
+      for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
+        var srvAns = srv.userAnswers[j];
+        // Skip -1 (finalize marker) and null/undefined
+        if (srvAns !== -1 && srvAns !== null && srvAns !== undefined) {
+          as.userAnswers[j] = srvAns;
+        }
+      }
+      saveState();
     }
   } catch(e) { console.warn('restoreQuizFromServer failed:', e); }
 }
@@ -52,15 +56,22 @@ function syncAnswerToServer() {
   var ch = getCh();
   var chapterId = as.setId || (ch ? ch.id : null);
   if (!chapterId) return;
+  var subj = getSubj();
+  var subjectId = (as.subjectId) || (subj ? subj.id : null);
   var stats = calcStats(as);
+  // Filter out -1 markers from synced answers
+  var syncAnswers = as.userAnswers.map(function(a) { return a === -1 ? undefined : a; });
   fetchWithAuth('/quiz/session', {
     method: 'POST',
     body: JSON.stringify({
       chapterId: chapterId,
+      subjectId: subjectId,
+      setId: as.setId,
       sessionName: as.setName || (ch ? ch.name : ''),
       questions: as.questions,
-      userAnswers: as.userAnswers,
-      stats: stats
+      userAnswers: syncAnswers,
+      stats: stats,
+      status: 'in_progress'
     })
   }).catch(function(e) { console.warn('syncAnswerToServer failed:', e); });
 }
@@ -73,16 +84,21 @@ async function syncAnswerToServerFinal() {
   var ch = getCh();
   var chapterId = as.setId || (ch ? ch.id : null);
   if (!chapterId) return;
+  var subj = getSubj();
+  var subjectId = (as.subjectId) || (subj ? subj.id : null);
   var stats = calcStats(as);
   try {
     await fetchWithAuth('/quiz/session', {
       method: 'POST',
       body: JSON.stringify({
         chapterId: chapterId,
+        subjectId: subjectId,
+        setId: as.setId,
         sessionName: as.setName || (ch ? ch.name : ''),
         questions: as.questions,
         userAnswers: as.userAnswers,
-        stats: stats
+        stats: stats,
+        status: 'completed'
       })
     });
   } catch(e) { console.warn('syncAnswerToServerFinal failed:', e); }
@@ -144,5 +160,53 @@ function autoUpdateChapterWeakTags(ch) {
   }
   saveState(); renderChapterTags(); updateChapterPromptTemplate();
 }
-function calcStats(as) { if (!as||!as.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=as.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; as.questions.forEach((q,i)=>{ if(as.userAnswers&&as.userAnswers[i]!==undefined) answered++; if(isObjType(q.type)){objTotal++;if(as.userAnswers&&as.userAnswers[i]!==undefined){const ci=getCi(q,as.userAnswers[i]);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;}} else {if(as.userAnswers&&as.userAnswers[i]!==undefined)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
-function updateProgress() { const as=getActiveSet(); const stats=calcStats(as); const pct=stats.total>0?Math.round((stats.answered/stats.total)*100):0; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):(stats.total>0&&stats.answered===stats.total?100:0); const pf=document.getElementById('progress-fill'); if(pf)pf.style.width=pct+'%'; const rd=document.getElementById('rate-display'); if(rd)rd.textContent=rate+'%'; const pd=document.getElementById('progress-display'); if(pd)pd.textContent=stats.answered+'/'+stats.total; const wd=document.getElementById('wrong-display'); if(wd)wd.textContent=stats.wrongCount; }
+function calcStats(as) { if (!as||!as.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=as.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; as.questions.forEach((q,i)=>{ var ans = as.userAnswers && as.userAnswers[i]; if(ans !== undefined && ans !== -1) answered++; if(isObjType(q.type)){objTotal++;if(ans !== undefined && ans !== -1){const ci=getCi(q,ans);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;}} else {if(ans !== undefined && ans !== -1)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
+
+function calcChapterStats(chapterId) {
+  var result = { total: 0, answered: 0, objCorrect: 0, objTotal: 0, wrongCount: 0, subjCount: 0, completedSets: 0 };
+  var ch = state.chapters[chapterId];
+  if (!ch || !ch.quizSets) return result;
+  ch.quizSets.forEach(function(set) {
+    var stats = calcStats(set);
+    // Only count completed sets (all questions answered, no -1 markers)
+    if (stats.answered >= stats.total && stats.total > 0) {
+      result.total += stats.total;
+      result.answered += stats.answered;
+      result.objCorrect += stats.objCorrect;
+      result.objTotal += stats.objTotal;
+      result.wrongCount += stats.wrongCount;
+      result.subjCount += stats.subjCount;
+      result.completedSets++;
+    }
+  });
+  return result;
+}
+
+function updateProgress() { updateChapterProgress(); }
+
+function updateChapterProgress() {
+  var ch = getCh();
+  var stats;
+  if (ch && ch.quizSets && ch.quizSets.length > 0) {
+    stats = calcChapterStats(ch.id);
+    // If no completed sets, show 0-based stats for the chapter
+    if (stats.completedSets === 0) {
+      stats.total = 0; stats.answered = 0; stats.objCorrect = 0; stats.objTotal = 0; stats.wrongCount = 0;
+      // Sum total questions across all sets (for display)
+      ch.quizSets.forEach(function(set) { stats.total += (set.questions ? set.questions.length : 0); });
+    }
+  } else {
+    var as = getActiveSet();
+    stats = calcStats(as);
+  }
+  var pct = stats.total > 0 ? Math.round((stats.answered / stats.total) * 100) : 0;
+  var rate = stats.objTotal > 0 ? Math.round((stats.objCorrect / stats.objTotal) * 100) : 0;
+  var pf = document.getElementById('progress-fill');
+  if (pf) pf.style.width = pct + '%';
+  var rd = document.getElementById('rate-display');
+  if (rd) rd.textContent = rate + '%';
+  var pd = document.getElementById('progress-display');
+  if (pd) pd.textContent = stats.total + ' 题';
+  var wd = document.getElementById('wrong-display');
+  if (wd) wd.textContent = stats.wrongCount;
+}

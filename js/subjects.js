@@ -61,7 +61,12 @@ function renderSubjectList() {
         const ch = state.chapters[cid]; if (!ch) return;
         const ca = cid === state.currentChapterId ? 'active' : ''; const setCount = ch.quizSets ? ch.quizSets.length : 0;
         let totalAnswered = 0; let totalQuestions = 0;
-        (ch.quizSets || []).forEach(set => { totalQuestions += set.questions.length; if (set.userAnswers) totalAnswered += set.userAnswers.filter(a => a !== undefined).length; });
+        (ch.quizSets || []).forEach(function(set) {
+          totalQuestions += set.questions.length;
+          if (set.userAnswers) {
+            totalAnswered += set.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length;
+          }
+        });
         html += '<div class="chapter-item ' + ca + '" onclick="closeSidebarIfMobile();switchChapter(\'' + cid + '\')"><div class="chapter-info"><span class="chapter-name">' + escapeHtml(ch.name) + '</span><span class="chapter-count">' + totalAnswered + ' 题已答</span></div>';
         html += '<div class="ch-actions"><button class="ch-btn ch-hist" onclick="event.stopPropagation();showChapterHistory(\'' + cid + '\')">📜</button><button class="ch-btn" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
       });
