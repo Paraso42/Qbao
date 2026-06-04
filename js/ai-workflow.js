@@ -180,7 +180,7 @@ async function _aiExecuteTask(task) {
     else { task.status = 'failed'; task.error = e.message; }
   }
   aiTaskAbortController = null;
-  saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar();
+  saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); updateGenerateButtonState();
   if (task.status === 'completed') showAiTaskNotification('completed', task.chapterName + ' 完成，生成 ' + task.questionCount + ' 题');
   else showAiTaskNotification('failed', task.chapterName + ' 失败：' + task.error);
 }
@@ -368,10 +368,10 @@ async function _aiStreamGenerate(task, opts) {
 async function aiTaskRunnerLoop() {
   while (aiTaskRunnerActive) {
     var pendingTask = state.aiTaskQueue.find(function(t) { return t.status === 'pending'; });
-    if (!pendingTask) { aiTaskRunnerActive = false; updateAiTaskStatusBar(); renderAiTaskQueueDialog(); return; }
+    if (!pendingTask) { aiTaskRunnerActive = false; updateAiTaskStatusBar(); renderAiTaskQueueDialog(); updateGenerateButtonState(); return; }
     await _aiExecuteTask(pendingTask);
-    if (!aiTaskRunnerActive) { updateAiTaskStatusBar(); renderAiTaskQueueDialog(); return; }
-    await new Promise(function(r){setTimeout(r, (state.aiConfig&&state.aiConfig.taskInterval?state.aiConfig.taskInterval:30)*1000);});
+    if (!aiTaskRunnerActive) { updateAiTaskStatusBar(); renderAiTaskQueueDialog(); updateGenerateButtonState(); return; }
+	    await new Promise(function(r){setTimeout(r, (state.aiConfig&&state.aiConfig.taskInterval?state.aiConfig.taskInterval:30)*1000);});
   }
 }
 function aiEnqueueGenerate(chapterId) {

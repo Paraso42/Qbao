@@ -206,29 +206,43 @@ async function renderAccountPage() {
   var body = document.getElementById('ucm-tab-account');
   if (!body) return;
   var html = '';
-  html += '<div style="margin-bottom:16px;"><h4 style="font-size:14px;margin-bottom:8px;">&#128247; 头像</h4>';
-  html += '<div style="display:flex;align-items:center;gap:12px;">';
-  html += '<div id="acc-avatar-preview" style="width:56px;height:56px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;overflow:hidden;">';
+  // Avatar section
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#128247; 头像</h4>';
+  html += '<div class="avatar-upload-area">';
+  html += '<div class="avatar-preview" id="acc-avatar-preview">';
   if (authUser.avatar) {
-    html += '<img src="' + authUser.avatar + '" style="width:100%;height:100%;object-fit:cover;">';
+    html += '<img src="' + authUser.avatar + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
   } else {
-    html += '<span style="font-size:24px;color:#999;">' + (authUser.displayName || authUser.username).charAt(0).toUpperCase() + '</span>';
+    html += '<span style="font-size:24px;color:var(--text-muted);line-height:60px;">' + (authUser.displayName || authUser.username).charAt(0).toUpperCase() + '</span>';
   }
-  html += '</div><div style="display:flex;flex-direction:column;gap:6px;">';
-  html += '<button class="btn btn-primary btn-small" onclick="uploadAvatar()" style="font-size:12px;padding:4px 10px;">上传头像</button>';
-  html += '<button class="btn btn-secondary btn-small" onclick="removeAvatar()" style="font-size:12px;padding:4px 10px;">移除</button>';
+  html += '</div>';
+  html += '<div class="avatar-actions">';
+  html += '<button class="btn btn-primary btn-small" onclick="uploadAvatar()">上传头像</button>';
+  html += '<button class="btn btn-secondary btn-small" onclick="removeAvatar()">移除头像</button>';
   html += '<input type="file" id="avatar-file-input" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">';
   html += '</div></div></div>';
-  html += '<div style="margin-bottom:16px;"><h4 style="font-size:14px;margin-bottom:8px;">&#9998;&#65039; 显示名称</h4>';
-  html += '<input type="text" id="acc-display-name" value="' + escapeHtml(authUser.displayName || '') + '" placeholder="输入显示名称" style="width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;">';
+  // Display name section
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#9998;&#65039; 显示名称</h4>';
+  html += '<div class="account-field">';
+  html += '<input type="text" id="acc-display-name" value="' + escapeHtml(authUser.displayName || '') + '" placeholder="输入显示名称">';
+  html += '</div></div>';
+  // Password section
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#128274; 修改密码</h4>';
+  html += '<div class="account-field" style="margin-bottom:8px;">';
+  html += '<input type="password" id="acc-old-password" placeholder="当前密码">';
   html += '</div>';
-  html += '<div style="margin-bottom:16px;"><h4 style="font-size:14px;margin-bottom:8px;">&#128274; 修改密码</h4>';
-  html += '<input type="password" id="acc-old-password" placeholder="当前密码" style="width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;margin-bottom:6px;">';
-  html += '<input type="password" id="acc-new-password" placeholder="新密码（至少6位）" style="width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;margin-bottom:6px;">';
-  html += '<input type="password" id="acc-new-password2" placeholder="确认新密码" style="width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;">';
+  html += '<div class="account-field" style="margin-bottom:8px;">';
+  html += '<input type="password" id="acc-new-password" placeholder="新密码（至少6位）">';
   html += '</div>';
-  html += '<div id="acc-msg" style="font-size:13px;margin-bottom:8px;"></div>';
-  html += '<button class="btn btn-primary btn-small" onclick="saveAccountChanges()">保存更改</button>';
+  html += '<div class="account-field">';
+  html += '<input type="password" id="acc-new-password2" placeholder="确认新密码">';
+  html += '</div></div>';
+  // Save
+  html += '<div id="acc-msg" style="font-size:13px;margin-bottom:10px;min-height:20px;"></div>';
+  html += '<button class="btn btn-primary" style="width:100%;" onclick="saveAccountChanges()">&#128190; 保存更改</button>';
   body.innerHTML = html;
 }
 
@@ -312,28 +326,27 @@ async function renderDataPage() {
   var body = document.getElementById('ucm-tab-data');
   if (!body) return;
 
-  var hasBackup = !!backupDirHandle;
-  var backupStatusText = hasBackup ? '✅ 已设置' : '<span style="color:#e94560;">未设置</span>';
-  if (hasBackup && backupMeta.length > 0) {
-    backupStatusText += '（' + backupMeta.length + ' 份备份）';
-  }
-
-  var html = '<div style="margin-bottom:16px;"><h4 style="font-size:14px;margin-bottom:8px;">&#128190; 本地备份</h4>';
-  html += '<p style="font-size:13px;color:#666;margin-bottom:8px;">当前备份状态：' + backupStatusText + '</p>';
+  var html = '<div class="account-manage-section">';
+  html += '<h4>&#128190; 本地备份</h4>';
+  html += '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">将答题数据导出为 JSON 文件保存到本地，需要时可上传恢复。</p>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-  html += '<button class="btn btn-primary btn-small" onclick="setupBackupFromDialog()" style="font-size:12px;padding:4px 10px;">&#128193; 设置路径</button>';
-  html += '<button class="btn btn-success btn-small" onclick="doManualBackup()" style="font-size:12px;padding:4px 10px;">&#128190; 立即备份</button>';
-  html += '<button class="btn btn-warning btn-small" onclick="openRestoreDialog()" style="font-size:12px;padding:4px 10px;">&#9202;&#65039; 回档</button>';
-  html += '</div></div>';
-  html += '<div style="margin-bottom:16px;"><h4 style="font-size:14px;margin-bottom:8px;">&#9729;&#65039; 云同步</h4>';
-  html += '<p style="font-size:13px;color:#666;">';
+  html += '<button class="btn btn-primary btn-small" onclick="doManualBackup()">&#128229; 下载备份</button>';
+  html += '<button class="btn btn-warning btn-small" onclick="restoreFromFile()">&#128230; 上传恢复</button>';
+  html += '</div>';
+  html += '<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">提示：建议定期下载备份文件并妥善保管。</p>';
+  html += '</div>';
+
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#9729;&#65039; 云同步</h4>';
+  html += '<p style="font-size:13px;color:var(--text-secondary);">';
   if (isOnlineMode && authUser) {
-    html += '云端同步状态：<span style="color:#2ed573;">已启用</span>';
+    html += '云端同步状态：<span style="color:#2ed573;font-weight:500;">已启用</span>';
     if (syncPending) { html += '（有未同步的更改）'; }
   } else {
-    html += '云端同步：<span style="color:#e94560;">离线模式</span>';
+    html += '云端同步：<span style="color:#e94560;font-weight:500;">离线模式</span>';
   }
   html += '</p></div>';
+
   body.innerHTML = html;
 }
 
