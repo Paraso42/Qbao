@@ -157,7 +157,8 @@ async function _aiExecuteTask(task) {
     for (var attempt = 1; attempt <= maxAttempts && !questions; attempt++) {
       if (attempt > 1) { await sleep(2000*(attempt-1)); }
       var retryPrompt = attempt > 1 ? task.promptText + '\n\n重要：你上次返回了无效JSON，错误是：'+lastJson+'。请修正后重新输出纯JSON数组。' : task.promptText;
-      var genRes = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':ac.apiKey||'', 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-strict-format':ac.strictFormat!==false?'true':'false' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retryPrompt, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags } }) }, 3, 5000);
+      var apiKey = (ac.providerKeys && ac.providerKeys[ac.provider||'ecnu']) || ac.apiKey || '';
+      var genRes = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key': apiKey, 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-provider': ac.provider||'ecnu', 'x-ai-strict-format':ac.strictFormat!==false?'true':'false' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retryPrompt, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags } }) }, 3, 5000);
       var genData = await genRes.json();
       var raw = genData.questions; if(!raw&&genData.output) raw=genData.output; if(!raw&&typeof genData==='object') raw=Object.values(genData).find(function(v){return Array.isArray(v)||typeof v==='string';});
       if (typeof raw === 'string') { raw = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim(); try { questions = JSON.parse(raw); } catch(e) { lastJson=e.message; if(attempt<maxAttempts) continue; else throw new Error('JSON格式错误: '+e.message); } }
@@ -231,13 +232,15 @@ async function _aiStreamGenerate(task, opts) {
       ? finalPrompt + '\n\n重要：上次返回格式错误，请只输出纯JSON数组。错误：' + lastStreamError
       : finalPrompt;
 
+    var apiKey = (ac.providerKeys && ac.providerKeys[ac.provider||'ecnu']) || ac.apiKey || '';
     var res = await fetch(API_BASE + '/ai/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + getToken(),
-        'x-ai-api-key': ac.apiKey || '',
+        'x-ai-api-key': apiKey,
         'x-ai-model': ac.model || 'ecnu-plus',
+        'x-ai-provider': ac.provider || 'ecnu',
         'x-ai-strict-format': 'false',
         'x-ai-stream': 'true'
       },

@@ -389,10 +389,11 @@
               <div class="card">
                 <div class="settings-section">
                   <h4>🤖 AI API 配置</h4>
-                  <p style="color:#666;font-size:13px;margin-bottom:10px;">配置华师大 AI API 密钥后，可在导入界面使用 AI 自动生成题目。</p>
-                  <div class="settings-row"><label>API 地址</label><input type="text" id="ai-base-url" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" value="https://chat.ecnu.edu.cn/open/api/v1" readonly></div>
-                  <div class="settings-row"><label>API 密钥</label><input type="password" id="ai-api-key" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" placeholder="粘贴你的 API Key"></div>
-                  <div class="settings-row"><label>模型</label><select id="ai-model-select" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><option value="ecnu-plus">ecnu-plus (推荐)</option><option value="ecnu-max">ecnu-max</option></select></div>
+                  <p style="color:#666;font-size:13px;margin-bottom:10px;">选择 AI 提供商并配置对应 API 密钥，可在章节界面使用 AI 自动生成题目。</p>
+                  <div class="settings-row"><label>提供商</label><select id="ai-provider-select" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" onchange="onAiProviderChange()"><option value="">加载中...</option></select></div>
+                  <div class="settings-row"><label>API 地址</label><input type="text" id="ai-base-url" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" value="" readonly></div>
+                  <div class="settings-row" id="ai-key-row"><label>API 密钥</label><input type="password" id="ai-api-key" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" placeholder="粘贴你的 API Key"></div>
+                  <div class="settings-row"><label>模型</label><select id="ai-model-select" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><option value="">请先选择提供商</option></select></div>
                   <div class="settings-row" style="flex-direction:column;">
                     <label style="margin-bottom:4px;">环境提示词</label>
                     <p style="color:#666;font-size:12px;margin-bottom:6px;">这段提示词将作为所有 AI 对话的基础上下文，用于稳定规范大模型行为。<span id="ai-env-prompt-char-count" style="color:#999;font-size:11px;"></span></p>
@@ -416,9 +417,11 @@
                 <div class="settings-section">
                   <h4>📋 使用说明</h4>
                   <div style="font-size:13px;color:#666;line-height:1.8;">
-                    <p>1. 从 <a href="https://chat.ecnu.edu.cn" target="_blank" style="color:#4facfe;">chat.ecnu.edu.cn</a> 获取 API 密钥</p>
-                    <p>2. 粘贴密钥并保存</p>
-                    <p>3. 在首页点击"AI 生成"即可上传资料并自动生成题目</p>
+                    <p>1. 选择 AI 提供商（ECNU / DeepSeek / OpenAI / Gemini）</p>
+                    <p>2. 在对应平台获取 API 密钥并粘贴保存</p>
+                    <p>3. 选择合适的模型</p>
+                    <p>4. 在首页点击"AI 生成"即可上传资料并自动生成题目</p>
+                    <p style="margin-top:8px;color:#999;font-size:11px;">密钥仅保存在本地浏览器，通过后端代理调用 AI 接口。</p>
                   </div>
                 </div>
               </div>

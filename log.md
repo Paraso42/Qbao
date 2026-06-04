@@ -2,6 +2,32 @@
 
 ---
 
+## 2026-06-04 — AI 多模型兼容 Part 1（仅测试环境 8080）
+
+### 后端：Provider 抽象层
+- [新增] [backend/src/providers/index.js](backend/src/providers/index.js) — Provider 工厂，注册 4 个提供商：ECNU/DeepSeek/OpenAI/Gemini
+- [新增] [backend/src/providers/ecnu.js](backend/src/providers/ecnu.js) — ECNU 提供商（从 ai.routes.js 提取）
+- [新增] [backend/src/providers/deepseek.js](backend/src/providers/deepseek.js) — DeepSeek 提供商，baseURL `https://api.deepseek.com`，模型 `deepseek-v4-flash`/`deepseek-v4-pro`
+- [新增] [backend/src/providers/openai.js](backend/src/providers/openai.js) — OpenAI ChatGPT 提供商，支持原生 json_schema + streaming
+- [新增] [backend/src/providers/gemini.js](backend/src/providers/gemini.js) — Gemini 提供商（adapter 层），处理 messages→contents 转换、SSE 格式差异、API key query param
+
+### 后端：路由重构
+- [修改] [backend/src/routes/ai.routes.js](backend/src/routes/ai.routes.js) — 移除 ECNU 硬编码，接入 provider 层；新增 `GET /api/v1/ai/providers` 端点；流式路径统一使用 provider 接口
+
+### 前端：Provider + Model 双级选择器
+- [修改] [index.html](index.html) — 设置弹窗 AI 配置区替换为 Provider 下拉 + Model 下拉联动 + 自动更新 Base URL
+- [修改] [js/settings.js](js/settings.js) — `loadAiConfig()` 从后端获取 provider 列表；新增 `onAiProviderChange()`/`fetchProviders()`/`populateProviderSelect()`/`updateAiBaseUrl()`；`saveAiConfig()` 存储 per-provider keys；`testAiConfig()` 传 `x-ai-provider`
+- [修改] [js/config.js](js/config.js) — 新增 `aiProviders`、`aiCurrentProvider` 全局变量
+- [修改] [js/state.js](js/state.js) — `migrateState()` 新增旧 apiKey→providerKeys 迁移逻辑
+- [修改] [js/ai-workflow.js](js/ai-workflow.js) — 所有 `/ai/generate` 调用添加 `x-ai-provider` header，使用 per-provider key
+
+### 部署确认
+- 仅上传测试环境（8080 + 3001），生产环境（9178 + 3000）未触碰
+- 后端 API：`GET /api/v1/ai/providers` 返回 4 个 provider 含模型列表
+- MD5 全部校验通过
+
+---
+
 ## 2026-06-04 — Bug 修复 & UX 优化 (第四轮)
 
 ### 开始出题按钮任务完成后状态修复
