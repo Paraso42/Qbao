@@ -423,6 +423,57 @@ function renderAiMaterialList() { const ch=getCh(); if(!ch)return; const materia
 function removeAiMaterial(idx) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); renderAiMaterialList(); updateAiMaterialCount(); updateGenerateButtonState(); }
 function openChapterMaterialsDialog() { const ch=getCh(); if(!ch)return; document.getElementById('cm-dialog-chapter-name').textContent='📖 '+escapeHtml(ch.name); renderChapterMaterialsDialog(); document.getElementById('chapter-materials-dialog').classList.add('active'); }
 function closeChapterMaterialsDialog() { document.getElementById('chapter-materials-dialog').classList.remove('active'); }
+async function openFilePoolForChapter() {
+  var ch = getCh();
+  if (!ch) { alert('请先选择章节'); return; }
+  if (!isOnlineMode || !getToken()) { alert('请先登录以使用文件池'); return; }
+  try {
+    var res = await fetchWithAuth('/files?pool=true');
+    if (!res || !res.ok) { alert('获取文件池失败'); return; }
+    var data = await res.json();
+    var files = data.files || [];
+    if (!files.length) { alert('文件池为空，请先在用户中心上传文件'); return; }
+    // Build a simple picker
+    var html = '<div style="max-height:300px;overflow-y:auto;">';
+    files.forEach(function(f) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid #e0e0e0;border-radius:6px;margin-bottom:6px;cursor:pointer;" onclick="assignFilePoolToChapter(' + f.id + ',\'' + escapeHtml(f.originalName).replace(/'/g, "\\'") + '\')" onmouseenter="this.style.borderColor=\'#4facfe\'" onmouseleave="this.style.borderColor=\'#e0e0e0\'">';
+      html += '<span style="font-size:20px;">' + getFileIcon(f.mimeType) + '</span>';
+      html += '<div style="flex:1;min-width:0;"><div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(f.originalName) + '</div><div style="font-size:11px;color:#888;">' + formatFileSize(f.fileSize) + '</div></div>';
+      html += '<span style="font-size:11px;color:#4facfe;">选择</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    var overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay active';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:2000;';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = '<div class="dialog-box" style="max-width:420px;"><h3>📁 从文件池选择</h3><p style="font-size:12px;color:#888;margin-bottom:10px;">点击文件将其分配到当前章节</p>' + html + '<div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="this.closest(\'.dialog-overlay\').remove()">关闭</button></div></div>';
+    document.body.appendChild(overlay);
+  } catch(e) { alert('获取文件池失败: ' + e.message); }
+}
+async function assignFilePoolToChapter(fileId, fileName) {
+  var ch = getCh();
+  if (!ch) return;
+  try {
+    var res = await fetchWithAuth('/files/' + fileId + '/assign', {
+      method: 'POST',
+      body: JSON.stringify({ chapterId: ch.id })
+    });
+    if (!res || !res.ok) {
+      var err = await (res ? res.json().catch(function() { return {}; }) : {});
+      alert('分配失败: ' + (err.error || '网络错误'));
+      return;
+    }
+    // Close the picker overlay
+    var overlay = document.querySelector('.dialog-overlay.active');
+    if (overlay && overlay.querySelector('h3') && overlay.querySelector('h3').textContent.indexOf('文件池') >= 0) {
+      overlay.remove();
+    }
+    renderChapterMaterialsDialog();
+    renderAiMaterialList();
+    updateAiMaterialCount();
+  } catch(e) { alert('分配失败: ' + e.message); }
+}
 function renderChapterMaterialsDialog() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const container=document.getElementById('cm-dialog-list'); if(!materials.length){container.innerHTML='<div class="empty-state">暂无复习资料</div>';return;} let html=''; materials.forEach((m,i)=>{ html+='<div class="ai-material-file"><span class="am-name">'+escapeHtml(m.name)+'</span><span class="am-size">'+formatFileSize(m.size)+'</span><button class="am-del" onclick="removeChapterMaterial('+i+');renderChapterMaterialsDialog();">✕</button></div>'; }); container.innerHTML=html; }
 function removeChapterMaterial(idx) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); }
 function handleCmFileSelect(e) { const files=e.target.files; if(!files.length)return; handleCmFiles(files); e.target.value=''; }

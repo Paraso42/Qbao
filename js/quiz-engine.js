@@ -1,3 +1,93 @@
+// --- Server answer recovery (called on init) ---
+async function restoreQuizFromServer() {
+  if (!isOnlineMode || !getToken()) return;
+  var as = getActiveSet();
+  if (!as || !as.questions || !as.questions.length) return;
+  var ch = getCh();
+  var chapterId = as.setId || (ch ? ch.id : null);
+  if (!chapterId) return;
+  try {
+    var sRes = await fetchWithAuth('/quiz/sessions');
+    if (!sRes || !sRes.ok) return;
+    var sData = await sRes.json();
+    var sessions = sData.sessions || [];
+    for (var i = 0; i < sessions.length; i++) {
+      if (sessions[i].chapterId === chapterId) {
+        var dRes = await fetchWithAuth('/quiz/session/' + sessions[i].id);
+        if (!dRes || !dRes.ok) return;
+        var dData = await dRes.json();
+        var srv = dData.session;
+        if (srv && srv.userAnswers && Array.isArray(srv.userAnswers)) {
+          // Merge: server answers win for already-answered positions
+          // Also restore from server if local has fewer answers
+          for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
+            var srvAns = srv.userAnswers[j];
+            if (srvAns !== null && srvAns !== undefined) {
+              as.userAnswers[j] = srvAns;
+            }
+          }
+          saveState();
+        }
+        break;
+      }
+    }
+  } catch(e) { console.warn('restoreQuizFromServer failed:', e); }
+}
+
+// --- Server answer sync (throttled) ---
+var _lastSyncTime = 0;
+var _syncPending = null;
+function syncAnswerToServer() {
+  if (!isOnlineMode || !getToken()) return;
+  var now = Date.now();
+  if (now - _lastSyncTime < 5000) {
+    // Throttle: schedule a trailing sync
+    if (_syncPending) clearTimeout(_syncPending);
+    _syncPending = setTimeout(syncAnswerToServer, 5000 - (now - _lastSyncTime));
+    return;
+  }
+  _lastSyncTime = now;
+  var as = getActiveSet();
+  if (!as || !as.questions || !as.questions.length) return;
+  var ch = getCh();
+  var chapterId = as.setId || (ch ? ch.id : null);
+  if (!chapterId) return;
+  var stats = calcStats(as);
+  fetchWithAuth('/quiz/session', {
+    method: 'POST',
+    body: JSON.stringify({
+      chapterId: chapterId,
+      sessionName: as.setName || (ch ? ch.name : ''),
+      questions: as.questions,
+      userAnswers: as.userAnswers,
+      stats: stats
+    })
+  }).catch(function(e) { console.warn('syncAnswerToServer failed:', e); });
+}
+async function syncAnswerToServerFinal() {
+  if (!isOnlineMode || !getToken()) return;
+  if (_syncPending) { clearTimeout(_syncPending); _syncPending = null; }
+  _lastSyncTime = 0;
+  var as = getActiveSet();
+  if (!as || !as.questions || !as.questions.length) return;
+  var ch = getCh();
+  var chapterId = as.setId || (ch ? ch.id : null);
+  if (!chapterId) return;
+  var stats = calcStats(as);
+  try {
+    await fetchWithAuth('/quiz/session', {
+      method: 'POST',
+      body: JSON.stringify({
+        chapterId: chapterId,
+        sessionName: as.setName || (ch ? ch.name : ''),
+        questions: as.questions,
+        userAnswers: as.userAnswers,
+        stats: stats
+      })
+    });
+  } catch(e) { console.warn('syncAnswerToServerFinal failed:', e); }
+}
+
 function renderQuestion() {
   const as = getActiveSet(); const area = document.getElementById('question-area'); const tagEl = document.getElementById('quiz-tag'), typeEl = document.getElementById('quiz-type'); const navEl = document.getElementById('quiz-nav'), sb = document.getElementById('btn-submit'), nx = document.getElementById('btn-next');
   if (!as||!as.questions||!as.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; return; }
@@ -26,11 +116,11 @@ function submitAnswer() {
   const q=as.questions[as.currentIdx]; if (!q||as.userAnswers[as.currentIdx]!==undefined) return;
   if (q.type==='term'||q.type==='short') { const ta=document.getElementById('subjective-answer'); if (!ta||!ta.value.trim()) { alert('请输入答案'); return; } as.userAnswers[as.currentIdx]=ta.value.trim(); }
   else { if (as.userAnswers[as.currentIdx]===undefined) { alert('请选择选项'); return; } }
-  saveState(); renderQuestion(); updateProgress(); updateQuickActions(); checkAchievements();
+  saveState(); renderQuestion(); updateProgress(); updateQuickActions(); checkAchievements(); syncAnswerToServer();
 }
 function nextQuestion() { const as=getActiveSet(); if (!as) return; if (as.currentIdx<as.questions.length-1) { as.setCurrentIdx(as.currentIdx+1); saveState(); renderQuestion(); updateProgress(); } }
 function goToQuestion(idx) { const as=getActiveSet(); if (!as||idx<0||idx>=as.questions.length) return; as.setCurrentIdx(idx); saveState(); renderQuestion(); updateProgress(); }
-function endExam() { const as=getActiveSet(); if (!as) return; if (as._isSet) { endQuizSession(); } else if (as.isExam) { endExamGenerated(as); } else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); openQuizModal('report'); renderReport(); } }
+function endExam() { const as=getActiveSet(); if (!as) return; if (as._isSet) { endQuizSession(); } else if (as.isExam) { endExamGenerated(as); } else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); syncAnswerToServerFinal(); openQuizModal("report"); renderReport(); } }
 function resetQuiz() { const as=getActiveSet(); if (!as) return; if (as._isSet) { as.userAnswers=new Array(as.questions.length).fill(undefined); as.setCurrentIdx(0); saveState(); openQuizModal('quiz'); renderQuestion(); updateProgress(); return; } as.userAnswers=new Array(as.questions.length).fill(undefined); as.setCurrentIdx(0); saveState(); renderQuestion(); updateProgress(); closeQuizModal(); showScreen('start'); updateQuickActions(); }
 function autoUpdateChapterWeakTags(ch) {
   ch = ch || getCh();

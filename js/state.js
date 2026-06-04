@@ -168,6 +168,7 @@ function endQuizSession() {
     if (as.setId) autoUpdateChapterWeakTags(state.chapters[as.setId]);
     autoBackup();
     checkAchievements();
+    syncAnswerToServerFinal();
     var unusedStats = calcStats(as);
     saveState();
     openQuizModal('report');
@@ -176,6 +177,7 @@ function endQuizSession() {
   }
   finalizeUnansweredQuestions(as);
   saveState();
+  syncAnswerToServerFinal();
   // 保存答题历史
   saveQuizHistory({ id: as.setId, questions: as.questions, userAnswers: as.userAnswers, setName: as.setName, setId: as.setId });
   updateSRSAfterExam({ setId: as.setId, questions: as.questions, userAnswers: as.userAnswers });

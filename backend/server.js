@@ -33,5 +33,7 @@ require('./src/routes/ai.routes')(app);
 require('./src/routes/share.routes')(app);
 require('./src/routes/notices.routes')(app);
 require('./src/routes/users.routes')(app);
+require('./src/routes/quiz.routes')(app);
+require('./src/routes/files.routes')(app);
 
 app.listen(PORT, () => console.log(`Qbao API running on port ${PORT}`));

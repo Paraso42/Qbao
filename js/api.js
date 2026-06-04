@@ -4,9 +4,14 @@ function getUser() { try { return JSON.parse(localStorage.getItem('qbao_user') |
 function setUser(u) { if (u) localStorage.setItem('qbao_user', JSON.stringify(u)); else localStorage.removeItem('qbao_user'); }
 
 async function fetchWithAuth(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  var isFormData = options.body instanceof FormData;
+  var headers = isFormData ? {} : { 'Content-Type': 'application/json' };
+  if (options.headers) Object.assign(headers, options.headers);
   if (getToken()) headers['Authorization'] = 'Bearer ' + getToken();
-  const res = await fetch(API_BASE + path, { ...options, headers });
+  var fetchOpts = { method: options.method, headers: headers };
+  if (options.body) fetchOpts.body = options.body;
+  if (options.signal) fetchOpts.signal = options.signal;
+  const res = await fetch(API_BASE + path, fetchOpts);
   if (res.status === 401) { clearAuth(); return null; }
   return res;
 }

@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/achievements.css">
 <link rel="stylesheet" href="css/settings.css">
 <link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="css/files.css">
 <link rel="stylesheet" href="css/edge-bubble.css">
 <link rel="stylesheet" href="css/dark-mode.css">
 <link rel="stylesheet" href="css/responsive.css">
@@ -288,6 +289,7 @@
           <div class="ai-materials-drop" onclick="document.getElementById('cm-file-input').click()" style="padding:14px;">
             <div class="drop-text">📎 点击上传新文件</div>
           </div>
+          <button class="btn btn-secondary btn-small" style="margin-top:8px;width:100%;" onclick="openFilePoolForChapter()">📁 从文件池选择</button>
           <input type="file" id="cm-file-input" multiple accept=".pdf,.doc,.docx,.pptx,.txt,.md" style="display:none;" onchange="handleCmFileSelect(event)">
         </div>
         <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeChapterMaterialsDialog()">关闭</button></div>
@@ -326,6 +328,7 @@
             <div class="uc-modal-nav">
               <div class="ucm-nav-item active" data-uc-tab="account" onclick="switchUcModalTab('account')"><span class="uc-menu-icon">&#128100;</span>账号管理</div>
               <div class="ucm-nav-item" data-uc-tab="data" onclick="switchUcModalTab('data')"><span class="uc-menu-icon">&#128190;</span>数据管理</div>
+              <div class="ucm-nav-item" data-uc-tab="files" onclick="switchUcModalTab('files')"><span class="uc-menu-icon">&#128193;</span>文件管理</div>
               <div class="ucm-nav-item" data-uc-tab="achievements" onclick="switchUcModalTab('achievements')"><span class="uc-menu-icon">&#127942;</span>成就</div>
               <div class="ucm-nav-item" data-uc-tab="admin" id="ucm-admin-nav" style="display:none;" onclick="switchUcModalTab('admin')"><span class="uc-menu-icon">&#128737;</span>管理员专区</div>
               <div class="uc-divider"></div>
@@ -335,6 +338,7 @@
           <div class="uc-modal-content">
             <div id="ucm-tab-account" class="ucm-tab-content active"></div>
             <div id="ucm-tab-data" class="ucm-tab-content"></div>
+            <div id="ucm-tab-files" class="ucm-tab-content"></div>
             <div id="ucm-tab-achievements" class="ucm-tab-content">
               <div class="achievements-header"><div class="achievements-count" id="ach-count-display">已解锁 <strong>0</strong> / 20</div></div>
               <div class="achievements-grid" id="achievements-grid"></div>
