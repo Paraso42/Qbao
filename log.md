@@ -2,6 +2,17 @@
 
 ---
 
+## 2026-06-04 — 头像裁剪 + 刷新恢复修复 v3.5.1（仅测试环境 8080）
+
+### Bug #1: 头像裁剪结果扭曲偏移 + 图片可拖出画面
+- [修复] [js/users.js](js/users.js) — `confirmAvatarCrop()` 源矩形高度从 `srcSize * naturalH / naturalW` 修正为 `srcSize`（视口正方形→原图正方形，不需要宽高比换算）；新增 `clampAvatarCropOffset()` 在 `applyAvatarCropTransform()` 中调用，约束拖拽使视口圆心始终落在图片边界内
+
+### Bug #2: 刷新页面后答题仍被结算为错题
+- [根因] `endQuizSession()` 中 `finalizeUnansweredQuestions(as)` 直接修改 quizSet 将 undefined 改为 -1，`saveState()` 将此持久化到 localStorage。刷新后 `startQuizSession()` 不清除旧 -1 标记，导致这些标记混入后续答题记录
+- [修复] [js/state.js](js/state.js) — `startQuizSession()` 在 `answered === 0`（无真实作答，全为 -1 或 undefined）时清除旧标记：`qs.userAnswers = new Array(n).fill(undefined)` 并重置 `currentIdx = 0`
+
+---
+
 ## 2026-06-04 — 6 项 Bug 修复 + UX 优化 v3.5.0（仅测试环境 8080）
 
 ### Bug #1: 刷新页面答题进度恢复修复

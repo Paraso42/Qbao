@@ -432,9 +432,25 @@ function initAvatarCrop(imgSrc) {
   });
 }
 
+function clampAvatarCropOffset() {
+  if (!_avatarCropState) return;
+  var vp = document.getElementById('avatar-crop-viewport');
+  var img = document.getElementById('avatar-crop-img');
+  if (!vp || !img) return;
+  var vpSize = vp.clientWidth;
+  var s = _avatarCropState.zoom / 100;
+  var displayW = img.clientWidth * s;
+  var displayH = img.clientHeight * s;
+  // Keep viewport center within the image bounds
+  var halfVp = vpSize / 2;
+  _avatarCropState.offsetX = Math.min(halfVp, Math.max(halfVp - displayW, _avatarCropState.offsetX));
+  _avatarCropState.offsetY = Math.min(halfVp, Math.max(halfVp - displayH, _avatarCropState.offsetY));
+}
+
 function applyAvatarCropTransform() {
   var img = document.getElementById('avatar-crop-img');
   if (!img || !_avatarCropState) return;
+  clampAvatarCropOffset();
   var s = _avatarCropState.zoom / 100;
   img.style.transform = 'translate(' + _avatarCropState.offsetX + 'px,' + _avatarCropState.offsetY + 'px) scale(' + s + ')';
 }
@@ -483,10 +499,10 @@ function confirmAvatarCrop() {
   var imgCenterY = _avatarCropState.offsetY + displayH / 2;
   var vpCenter = vpSize / 2;
 
-  // Source rect in natural image space
+  // Source rect in natural image space (viewport square → natural square)
   var srcX = (vpCenter - imgCenterX) / displayW * naturalW;
   var srcY = (vpCenter - imgCenterY) / displayH * naturalH;
-  var srcSize = vpSize / displayW * naturalW; // square region in natural coords
+  var srcSize = vpSize / displayW * naturalW;
 
   ctx.save();
   // Clip to circle
@@ -494,9 +510,8 @@ function confirmAvatarCrop() {
   ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
   ctx.closePath();
   ctx.clip();
-  // Draw the source region
-  ctx.drawImage(img, srcX, srcY, srcSize, srcSize * naturalH / naturalW,
-    0, 0, outputSize, outputSize);
+  // Draw the source region (square → square, no distortion)
+  ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, outputSize, outputSize);
   ctx.restore();
 
   var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
