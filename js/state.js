@@ -249,6 +249,20 @@ function migrateState(s) {
   if (!s.generatedExams) s.generatedExams = {};
   if (!s.aiConfig) s.aiConfig = {};
   if (typeof s.aiConfig.systemPrompt !== 'string') s.aiConfig.systemPrompt = '';
+  // Migrate old single-key aiConfig to new providerKeys structure
+  if (!s.aiConfig.provider) s.aiConfig.provider = 'ecnu';
+  if (!s.aiConfig.model) s.aiConfig.model = 'ecnu-plus';
+  if (!s.aiConfig.providerKeys) {
+    s.aiConfig.providerKeys = {};
+    // Migrate old ecnu apiKey to providerKeys
+    if (s.aiConfig.apiKey) {
+      s.aiConfig.providerKeys.ecnu = s.aiConfig.apiKey;
+    }
+  }
+  // Ensure apiKeySet flag for backward compat
+  if (s.aiConfig.providerKeys && Object.keys(s.aiConfig.providerKeys).length > 0) {
+    s.aiConfig.apiKeySet = true;
+  }
   if (!s.chapterMaterials) s.chapterMaterials = {};
   if (typeof s.aiEnabled !== 'boolean') s.aiEnabled = false;
   // AI task queue

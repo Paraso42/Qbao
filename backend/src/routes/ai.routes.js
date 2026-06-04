@@ -3,59 +3,11 @@ const { requireAuth } = require('../middleware');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const OpenAI = require('openai');
+const { getProvider, getProviderByModel, getAllProviders } = require('../providers');
 
 const uploadDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const upload = multer({ dest: uploadDir, limits: { fileSize: 20 * 1024 * 1024 } });
-
-const ECNU_BASE = 'https://chat.ecnu.edu.cn/open/api/v1';
-
-function getEcnuClient(apiKey) {
-  const key = apiKey || process.env.ECNU_API_KEY || 'your-key';
-  const opts = { apiKey: key, baseURL: ECNU_BASE };
-  if (typeof opts.skipUpdateCheck === 'undefined') opts.httpAgent = undefined;
-  return new OpenAI(opts);
-}
-
-async function callEcnuApi(apiKey, model, messages, options) {
-  const key = apiKey || process.env.ECNU_API_KEY || 'your-key';
-  const body = { model, messages, ...options };
-  const contentLen = (body.messages[1] && body.messages[1].content && typeof body.messages[1].content === 'string') ? body.messages[1].content.length : 0;
-  console.log('callEcnuApi: posting to', ECNU_BASE + '/chat/completions', 'model=' + model, 'contentLen=' + contentLen, 'max_tokens=' + (options.max_tokens || 'default'));
-  const controller = new AbortController();
-  const timeout = setTimeout(() => { controller.abort(); }, 300000);
-  const start = Date.now();
-  try {
-    const res = await fetch(ECNU_BASE + '/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + key
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    const ms = Date.now() - start;
-    console.log('callEcnuApi: response status=' + res.status + ' time=' + ms + 'ms');
-    const text = await res.text();
-    if (!res.ok) {
-      console.log('callEcnuApi: error body=' + text.substring(0, 500));
-      throw new Error(`${res.status} ${res.statusText}: ${text.substring(0, 200)}`);
-    }
-    return JSON.parse(text);
-  } catch (e) {
-    clearTimeout(timeout);
-    const ms = Date.now() - start;
-    if (e.name === 'AbortError') {
-      console.log('callEcnuApi: TIMEOUT after ' + ms + 'ms');
-      throw new Error('AI响应超时（超过5分钟），可能是内容过长或网络慢。请减少资料后重试。');
-    }
-    console.log('callEcnuApi: fetch error after ' + ms + 'ms - ' + e.message);
-    throw e;
-  }
-}
 
 async function extractText(filePath, ext) {
   if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
@@ -113,6 +65,23 @@ async function extractText(filePath, ext) {
 }
 
 module.exports = function (app) {
+  // List available providers and models
+  app.get('/api/v1/ai/providers', function(req, res) {
+    try {
+      var providers = getAllProviders();
+      // Also add backward-compatible model listing
+      var allModels = [];
+      providers.forEach(function(p) {
+        p.models.forEach(function(m) {
+          allModels.push(m.id);
+        });
+      });
+      res.json({ providers: providers, models: allModels });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/v1/ai/upload', requireAuth, upload.array('files', 10), async (req, res) => {
     try {
       if (!req.files || req.files.length === 0) return res.status(422).json({ error: '未上传文件' });
@@ -135,13 +104,22 @@ module.exports = function (app) {
     try {
       const apiKey = req.headers['x-ai-api-key'];
       const model = req.headers['x-ai-model'] || 'ecnu-plus';
+      const providerName = req.headers['x-ai-provider'] || getProviderByModel(model);
       const { textContent, typeCounts, prompt, chapterHistory } = req.body;
       const useStream = req.headers['x-ai-stream'] === 'true';
       const useStrictFormat = req.headers['x-ai-strict-format'] !== 'false';
-      console.log('AI generate: model='+model+', apiKey='+((apiKey||'').substring(0,10)+'...'), 'textContentLen='+(textContent?.length||0), 'stream='+useStream, 'strictFormat='+useStrictFormat, 'typeCounts=', JSON.stringify(typeCounts));
+
+      const provider = getProvider(providerName);
+      console.log('AI generate: provider=' + providerName + ', model=' + model +
+        ', apiKey=' + ((apiKey || '').substring(0, 10) + '...') +
+        ', textContentLen=' + (textContent ? textContent.length : 0) +
+        ', stream=' + useStream + ', strictFormat=' + useStrictFormat +
+        ', typeCounts=', JSON.stringify(typeCounts));
+
       if (!apiKey || apiKey.length < 10) {
         return res.status(401).json({ error: '缺少 AI API Key，请在设置中配置' });
       }
+
       const tc = typeCounts || { single: 10, judge: 5, term: 2, short: 1 };
       const safeTc = tc;
       if ((safeTc.single || 0) + (safeTc.judge || 0) + (safeTc.term || 0) + (safeTc.short || 0) === 0) {
@@ -149,6 +127,7 @@ module.exports = function (app) {
       }
       const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成题目。\n重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。';
       let userText = textContent || '请生成一些通用练习题';
+
       if (chapterHistory && chapterHistory.tagStats) {
         var tagEntries = Object.entries(chapterHistory.tagStats);
         if (tagEntries.length > 0) {
@@ -173,128 +152,147 @@ module.exports = function (app) {
           userText += progressLines.join('\n');
         }
       }
+
       let content = userText;
       const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content }];
       const totalQ = safeTc.single + safeTc.judge + safeTc.term + safeTc.short;
-      const jsonSchema = { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, question: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, answer: { type: 'integer' }, tag: { type: 'string' }, explanation: { type: 'string' } }, required: ['type', 'question', 'explanation'] } };
+      const jsonSchema = {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            question: { type: 'string' },
+            options: { type: 'array', items: { type: 'string' } },
+            answer: { type: 'integer' },
+            tag: { type: 'string' },
+            explanation: { type: 'string' }
+          },
+          required: ['type', 'question', 'explanation']
+        }
+      };
 
-      // 动态计算 max_tokens
+      // Dynamic max_tokens calculation
       var baseTokens = Math.max(4096, Math.ceil((typeof content === 'string' ? content.length : 0) / 2) * 3);
       var perQuestionTokens = 300;
       var neededTokens = baseTokens + totalQ * perQuestionTokens;
       var maxTokens = Math.min(16384, Math.max(4096, neededTokens));
 
       if (useStream) {
-        const start = Date.now();
-        console.log('callEcnuApi: streaming to', ECNU_BASE + '/chat/completions', 'model=' + model, 'contentLen=' + (typeof content === 'string' ? content.length : 0));
-        var streamBody = { model, messages, stream: true, temperature: 0.7, max_tokens: maxTokens };
-        // 流式输出不使用 json_schema（会阻止 token 逐步释放），靠 prompt 约束输出格式
         const streamAborter = new AbortController();
         var accumulatedQuestions = [];
-        const streamRes = await fetch(ECNU_BASE + '/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + apiKey
-          },
-          body: JSON.stringify(streamBody),
-          signal: streamAborter.signal
-        });
-        console.log('callEcnuApi: stream response status=' + streamRes.status);
-        if (!streamRes.ok) {
-          const errText = await streamRes.text();
-          return res.status(500).json({ error: streamRes.status + ' ' + errText.substring(0, 200) });
+        var lastParsedLength = 0;
+        var finalFullContent = '';
+        var streamDone = false;
+        var streamError = null;
+
+        // Build options: only use response_format when provider supports streaming + structured output
+        var streamOpts = { temperature: 0.7, max_tokens: maxTokens };
+        if (useStrictFormat) {
+          if (provider.supportsStreamWithJsonSchema && provider.supportsStreamWithJsonSchema(model)) {
+            if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
+              streamOpts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
+            } else {
+              streamOpts.response_format = { type: 'json_object' };
+            }
+          }
         }
+
+        // Set up SSE response
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
-        let fullContent = '';
-        let deltaCount = 0;
-        let lastParsedLength = 0;
-        const decoder = new TextDecoder();
-        const reader = streamRes.body.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(data);
-                const delta = parsed.choices?.[0]?.delta?.content;
-                if (delta) {
-                  fullContent += delta;
-                  deltaCount++;
-                  // 每收到 5 个 delta 就尝试提取已闭合的完整对象
-                  // 用正则逐层截取 + JSON.parse 验证，不要求整体 JSON 有效
-                  if (deltaCount % 5 === 0) {
-                    const cleaned = fullContent.trim();
-                    const newQs = tryExtractCompletedObjects(cleaned, lastParsedLength);
-                    if (newQs && newQs.length > 0) {
-                      lastParsedLength += newQs.length;
-                      accumulatedQuestions = accumulatedQuestions.concat(newQs);
-                      if (lastParsedLength >= totalQ) {
-                        streamAborter.abort();
-                        var doneQs = accumulatedQuestions.slice(0, totalQ);
-                        res.write('data: ' + JSON.stringify({ done: true, questions: doneQs, usage: {} }) + "\n\n");
-                        res.end();
-                        return;
-                      }
-                      res.write('data: ' + JSON.stringify({ content: delta, newParsed: newQs, parsedCount: lastParsedLength }) + '\n\n');
-                      continue;
-                    }
-                  }
-                  res.write('data: ' + JSON.stringify({ content: delta, full: fullContent }) + '\n\n');
+
+        try {
+          var result = await provider.streamChatCompletions(apiKey, model, messages, streamOpts, function(evt) {
+            finalFullContent = evt.full;
+            if (evt.deltaCount % 5 === 0) {
+              var cleaned = evt.full.trim();
+              var newQs = tryExtractCompletedObjects(cleaned, lastParsedLength);
+              if (newQs && newQs.length > 0) {
+                lastParsedLength += newQs.length;
+                accumulatedQuestions = accumulatedQuestions.concat(newQs);
+                if (lastParsedLength >= totalQ) {
+                  streamAborter.abort();
+                  streamDone = true;
                 }
-              } catch {}
+                try {
+                  res.write('data: ' + JSON.stringify({ content: evt.content, newParsed: newQs, parsedCount: lastParsedLength }) + '\n\n');
+                } catch (e) { /* connection closed */ }
+                return;
+              }
             }
+            try {
+              res.write('data: ' + JSON.stringify({ content: evt.content, full: evt.full }) + '\n\n');
+            } catch (e) { /* connection closed */ }
+          }, streamAborter.signal);
+
+          finalFullContent = result.content || finalFullContent;
+        } catch (e) {
+          streamError = e;
+          if (!res.headersSent) {
+            return res.status(500).json({ error: e.message });
           }
+          console.error('Stream error:', e.message);
         }
-        const elapsed = Date.now() - start;
-        var finalClean = fullContent.trim();
+
+        if (streamDone) return;
+
+        // Parse final output
+        var finalClean = finalFullContent.trim();
         finalClean = finalClean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-        // 提取 JSON 数组 [...]，忽略 AI 末尾可能添加的解释文字
         var jsonMatch = finalClean.match(/\[[\s\S]*\]/);
         if (jsonMatch) finalClean = jsonMatch[0];
         while (finalClean.trimEnd().endsWith(',')) finalClean = finalClean.trimEnd().slice(0, -1);
+
         try {
           var questions = JSON.parse(finalClean);
           if (!Array.isArray(questions)) questions = [questions];
-          res.write('data: ' + JSON.stringify({ done: true, questions, usage: {} }) + '\n\n');
+          res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {} }) + '\n\n');
           res.end();
-        } catch {
+        } catch (e) {
           if (!finalClean.endsWith(']')) finalClean += ']';
           try {
             questions = JSON.parse(finalClean);
             if (Array.isArray(questions)) {
-              res.write('data: ' + JSON.stringify({ done: true, questions, usage: {} }) + '\n\n');
+              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {} }) + '\n\n');
               res.end();
             } else throw new Error();
-          } catch {
-            res.write('data: ' + JSON.stringify({ done: true, error: 'JSON\u89e3\u6790\u5931\u8d25', raw: fullContent }) + '\n\n');
+          } catch (e2) {
+            res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent }) + '\n\n');
             res.end();
           }
         }
       } else {
+        // Non-streaming path
         const opts = { temperature: 0.7, max_tokens: maxTokens };
-        // json_schema 仅 ecnu-plus 和 ecnu-turbo 支持，ecnu-max 不支持
-        if (useStrictFormat && (model === 'ecnu-plus' || model === 'ecnu-turbo')) {
-          opts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
+        if (useStrictFormat) {
+          if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
+            opts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
+          } else {
+            // Fallback: use json_object if provider supports it but not json_schema
+            // For Gemini, no response_format at all — rely on prompt
+            if (providerName !== 'gemini') {
+              opts.response_format = { type: 'json_object' };
+            }
+          }
         }
-        const completion = await callEcnuApi(apiKey, model, messages, opts);
+
+        const completion = await provider.chatCompletions(apiKey, model, messages, opts);
         const output = completion.choices[0].message.content;
         let questions;
-        try { questions = JSON.parse(output); } catch { questions = [output]; }
-        await pool.query('INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)', [req.userId, model, 'ok']);
-        res.json({ questions, usage: completion.usage });
+        try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
+
+        await pool.query(
+          'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
+          [req.userId, model, 'ok']
+        );
+        res.json({ questions: questions, usage: completion.usage });
       }
     } catch (e) {
-      console.error('AI generate error:', e.message, 'statusCode:', e?.status, 'code:', e?.code);
-      if (!res.headersSent) res.status(500).json({ error: e.message, status: e?.status });
+      console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);
+      if (!res.headersSent) res.status(500).json({ error: e.message, status: e ? e.status : undefined });
       else console.error('AI generate error after headers sent:', e.message);
     }
   });
@@ -305,11 +303,10 @@ module.exports = function (app) {
 };
 
 
-// 辅助函数：从流式累积文本中提取已闭合的完整题目对象
-// 不要求整体 JSON 有效，逐个提取 {完整闭合对象} 并校验
+// Helper: extract completed JSON objects from streaming accumulated text
+// Does not require valid overall JSON — extracts individual {complete objects} and validates
 function tryExtractCompletedObjects(text, knownCount) {
   var cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  // 逐字符扫描，找到完整闭合的 {...} 并尝试解析
   var result = [];
   var depth = 0;
   var start = -1;
@@ -325,11 +322,10 @@ function tryExtractCompletedObjects(text, knownCount) {
         try {
           var obj = JSON.parse(candidate);
           if (obj && obj.question && typeof obj.question === 'string') {
-            // 去重（基于 question 文本避免重复计数）
             var isDup = result.some(function(r) { return r.question === obj.question; });
             if (!isDup) result.push(obj);
           }
-        } catch(e) {}
+        } catch (e) { /* skip malformed object */ }
         start = -1;
       }
     }

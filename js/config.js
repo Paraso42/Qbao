@@ -7,4 +7,6 @@ let syncTimer = null;
 let aiTimer = null;
 let aiGenerating = false;
 let aiTaskRunnerActive = false;
-let aiTaskAbortController = null;
+let aiTaskAbortController = null;
+let aiProviders = [];
+let aiCurrentProvider = 'ecnu';
