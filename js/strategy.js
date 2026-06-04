@@ -49,8 +49,9 @@ function generatePromptText(chId) {
   if (allTags.length > 0) {
     existingTagLine = '\n\n【已有知识点标签】' + allTags.join('、') + '\n如果题目知识点与以上已有标签相似，请优先使用已有标签名称；如果是全新知识点，再创建新标签。';
   }
+  var tagLabelNum = tagLine7 ? '\n8.' : '\n7.';
   var formatNote = '重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n';
-      return formatNote + '请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：' + qStr + '。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 "single", "judge", "term", "short"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 ["正确", "错误"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：' + errPct + '% 针对错题，' + reviewPct + '% 滚动复习，' + newPct + '% 新考点。\n6. 请在 explanation 中标注来源。' + tagLine7 + '\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如："三角函数"、"牛顿定律"、"文艺复兴"等。' + existingTagLine;
+      return formatNote + '请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：' + qStr + '。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 "single", "judge", "term", "short"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 ["正确", "错误"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：' + errPct + '% 针对错题，' + reviewPct + '% 滚动复习，' + newPct + '% 新考点。\n6. 请在 explanation 中标注来源。' + tagLine7 + tagLabelNum + ' 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如："三角函数"、"牛顿定律"、"文艺复兴"等。' + existingTagLine;
 }
 function updateChapterPromptTemplate() {
   const ch = getCh(); if (!ch) return;

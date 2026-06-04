@@ -64,6 +64,7 @@ module.exports = function (app) {
       const storedName = req.file.filename;
       const fileSize = req.file.size;
       const mimeType = req.file.mimetype || '';
+      const chapterId = req.body.chapterId || null;
       // Relative path from uploads/ for portability
       const relPath = 'pool/' + userId + '/' + storedName;
 
@@ -71,9 +72,9 @@ module.exports = function (app) {
       const poolExpiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
       const result = await pool.query(
-        `INSERT INTO user_files (user_id, original_name, stored_name, file_size, file_path, mime_type, pool_expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [userId, originalName, storedName, fileSize, relPath, mimeType, poolExpiresAt]
+        `INSERT INTO user_files (user_id, original_name, stored_name, file_size, file_path, mime_type, chapter_id, pool_expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [userId, originalName, storedName, fileSize, relPath, mimeType, chapterId, poolExpiresAt]
       );
 
       res.status(201).json({ file: formatFileRow(result.rows[0]) });
@@ -139,7 +140,7 @@ module.exports = function (app) {
       if (!chapterId) return res.status(422).json({ error: '缺少 chapterId' });
 
       const result = await pool.query(
-        'UPDATE user_files SET chapter_id = $1, in_pool = false WHERE id = $2 AND user_id = $3 RETURNING *',
+        'UPDATE user_files SET chapter_id = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
         [chapterId, parseInt(req.params.id), req.userId]
       );
       if (result.rows.length === 0) return res.status(404).json({ error: '文件不存在或不属于你' });

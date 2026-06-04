@@ -6,6 +6,7 @@ const path = require('path');
 const { getProvider, getProviderByModel, getAllProviders } = require('../providers');
 
 const uploadDir = path.join(__dirname, '../../uploads');
+const POOL_BASE = path.join(__dirname, '../../../uploads'); // shared file pool root
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const upload = multer({ dest: uploadDir, limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -105,7 +106,7 @@ module.exports = function (app) {
       const apiKey = req.headers['x-ai-api-key'];
       const model = req.headers['x-ai-model'] || 'ecnu-plus';
       const providerName = req.headers['x-ai-provider'] || getProviderByModel(model);
-      const { textContent, typeCounts, prompt, chapterHistory } = req.body;
+      const { textContent, typeCounts, prompt, chapterHistory, chapterId } = req.body;
       const useStream = req.headers['x-ai-stream'] === 'true';
       const useStrictFormat = req.headers['x-ai-strict-format'] !== 'false';
 
@@ -114,7 +115,7 @@ module.exports = function (app) {
         ', apiKey=' + ((apiKey || '').substring(0, 10) + '...') +
         ', textContentLen=' + (textContent ? textContent.length : 0) +
         ', stream=' + useStream + ', strictFormat=' + useStrictFormat +
-        ', typeCounts=', JSON.stringify(typeCounts));
+        ', typeCounts=', JSON.stringify(typeCounts) + ', chapterId=' + (chapterId || 'none'));
 
       if (!apiKey || apiKey.length < 10) {
         return res.status(401).json({ error: '缺少 AI API Key，请在设置中配置' });
@@ -126,7 +127,40 @@ module.exports = function (app) {
         safeTc.single = 1;
       }
       const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成题目。\n重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。';
-      let userText = textContent || '请生成一些通用练习题';
+      let userText = textContent || '';
+
+      // If chapterId provided, read assigned pool files from disk
+      var poolTexts = [];
+      if (chapterId) {
+        try {
+          var fileResult = await pool.query(
+            'SELECT * FROM user_files WHERE user_id = $1 AND chapter_id = $2',
+            [req.userId, chapterId]
+          );
+          for (var fi = 0; fi < fileResult.rows.length; fi++) {
+            var frow = fileResult.rows[fi];
+            var absPath = path.join(POOL_BASE, frow.file_path);
+            if (fs.existsSync(absPath)) {
+              try {
+                var ext = path.extname(frow.original_name).slice(1).toLowerCase();
+                var extracted = await extractText(absPath, ext);
+                if (extracted && extracted.type === 'text' && extracted.content) {
+                  poolTexts.push('--- 文件：' + frow.original_name + ' ---\n' + extracted.content);
+                }
+              } catch (ex) {
+                console.warn('Failed to extract pool file: ' + frow.original_name + ' — ' + ex.message);
+              }
+            }
+          }
+          if (poolTexts.length > 0) {
+            userText = poolTexts.join('\n\n') + (userText ? '\n\n' + userText : '');
+            console.log('AI generate: merged ' + poolTexts.length + ' pool files, total textLen=' + userText.length);
+          }
+        } catch (e2) {
+          console.warn('Pool file reading failed:', e2.message);
+        }
+      }
+      if (!userText) userText = '请生成一些通用练习题';
 
       if (chapterHistory && chapterHistory.tagStats) {
         var tagEntries = Object.entries(chapterHistory.tagStats);
@@ -144,11 +178,11 @@ module.exports = function (app) {
           }
           progressLines.push('');
           progressLines.push('要求：');
-          progressLines.push('1. 对于已有知识点标签，请出同知识点但不同问法、不同场景的变式题');
-          progressLines.push('2. 对于已有标签中已掌握的内容（错题少），出少量巩固题即可');
-          progressLines.push('3. 对于已有标签中出题少的（少于3题），请补充出题');
-          progressLines.push('4. 对于资料中未覆盖的新知识点，请创建新标签并出题');
-          progressLines.push('5. 为每道题标注 tag 时，如果知识点与已有标签相似，请归入已有标签；如果是全新知识点，请创建新标签');
+          progressLines.push('- 对于已有知识点标签，请出同知识点但不同问法、不同场景的变式题');
+          progressLines.push('- 对于已有标签中已掌握的内容（错题少），出少量巩固题即可');
+          progressLines.push('- 对于已有标签中出题少的（少于3题），请补充出题');
+          progressLines.push('- 对于资料中未覆盖的新知识点，请创建新标签并出题');
+          progressLines.push('- 为每道题标注 tag 时，如果知识点与已有标签相似，请归入已有标签；如果是全新知识点，请创建新标签');
           userText += progressLines.join('\n');
         }
       }
@@ -237,7 +271,13 @@ module.exports = function (app) {
           console.error('Stream error:', e.message);
         }
 
-        if (streamDone) return;
+        if (streamDone) {
+          try {
+            res.write('data: ' + JSON.stringify({ done: true, questions: accumulatedQuestions.slice(0, totalQ), usage: {} }) + '\n\n');
+            res.end();
+          } catch(e) { /* connection already closed */ }
+          return;
+        }
 
         // Parse final output
         var finalClean = finalFullContent.trim();
