@@ -10,8 +10,16 @@
   border: 1px solid var(--border-light);
 }
 
-.card h3 { font-size: var(--fs-md); margin-bottom: var(--space-sm); font-weight: 600; }
-.card h4 { font-size: var(--fs-base); margin: var(--space-lg) 0 var(--space-sm); color: var(--text-secondary); }
+.card h3 { font-size: 1em; margin-bottom: var(--space-sm); font-weight: 600; }
+.card h4 { font-size: 0.875em; margin: var(--space-lg) 0 var(--space-sm); color: var(--text-secondary); }
+
+.card-bottom-bar {
+  position: fixed; bottom: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 16px;
+  background: var(--surface-card); border-top: 1px solid var(--border-light);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+}
 
 /* --- Buttons --- */
 .btn {
@@ -47,7 +55,7 @@
 .btn-warning { background: var(--color-warning); color: #fff; }
 .btn-warning:hover { background: var(--color-warning-hover); box-shadow: var(--shadow-sm); }
 
-.btn-small { padding: 5px 12px; font-size: var(--fs-sm); border-radius: var(--radius-sm); }
+.btn-small { padding: 5px 12px; font-size: 0.824em; border-radius: var(--radius-sm); }
 
 .btn-ghost {
   background: transparent;
@@ -253,10 +261,16 @@
 
 /* --- Type counts --- */
 .type-counts { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin: var(--space-sm) 0; }
-.type-count-item { display: flex; align-items: center; gap: 4px; background: var(--surface-hover); padding: 4px 10px; border-radius: var(--radius-sm); }
+.type-count-item { display: flex; align-items: center; gap: 6px; background: var(--surface-hover); padding: 4px 10px; border-radius: var(--radius-sm); }
 .type-count-item label { font-size: var(--fs-xs); white-space: nowrap; color: var(--text-secondary); }
-.type-count-item input[type="number"] { width: 40px; padding: 3px 4px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); text-align: center; font-size: var(--fs-xs); }
-.type-count-item input[type="number"]:focus { outline: none; border-color: var(--border-focus); }
+
+/* --- Num picker (iOS-style stepper) --- */
+.num-picker { display: inline-flex; align-items: center; border: 1px solid var(--border-default); border-radius: 8px; overflow: hidden; background: var(--surface-bg); }
+.num-picker .num-btn { width: 28px; height: 32px; border: none; background: var(--surface-hover); font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: background 0.15s, color 0.15s; padding: 0; font-family: inherit; }
+.num-picker .num-btn:hover { background: var(--color-primary-light); color: var(--color-primary); }
+.num-picker .num-btn:active { background: var(--color-primary); color: #fff; }
+.num-picker .num-input { width: 40px; text-align: center; border: none; border-left: 1px solid var(--border-default); border-right: 1px solid var(--border-default); font-size: 14px; font-weight: 600; background: var(--surface-bg); padding: 5px 2px; -moz-appearance: textfield; }
+.num-picker .num-input::-webkit-outer-spin-button, .num-picker .num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* --- Tags manager --- */
 .tags-manager { margin: var(--space-sm) 0; }

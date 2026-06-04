@@ -5,10 +5,7 @@ function renderSubjComposeExam(s) {
   html += '<h4 style="font-size:15px;margin-bottom:6px;">1. 选择章节</h4><div class="chapter-select-grid" id="exam-chapter-select">';
   s.chapterIds.forEach(cid => { const ch = state.chapters[cid]; if (!ch) return; html += '<div class="chapter-select-item"><input type="checkbox" id="exam-chk-' + cid + '" value="' + cid + '" onchange="updateExamSlidersFromSubj()"><label for="exam-chk-' + cid + '">' + escapeHtml(ch.name) + '</label><span class="cs-count">' + (ch.questions ? ch.questions.length : 0) + ' 题</span></div>'; });
   html += '</div><h4 style="font-size:15px;margin:10px 0 6px;">2. 各题型数量</h4><div class="type-counts">';
-  html += '<div class="type-count-item"><label>📝 单选</label><input type="number" id="exam-tc-single" min="0" value="5" onchange="updateExamTotal()"></div>';
-  html += '<div class="type-count-item"><label>⚖️ 判断</label><input type="number" id="exam-tc-judge" min="0" value="3" onchange="updateExamTotal()"></div>';
-  html += '<div class="type-count-item"><label>📖 名词解释</label><input type="number" id="exam-tc-term" min="0" value="1" onchange="updateExamTotal()"></div>';
-  html += '<div class="type-count-item"><label>✍️ 简答</label><input type="number" id="exam-tc-short" min="0" value="1" onchange="updateExamTotal()"></div>';
+  ['single','judge','term','short'].forEach(function(type){ var labels={single:'📝 单选',judge:'⚖️ 判断',term:'📖 名词解释',short:'✍️ 简答'}; var defaults={single:5,judge:3,term:1,short:1}; html+='<div class="type-count-item"><label>'+labels[type]+'</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="exam-tc-'+type+'" class="num-input" value="'+defaults[type]+'" min="0" max="50" onchange="updateExamTotal()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>'; });
   html += '</div><p style="font-size:13px;color:#888;" id="exam-total-info">总题数：10 题</p>';
   // 章节占比 - v8.2 累积滑条
   html += '<h4 style="font-size:15px;margin:10px 0 6px;">3. 章节占比（滑动累积边界，总和100%）</h4><div id="exam-proportion-area">请先勾选章节</div>';

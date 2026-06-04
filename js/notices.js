@@ -7,14 +7,35 @@ async function loadNotices() {
   } catch(e) { state.notices = []; }
   renderNoticeBar();
 }
-function renderNoticeBar() {
+function applyNoticeScrollClass() {
   var bar = document.getElementById('notice-bar');
-  if (!bar) return;
+  var wrap = document.getElementById('notice-bar-wrap');
+  if (!bar || !wrap) return;
+  bar.classList.remove('scroll');
+  bar.style.removeProperty('--scroll-dist');
+  bar.style.removeProperty('--scroll-duration');
+  if (bar.scrollWidth > wrap.clientWidth) {
+    var dist = bar.scrollWidth - wrap.clientWidth + 40;
+    bar.style.setProperty('--scroll-dist', '-' + dist + 'px');
+    var notices = state.notices || [];
+    var displayMs = notices[noticeCurrentIdx] ? (notices[noticeCurrentIdx].duration || 4000) : 4000;
+    bar.style.setProperty('--scroll-duration', Math.max(3, displayMs / 1000) + 's');
+    bar.classList.add('scroll');
+  }
+}
+function isNoticeBarWrapped() { var wrap=document.getElementById('notice-bar-wrap'); if(!wrap)return false; return window.innerWidth<=900; }
+function renderNoticeBar() {
+  var wrap = document.getElementById('notice-bar-wrap');
+  var bar = document.getElementById('notice-bar');
+  if (!wrap || !bar) return;
   var notices = state.notices || [];
-  if (notices.length === 0) { bar.style.display = 'none'; stopNoticeRotation(); return; }
-  bar.style.display = 'flex';
+  var show = state.settings ? state.settings.showNoticeBar !== false : true;
+  if (notices.length === 0 || !show) { wrap.style.display = 'none'; stopNoticeRotation(); return; }
+  wrap.style.display = 'flex';
   noticeCurrentIdx = 0;
+  bar.style.transition = 'none'; bar.style.transform = ''; bar.style.opacity = '1';
   bar.textContent = (noticeTypeMap[notices[0].type] || noticeTypeMap.notice).icon + ' ' + notices[0].content;
+  applyNoticeScrollClass();
   if (notices.length > 1) { startNoticeRotation(); } else { stopNoticeRotation(); }
 }
 function startNoticeRotation() {
@@ -38,15 +59,36 @@ function rotateNotice() {
   var bar = document.getElementById('notice-bar');
   if (!bar) return;
   noticeTransitioning = true;
-  bar.style.transition = 'opacity 0.5s ease';
-  bar.style.opacity = '0';
+  bar.classList.remove('scroll'); bar.style.removeProperty('--scroll-dist');
+  var useSlide = isNoticeBarWrapped();
+  if (useSlide) {
+    bar.style.transition = 'transform 0.45s ease-in, opacity 0.35s ease-in';
+    bar.style.transform = 'translateX(-120%)';
+    bar.style.opacity = '0';
+  } else {
+    bar.style.transition = 'opacity 0.3s ease';
+    bar.style.opacity = '0';
+  }
   setTimeout(function() {
     noticeCurrentIdx = (noticeCurrentIdx + 1) % notices.length;
     bar.textContent = (noticeTypeMap[notices[noticeCurrentIdx].type] || noticeTypeMap.notice).icon + ' ' + notices[noticeCurrentIdx].content;
-    bar.style.opacity = '1';
-    var currentDuration = notices[noticeCurrentIdx].duration || 4000;
-    setTimeout(function() { noticeTransitioning = false; startNoticeRotation(); }, 500);
-  }, 500);
+    if (useSlide) {
+      bar.style.transition = 'none';
+      bar.style.transform = 'translateX(120%)';
+      bar.offsetHeight;
+      bar.style.transition = 'transform 0.45s ease-out, opacity 0.35s ease-out';
+      bar.style.transform = 'translateX(0)';
+      bar.style.opacity = '1';
+    } else {
+      bar.style.opacity = '1';
+    }
+    applyNoticeScrollClass();
+    var settleTime = useSlide ? 450 : 300;
+    setTimeout(function() {
+      bar.style.transition = ''; bar.style.transform = '';
+      noticeTransitioning = false; startNoticeRotation();
+    }, settleTime);
+  }, useSlide ? 450 : 300);
 }
 function clickNotice() {
   var notices = state.notices || [];
@@ -56,7 +98,8 @@ function clickNotice() {
 }
 document.addEventListener('click', function(e) {
   var bar = document.getElementById('notice-bar');
-  if (bar && bar.contains(e.target)) clickNotice();
+  var wrap = document.getElementById('notice-bar-wrap');
+  if ((bar && bar.contains(e.target)) || (wrap && wrap.contains(e.target))) clickNotice();
 });
 async function loadAdminNotices() {
   if (!getToken()) return;

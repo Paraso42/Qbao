@@ -19,7 +19,7 @@
 }
 
 #sidebar-header h2 {
-  font-size: var(--fs-lg);
+  font-size: 1.385em;
   color: var(--text-primary);
   margin-bottom: var(--space-sm);
   text-align: center;
@@ -35,7 +35,7 @@
   color: var(--text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--fs-xs);
+  font-size: 0.846em;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   font-weight: 500;
   font-family: inherit;
@@ -57,15 +57,15 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--transition-fast);
-  font-size: var(--fs-sm);
+  font-size: 0.923em;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .subject-header:hover { background: var(--sidebar-hover-bg); }
 .subject-header.active { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
-.subject-header .subj-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
-.subject-header .subj-count { font-size: 11px; color: var(--text-muted); font-weight: 400; margin: 0 4px; }
+.subject-header .subj-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1em; }
+.subject-header .subj-count { font-size: 0.846em; color: var(--text-muted); font-weight: 400; margin: 0 4px; }
 
 .subj-actions { display: flex; gap: 1px; opacity: 0; transition: opacity var(--transition-fast); }
 .subject-header:hover .subj-actions { opacity: 1; }
@@ -75,7 +75,7 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 0.846em;
   padding: 2px 4px;
   border-radius: var(--radius-sm);
   transition: color var(--transition-fast), background var(--transition-fast);
@@ -95,7 +95,7 @@
   justify-content: space-between;
   align-items: center;
   transition: background var(--transition-fast);
-  font-size: var(--fs-xs);
+  font-size: 0.846em;
   color: var(--text-secondary);
 }
 
@@ -104,7 +104,7 @@
 
 .chapter-info { flex: 1; min-width: 0; }
 .chapter-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chapter-count { font-size: 11px; color: var(--text-muted); }
+.chapter-count { font-size: 0.846em; color: var(--text-muted); }
 
 .ch-actions { display: flex; gap: 1px; opacity: 0; transition: opacity var(--transition-fast); }
 .chapter-item:hover .ch-actions { opacity: 1; }

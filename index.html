@@ -41,7 +41,9 @@
   <div id="topbar">
     <span id="sidebar-toggle" class="tb-item" onclick="toggleSidebar()" style="font-size:20px;padding:4px 8px;">☰</span>
     <span class="tb-brand">📚 Qbao</span>
-    <span id="notice-bar" style="display:none;align-items:center;gap:5px;font-size:12px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;flex-shrink:1;margin:0 auto;" onmouseenter="pauseNoticeRotation()" onmouseleave="resumeNoticeRotation()"></span>
+    <span id="notice-bar-wrap">
+      <span id="notice-bar" onmouseenter="pauseNoticeRotation()" onmouseleave="resumeNoticeRotation()"></span>
+    </span>
     <div id="topbar-auth-area">
       <button class="tb-item" onclick="openAuthDialog()">
         <span class="tb-icon">☁️</span> 登录/注册
@@ -96,10 +98,10 @@
         <h3>🎓 准备新的一轮 — <span id="ch-strategy-name">当前章节</span></h3>
         <h4>📐 第一步：各题型数量</h4>
         <div class="type-counts">
-          <div class="type-count-item"><label>📝 单选</label><input type="number" id="tc-single" min="0" max="50" value="10" onchange="onChapterStrategyChange()"></div>
-          <div class="type-count-item"><label>⚖️ 判断</label><input type="number" id="tc-judge" min="0" max="50" value="5" onchange="onChapterStrategyChange()"></div>
-          <div class="type-count-item"><label>📖 名词解释</label><input type="number" id="tc-term" min="0" max="50" value="1" onchange="onChapterStrategyChange()"></div>
-          <div class="type-count-item"><label>✍️ 简答</label><input type="number" id="tc-short" min="0" max="50" value="1" onchange="onChapterStrategyChange()"></div>
+          <div class="type-count-item"><label>📝 单选</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-single" class="num-input" value="10" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
+          <div class="type-count-item"><label>⚖️ 判断</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-judge" class="num-input" value="5" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
+          <div class="type-count-item"><label>📖 名词解释</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-term" class="num-input" value="1" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
+          <div class="type-count-item"><label>✍️ 简答</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-short" class="num-input" value="1" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
         </div>
         <h4>📐 第二步：出题策略</h4>
         <p style="color:#666;font-size:13px;margin-bottom:3px;">三比例之和 = 100%：</p>
@@ -152,10 +154,13 @@
         <div id="ai-generate-section" class="ai-mode-hidden">
         <h4 style="margin-top:14px;">🚀 第五步：AI 自动生成题目</h4>
         <div class="ai-generate-area">
-          <button class="btn btn-success btn-small" id="btn-ai-generate" onclick="aiEnqueueGenerate(state.currentChapterId)">🤖 开始出题</button>
           <span style="font-size:12px;color:#888;" id="ai-material-count"></span>
         </div>
         <div class="ai-progress" id="ai-progress"></div>
+        </div>
+        <div class="card-bottom-bar" id="chapter-card-bottom-bar" style="display:none;">
+          <span id="card-bar-status" style="font-size:12px;color:#888;"></span>
+          <button class="btn btn-success btn-small" id="btn-ai-generate-sticky" onclick="handleStickyGenerate()">🤖 开始出题</button>
         </div>
       </div>
     </div>
@@ -298,7 +303,7 @@
         <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="document.getElementById('qdetail-dialog').classList.remove('active')">关闭</button></div>
       </div>
     </div>
-    <div class="dialog-overlay" id="ai-task-queue-dialog">
+    <div class="dialog-overlay" id="ai-task-queue-dialog" onclick="if(event.target===this)closeAiTaskQueueDialog()">
       <div class="dialog-box">
         <h3>🔄 AI 出题任务队列</h3>
         <div id="ai-task-queue-list" style="max-height:400px;overflow-y:auto;"></div>
@@ -359,22 +364,27 @@
                 <div class="settings-section">
                   <h4>📌 边栏</h4>
                   <div class="settings-row"><label>边栏字体大小</label><input type="range" id="settings-sidebar-font-size" min="11" max="16" value="13" step="1" oninput="onSettingsSidebarFontSize()"><span class="settings-val" id="settings-sidebar-font-size-val">13px</span></div>
+                  <div class="font-preview" id="preview-sidebar" style="font-size:13px;padding:6px 10px;margin-top:6px;background:var(--surface-sidebar);border-radius:6px;border-left:3px solid var(--color-primary);"><div style="font-weight:600;">📂 科目名称</div><div style="margin-left:10px;color:#666;font-size:0.923em;">📄 章节 1.1 — 3 题</div></div>
                 </div>
                 <div class="settings-section">
                   <h4>🔝 顶栏</h4>
                   <div class="settings-row"><label>顶栏字体大小</label><input type="range" id="settings-topbar-font-size" min="11" max="18" value="14" step="1" oninput="onSettingsTopbarFontSize()"><span class="settings-val" id="settings-topbar-font-size-val">14px</span></div>
+                  <div class="font-preview" id="preview-topbar" style="font-size:14px;padding:4px 10px;margin-top:6px;background:var(--surface-topbar);border-radius:6px;display:flex;align-items:center;gap:8px;"><span style="font-weight:700;color:var(--color-primary);">Qbao</span><span style="color:#666;font-size:0.857em;">设置</span><span style="color:#999;font-size:0.786em;">/ 个性化</span></div>
                 </div>
                 <div class="settings-section">
                   <h4>📄 主页区域</h4>
                   <div class="settings-row"><label>主页字体大小</label><input type="range" id="settings-main-font-size" min="15" max="22" value="17" step="1" oninput="onSettingsMainFontSize()"><span class="settings-val" id="settings-main-font-size-val">17px</span></div>
+                  <div class="font-preview" id="preview-main" style="font-size:17px;padding:8px 12px;margin-top:6px;background:var(--surface-card);border-radius:6px;border:1px solid var(--border-light);"><div style="font-weight:600;font-size:1.125em;">📖 章节标题</div><div style="color:#666;font-size:0.875em;">这是一段正文内容，展示主页区域字体大小效果。</div></div>
                 </div>
                 <div class="settings-section">
                   <h4>🔤 答题区域</h4>
                   <div class="settings-row"><label>题目字体大小</label><input type="range" id="settings-quiz-font-size" min="14" max="28" value="17" step="1" oninput="onSettingsQuizFontSize()"><span class="settings-val" id="settings-quiz-font-size-val">17px</span></div>
+                  <div class="font-preview" id="preview-quiz" style="font-size:17px;padding:8px 12px;margin-top:6px;background:#fffbe6;border-radius:6px;border-left:3px solid var(--color-warning);"><div style="font-weight:600;">1. 以下哪项是正确的？</div><div style="color:#666;font-size:0.882em;margin-top:4px;">A. 选项一 &nbsp; B. 选项二 &nbsp; C. 选项三</div></div>
                 </div>
                 <div class="settings-section">
                   <h4>🌙 外观</h4>
                   <div class="settings-row"><label>夜间模式</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="settings-dark-mode" onchange="onSettingsDarkMode()" style="width:18px;height:18px;accent-color:#8b5cf6;"> 开启</label></div>
+                  <div class="settings-row"><label>消息提醒</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="settings-notice-bar" onchange="onSettingsNoticeBar()" style="width:18px;height:18px;accent-color:#8b5cf6;"> 显示顶栏消息</label></div>
                 </div>
               </div>
             </div>
@@ -454,10 +464,7 @@
     </div>
 
   </main>
-  <!-- 备案号 -->
-  <div id="footer-beian" style="text-align:center;padding:14px 20px;font-size:12px;color:#999;border-top:1px solid #eee;margin-top:auto;flex-shrink:0;">
-    <a href="http://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer" style="color:#999;text-decoration:none;">闽ICP备2026017652号-1</a>
-  </div>
+
   </div>
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 </div>

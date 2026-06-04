@@ -90,11 +90,13 @@ function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('mobile-open');
   var ov = document.getElementById('sidebar-overlay');
   if (ov) ov.classList.toggle('active');
+  setTimeout(function() { if (typeof positionCardBottomBar === 'function') positionCardBottomBar(); }, 350);
 }
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('mobile-open');
   var ov = document.getElementById('sidebar-overlay');
   if (ov) ov.classList.remove('active');
+  setTimeout(function() { if (typeof positionCardBottomBar === 'function') positionCardBottomBar(); }, 350);
 }
 function closeSidebarIfMobile() {
   if (window.innerWidth <= 768) closeSidebar();
