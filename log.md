@@ -2,6 +2,50 @@
 
 ---
 
+## 2026-06-04 — 生产端口同步 & Nginx 缓存修复
+
+### 问题发现
+- 9178 生产端口页面行为与 8080 测试不一致（消息栏移动端不独立、开始出题底栏不固定）
+- MD5 校验 36 个文件全部一致，排除文件差异
+
+### 根因分析
+1. **Nginx `expires 1h`**: 9178 server block 配置了静态资源缓存 1 小时，浏览器使用旧缓存不请求新文件；8080 无此配置故每次刷新生效
+2. **SCP 路径错误**: 批量 `scp` 上传 CSS 时目标路径写成 `/var/www/qbao/` 根目录而非 `css/` 子目录，残留 4 个 CSS + 2 个 JS 在根目录（不影响功能但造成干扰）
+
+### 修复
+- [Nginx] 9178 `location /` 中 `expires 1h;` → `add_header Cache-Control "no-cache, must-revalidate";`
+- [服务器] 清理 `/var/www/qbao/` 和 `/var/www/qbao_test/` 根目录残留文件
+- [Nginx] `nginx -t && systemctl reload nginx`
+- [验证] `curl -sI` 确认 9178 返回 `Cache-Control: no-cache, must-revalidate`
+
+### 服务器后端端口
+- 9178 生产 → API `proxy_pass http://127.0.0.1:3000`
+- 8080 测试 → API `proxy_pass http://127.0.0.1:3001`
+
+### 文档更新
+- [SKILL.md](SKILL.md): 服务器信息表补充后端端口映射 + Nginx 单文件双 server block 说明；新增注意事项 #12 Nginx 缓存坑
+
+---
+
+## 2026-06-04 — Bug 修复 & UX 优化 (第三轮)
+
+### isOnlineMode 崩溃修复
+- [ai-workflow.js](js/ai-workflow.js): 修复两处 `isOnlineMode()` 函数调用 → `isOnlineMode` 变量引用。`config.js` 中定义为 `let isOnlineMode` 而非函数，误写导致 TypeError 中断 `init()` 执行链，连锁导致 `updateAuthUI()` 和 `loadNotices()` 未执行
+
+### 上传资料后按钮状态
+- [ai-workflow.js](js/ai-workflow.js): `handleAiFiles()` 和 `handleCmFiles()` 的 reader.onload 回调中新增 `updateGenerateButtonState()` 调用，上传资料后"开始出题"按钮即时变绿，无需刷新
+
+### 消息栏滚动速度自适应
+- [notices.js](js/notices.js): `applyNoticeScrollClass()` 新增 `--scroll-duration` CSS 变量计算，取当前消息的 `duration` 设置值（最低 3s），驱动 marquee 动画速度匹配管理员设定的展示时长
+- [topbar.css](css/topbar.css): `.scroll` 动画 duration 从固定 `14s` → `var(--scroll-duration, 14s)`
+
+### 运维
+- 部署至生产端口 9178，MD5 校验通过
+- 本地版本备份: `Version/Qbao_v3.2.1/`
+- GitHub: commit `21d4cab`，push `origin/main`
+
+---
+
 ## 2026-06-04 — Bug 修复 & UX 优化 (第二轮)
 
 ### 消息栏重构
