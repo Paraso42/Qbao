@@ -2,6 +2,65 @@
 
 ---
 
+## 2026-06-04 — 文件同步 + 账号修复 + 积分预留 Part 3（仅测试环境 8080）
+
+### 文件过期前端同步
+- [修改] [js/users.js](js/users.js) — init() 登录后调用 checkExpiredFilesOnLogin() 检测即将过期文件（24h 内），弹出提示横幅；横幅点击跳转文件管理页，8s 自动消失
+- 服务端 GET /files 已含 cleanupExpiredFiles()（Part 2 完成），每次打开文件管理页自动清理
+
+### 存储积分预留
+- [修改] [js/users.js](js/users.js) — renderAccountPage() 新增存储积分显示区域（当前积分 + 续期说明）；renderFilesPage() 顶部新增积分余额 badge；续期按钮改为"续期 (10积分)"，title 提示需 10 积分（功能预留）
+- 后端 GET /users/me 已返回 storagePoints（Part 2 完成）
+
+### 账号管理修复
+- [修改] [js/users.js](js/users.js) — handleAvatarUpload() 改为 Canvas 压缩至 200x200（JPEG 0.8），避免 data URL 过大；saveAccountChanges() 新增头像上传到服务端（PUT /users/me/avatar）、修复 openUserCenter() → renderAccountPage() 刷新当前页面 + 更新弹窗头部名称和头像；保存后合并 avatarUrl 确保显示一致
+
+### CSS 补充
+- [修改] [css/files.css](css/files.css) — 新增 .file-expiry-banner 横幅样式 + 滑入动画
+- [修改] [css/dark-mode.css](css/dark-mode.css) — 新增文件过期横幅、存储积分暗色覆盖
+- [修改] [css/responsive.css](css/responsive.css) — 新增文件过期横幅移动端全宽底部定位、存储积分移动端纵向排列
+
+### 部署确认
+- 仅上传测试环境（8080），生产环境（9178）未触碰
+- 后端无变更（Part 2 已有全部 API）
+- MD5 全部校验通过
+
+---
+
+## 2026-06-04 — 答题持久化 + 文件管理 Part 2（仅测试环境 8080）
+
+### 数据库
+- [新增] [backend/sql/migration_v3.sql](backend/sql/migration_v3.sql) — v3.3 迁移脚本：answer_sessions、user_files 表，users 表新增 storage_points
+- [修改] [backend/init.sql](backend/init.sql) — 新建安装含新表
+
+### 后端：答题会话 API
+- [新增] [backend/src/routes/quiz.routes.js](backend/src/routes/quiz.routes.js) — POST/GET/DELETE 答题会话 CRUD，user+chapter upsert
+- [修改] [backend/server.js](backend/server.js) — 注册 quiz.routes、files.routes
+
+### 后端：文件管理 API
+- [新增] [backend/src/routes/files.routes.js](backend/src/routes/files.routes.js) — 文件池上传/列表/删除/分配章节/续期，含过期清理
+- [修改] [backend/src/routes/users.routes.js](backend/src/routes/users.routes.js) — GET /users/me 返回 storage_points
+
+### 前端：答题服务端同步
+- [修改] [js/quiz-engine.js](js/quiz-engine.js) — 新增 syncAnswerToServer()（5s 节流）和 syncAnswerToServerFinal()（结束强制同步）
+- [修改] [js/state.js](js/state.js) — endQuizSession() 结束时调用 syncAnswerToServerFinal
+- [修改] [js/srs.js](js/srs.js) — endExamGenerated() 结束时调用 syncAnswerToServerFinal
+
+### 前端：文件管理页
+- [修改] [index.html](index.html) — 用户中心侧栏新增"文件管理"tab + #ucm-tab-files 内容容器；章节资料弹窗新增"从文件池选择"按钮
+- [修改] [js/users.js](js/users.js) — 新增 renderFilesPage()/uploadToFilePool()/handleFilePoolUpload()/assignFileToChapter()/deleteFileFromPool()/extendFileInPool()/formatDuration()/formatFileSize()/getFileIcon()；switchUcModalTab 添加 'files' 分支
+- [新增] [css/files.css](css/files.css) — 文件列表样式
+- [修改] [css/dark-mode.css](css/dark-mode.css) — 文件管理暗色覆盖
+- [修改] [css/responsive.css](css/responsive.css) — 文件管理移动端适配（操作按钮折行）
+- [修改] [js/ai-workflow.js](js/ai-workflow.js) — 新增 openFilePoolForChapter()/assignFilePoolToChapter() 供章节资料弹窗从文件池选择
+
+### 部署确认
+- 仅上传测试环境（8080 + 3001），生产环境（9178 + 3000）未触碰
+- migration_v3.sql 已执行：answer_sessions + user_files 表已创建
+- API 端点已注册，PM2 qbao-api-test 已重启
+
+---
+
 ## 2026-06-04 — AI 多模型兼容 Part 1（仅测试环境 8080）
 
 ### 后端：Provider 抽象层
