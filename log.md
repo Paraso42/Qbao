@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-06-04 — Bug 修复 & UX 优化 (第四轮)
+
+### 开始出题按钮任务完成后状态修复
+- [ai-workflow.js](js/ai-workflow.js): `_aiExecuteTask()` 任务完成路径新增 `updateGenerateButtonState()` 调用；`aiTaskRunnerLoop()` 两个退出路径均新增 `updateGenerateButtonState()` 调用。解决出题任务结束后按钮仍灰色显示"该章节已有任务在队列中"的问题
+
+### 备份功能重写 — 兼容 HTTP 环境
+- [backup.js](js/backup.js): File System Access API (`showDirectoryPicker`) → JSON 下载/上传通用方案。`doManualBackup()` 生成 `.json` 并通过 `<a download>` 触发下载；`restoreFromFile()` 通过 `<input type="file">` 选择备份文件恢复；移除目录句柄 IndexedDB 存储、`autoBackup()`/`tryAutoRestore()` 等 HTTP 不可用代码
+- [index.html](index.html): 备份对话框简化为直接下载；回档对话框改为文件上传入口
+- [users.js](js/users.js): `renderDataPage()` 简化备份操作区域
+
+### 报告页 UX 优化
+- [index.html](index.html): 移除报告页"重新开始"按钮；"只看错题"/"显示全部" + "返回首页"放入 `report-bottom-bar`
+- [modals.css](css/modals.css): 新增 `.report-bottom-bar` — `position: sticky; bottom: 0` 固定在 quiz-modal 滚动容器底部
+
+### 用户中心 UI 美化
+- [users.js](js/users.js): `renderAccountPage()` 头像/显示名称/修改密码改为独立卡片式分区；`renderDataPage()` 备份/云同步改为卡片式布局
+- [modals.css](css/modals.css): `.account-manage-section` 增加卡片底板（`background` + `border` + `border-radius`）；input focus 增加 box-shadow
+
+### 运维
+- 部署至 8080 测试 + 9178 生产，MD5 全量匹配
+- 本地版本备份: `Version/Qbao_v3.2.2/`
+- GitHub: commit `1a7e1a5`，push `origin/main`
+
+---
+
 ## 2026-06-04 — 生产端口同步 & Nginx 缓存修复
 
 ### 问题发现
