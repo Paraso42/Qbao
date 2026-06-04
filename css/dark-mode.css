@@ -255,6 +255,13 @@ body.dark-mode .file-item.expired { border-color: #2a2a30; }
 body.dark-mode .file-name { color: #e4e4e8; }
 body.dark-mode .file-meta { color: #707078; }
 
+/* Drop zone dark mode */
+body.dark-mode .drop-zone { border-color: #3a3a44; }
+body.dark-mode .drop-zone:hover,
+body.dark-mode .drop-zone.drop-zone-active { border-color: #4facfe; background: rgba(79,172,254,0.08); }
+body.dark-mode .drop-zone-text { color: #e4e4e8; }
+body.dark-mode .drop-zone-hint { color: #707078; }
+
 /* File expiry banner dark mode */
 body.dark-mode .file-expiry-banner {
   background: #302818;
@@ -266,3 +273,11 @@ body.dark-mode .file-expiry-banner {
 body.dark-mode .storage-points-value {
   color: #7aade0;
 }
+
+/* Avatar crop dark mode */
+body.dark-mode .avatar-crop-dialog { background: #1e1e22; }
+body.dark-mode .avatar-crop-header h4 { color: #e4e4e8; }
+body.dark-mode .avatar-crop-close-btn { color: #707078; }
+body.dark-mode .avatar-crop-close-btn:hover { color: #e4e4e8; }
+body.dark-mode .avatar-crop-controls span { color: #909098; }
+body.dark-mode .avatar-crop-controls input[type="range"] { background: #3a3a44; }

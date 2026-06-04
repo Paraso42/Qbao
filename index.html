@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="css/admin.css">
 <link rel="stylesheet" href="css/files.css">
 <link rel="stylesheet" href="css/edge-bubble.css">
+<link rel="stylesheet" href="css/avatar-crop.css">
 <link rel="stylesheet" href="css/dark-mode.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
@@ -435,7 +436,7 @@
       </div>
     </div>
 <!-- ===== 答题弹窗 ===== -->
-    <div class="dialog-overlay" id="quiz-modal">
+    <div class="dialog-overlay" id="quiz-modal" onclick="if(event.target===this)closeQuizModal()">
       <div class="dialog-box quiz-modal-box">
         <button class="uc-modal-close" id="quiz-modal-close-btn" onclick="closeQuizModal()" style="display:none;">&times;</button>
         <div id="quiz-modal-view-quiz">

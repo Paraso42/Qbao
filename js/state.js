@@ -116,6 +116,7 @@ function selectQuizSet(idx) {
   if (idx >= 0 && idx < ch.quizSets.length) { ch.currentQuizSetIdx = idx; saveState(); renderSubjectList(); updateQuickActions(); }
 }
 function startQuizSession() {
+  _firstSyncDone = false;
   const ch = getCh(); if (!ch) return;
   // 检测当前章节是否有正在流式注入的任务
   var runningStreamTask = (state.aiTaskQueue || []).find(function(t) {
@@ -134,7 +135,7 @@ function startQuizSession() {
     const qs = getCurrentQuizSet();
     if (qs && qs.questions.length > 0) {
       // 检查是否已全部答完，如果答完则不允许再进入
-      const answered = qs.userAnswers ? qs.userAnswers.filter(a => a !== undefined).length : 0;
+      const answered = qs.userAnswers ? qs.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length : 0;
       if (answered >= qs.questions.length) {
         alert('当前这组题目已全部答完，请导入新题目或 AI 出题');
         return;

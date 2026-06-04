@@ -152,6 +152,22 @@ module.exports = function (app) {
     }
   });
 
+  // POST /api/v1/files/:id/unassign — remove file from chapter (does NOT delete from pool)
+  app.post('/api/v1/files/:id/unassign', requireAuth, async (req, res) => {
+    try {
+      const result = await pool.query(
+        'UPDATE user_files SET chapter_id = NULL, in_pool = true WHERE id = $1 AND user_id = $2 RETURNING *',
+        [parseInt(req.params.id), req.userId]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: '文件不存在或不属于你' });
+
+      res.json({ file: formatFileRow(result.rows[0]) });
+    } catch (e) {
+      console.error('file unassign error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // POST /api/v1/files/:id/extend — extend pool storage (points placeholder)
   app.post('/api/v1/files/:id/extend', requireAuth, async (req, res) => {
     try {

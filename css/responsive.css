@@ -80,7 +80,7 @@
   /* --- Strategy sliders --- */
   .strategy-labels { flex-wrap: wrap; gap: 4px; }
   .strategy-labels span { font-size: var(--fs-xs); }
-  .dual-range-wrap, .multi-range-wrap { height: 48px; margin: 4px 0; }
+  .dual-range-wrap, .multi-range-wrap { height: 48px; margin: 4px 0; touch-action: none; }
   .dual-range-wrap input[type="range"]::-webkit-slider-thumb,
   .multi-range-wrap input[type="range"]::-webkit-slider-thumb {
     width: 28px;

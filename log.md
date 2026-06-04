@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-06-04 — 6 项 Bug 修复 + UX 优化 v3.5.0（仅测试环境 8080）
+
+### Bug #1: 刷新页面答题进度恢复修复
+- [修改] [js/quiz-engine.js](js/quiz-engine.js) — 新增 `_firstSyncDone` 标志，首次 sync 跳过 5s 节流立即发送；`restoreQuizFromServer()` 增加题目文本逐题比对，服务端题目数量/内容不匹配时跳过合并
+- [修改] [js/state.js](js/state.js) — `startQuizSession()` 将 `-1`（未答占位）排除出"已答"计数，避免全部结算后无法重新进入；入口重置 `_firstSyncDone`
+- [修改] [js/users.js](js/users.js) — `hasPartialProgress` 检测排除 `-1`，避免将已结算会话误判为有进度
+
+### Bug #2: 文件池文件连坐删除 + 到期时间优化
+- [新增] [backend/src/routes/files.routes.js](backend/src/routes/files.routes.js) — `POST /files/:id/unassign` 端点，解除章节关联（SET chapter_id=NULL）而不删磁盘文件
+- [新增] [js/users.js](js/users.js) — `removeFileFromChapter()` 函数调用 unassign 端点；章节资料"删除"按钮改为"移除"并调用此函数
+- [修改] [js/users.js](js/users.js) — `formatDuration()` 简化为只显示最大单位（X 天 / X 小时 / X 分钟），不再拼接二级单位
+
+### Bug #3: 答题界面点击遮罩退出
+- [修改] [index.html](index.html) — quiz-modal overlay 添加 `onclick="if(event.target===this)closeQuizModal()"`
+
+### Bug #4: 文件池批量上传 + 拖入上传
+- [修改] [js/users.js](js/users.js) — `handleFilePoolUpload()` 改为遍历 `e.target.files` 逐个上传；新增 `setupFilePoolDragDrop()` 拖放处理函数；`renderFilesPage()` 注入 drop-zone HTML
+- [修改] [index.html](index.html) — file-pool-input 添加 `multiple` 属性
+- [修改] [css/files.css](css/files.css) — 新增 `.drop-zone` / `.drop-zone-active` / `.drop-zone-icon` / `.drop-zone-text` / `.drop-zone-hint` 样式
+- [修改] [css/dark-mode.css](css/dark-mode.css) — drop-zone 暗色模式覆盖
+
+### Bug #5: 手机端滑块拖动带动全页面滚动
+- [修改] [css/components.css](css/components.css) — `.dual-range-wrap` 和 `.multi-range-wrap` 添加 `touch-action: none`
+- [修改] [css/responsive.css](css/responsive.css) — 移动端媒体查询中间接添加 `touch-action: none`
+
+### Bug #6: 头像交互式裁剪编辑器
+- [重写] [js/users.js](js/users.js) — `handleAvatarUpload()` 不再直接压缩至 200x200，改为打开裁剪弹窗；新增 `initAvatarCrop()` / `applyAvatarCropTransform()` / `updateAvatarCropZoom()` / `cancelAvatarCrop()` / `confirmAvatarCrop()` 完整交互裁剪函数
+- [新增] [css/avatar-crop.css](css/avatar-crop.css) — 裁剪弹窗样式（圆形视口 280px、遮罩层、拖拽缩放控件、移动端适配）
+- [修改] [css/dark-mode.css](css/dark-mode.css) — 裁剪弹窗暗色模式
+- [修改] [index.html](index.html) — 引入 `css/avatar-crop.css`
+
+---
+
 ## 2026-06-04 — 6 项 Bug 修复 v3.4.0（仅测试环境 8080）
 
 ### Bug #1: ECNU 流式出题达到目标数后无法自动结束
