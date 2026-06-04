@@ -128,7 +128,7 @@
 .strategy-labels span { display: flex; align-items: center; gap: 3px; }
 .strategy-labels .val { font-weight: 700; min-width: 24px; text-align: center; color: var(--text-primary); }
 
-.dual-range-wrap { position: relative; height: 40px; margin: 2px 0 var(--space-sm); }
+.dual-range-wrap { position: relative; height: 40px; margin: 2px 0 var(--space-sm); touch-action: none; }
 
 .dual-range-wrap input[type="range"] {
   position: absolute;
@@ -170,7 +170,7 @@
 .dual-range-wrap .exam-s-review::-moz-range-thumb { background: var(--color-warning); }
 
 /* Multi-range (exam chapter sliders) */
-.multi-range-wrap { position: relative; height: 40px; margin: 2px 0; }
+.multi-range-wrap { position: relative; height: 40px; margin: 2px 0; touch-action: none; }
 
 .multi-range-wrap input[type="range"] {
   position: absolute;
