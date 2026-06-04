@@ -88,6 +88,35 @@
   to { opacity: 1; transform: translateX(0); }
 }
 
+/* Drop zone for drag-and-drop upload */
+.drop-zone {
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover,
+.drop-zone.drop-zone-active {
+  border-color: var(--color-primary, #4facfe);
+  background: rgba(79, 172, 254, 0.05);
+}
+.drop-zone-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.drop-zone-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #222);
+  margin-bottom: 4px;
+}
+.drop-zone-hint {
+  font-size: 11px;
+  color: var(--text-muted, #999);
+}
+
 /* Storage points display */
 .storage-points-display {
   display: flex;

@@ -26,6 +26,23 @@ async function restoreQuizFromServer() {
     var dData = await dRes.json();
     var srv = dData.session;
     if (srv && srv.userAnswers && Array.isArray(srv.userAnswers)) {
+      // Validate server questions match local questions by text, avoiding cross-round merge
+      var srvQs = srv.questions || [];
+      if (srvQs.length !== as.questions.length) {
+        console.warn('restoreQuizFromServer: question count mismatch, skipping merge (server=' + srvQs.length + ', local=' + as.questions.length + ')');
+        return;
+      }
+      var contentMismatch = false;
+      for (var qi = 0; qi < as.questions.length; qi++) {
+        if ((srvQs[qi] && srvQs[qi].question) !== (as.questions[qi] && as.questions[qi].question)) {
+          contentMismatch = true;
+          break;
+        }
+      }
+      if (contentMismatch) {
+        console.warn('restoreQuizFromServer: question content mismatch, skipping merge');
+        return;
+      }
       for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
         var srvAns = srv.userAnswers[j];
         // Skip -1 (finalize marker) and null/undefined
@@ -41,10 +58,14 @@ async function restoreQuizFromServer() {
 // --- Server answer sync (throttled) ---
 var _lastSyncTime = 0;
 var _syncPending = null;
+var _firstSyncDone = false;
 function syncAnswerToServer() {
   if (!isOnlineMode || !getToken()) return;
   var now = Date.now();
-  if (now - _lastSyncTime < 5000) {
+  if (!_firstSyncDone) {
+    _firstSyncDone = true;
+    // First sync of this session: execute immediately
+  } else if (now - _lastSyncTime < 5000) {
     // Throttle: schedule a trailing sync
     if (_syncPending) clearTimeout(_syncPending);
     _syncPending = setTimeout(syncAnswerToServer, 5000 - (now - _lastSyncTime));
@@ -79,6 +100,7 @@ async function syncAnswerToServerFinal() {
   if (!isOnlineMode || !getToken()) return;
   if (_syncPending) { clearTimeout(_syncPending); _syncPending = null; }
   _lastSyncTime = 0;
+  _firstSyncDone = false;
   var as = getActiveSet();
   if (!as || !as.questions || !as.questions.length) return;
   var ch = getCh();
@@ -126,7 +148,7 @@ function renderQuestion() {
   if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
   applyQuizFontSize();
 }
-function selectOption(idx) { const as=getActiveSet(); if (!as||as.userAnswers[as.currentIdx]!==undefined) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); }
+function selectOption(idx) { const as=getActiveSet(); if (!as||as.userAnswers[as.currentIdx]!==undefined) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); syncAnswerToServer(); }
 function submitAnswer() {
   const as=getActiveSet(); if (!as||!as.questions||!as.questions.length) return;
   const q=as.questions[as.currentIdx]; if (!q||as.userAnswers[as.currentIdx]!==undefined) return;

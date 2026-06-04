@@ -111,7 +111,7 @@ async function init(){ try{
 		if (as && as.questions && as.questions.length > 0 && as.userAnswers) {
 			var answered = 0;
 			for (var _i = 0; _i < as.userAnswers.length; _i++) {
-				if (as.userAnswers[_i] !== undefined) answered++;
+				if (as.userAnswers[_i] !== undefined && as.userAnswers[_i] !== -1) answered++;
 			}
 			hasPartialProgress = (answered > 0 && answered < as.questions.length);
 		}
@@ -306,32 +306,208 @@ async function uploadAvatar() {
   document.getElementById('avatar-file-input').click();
 }
 
-async function handleAvatarUpload(e) {
+function handleAvatarUpload(e) {
   var file = e.target.files[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) { showAccMsg('请选择图片文件', false); return; }
   if (file.size > 2 * 1024 * 1024) { showAccMsg('图片不能超过 2MB', false); return; }
-  try {
-    // Compress to 200x200 via canvas before storing
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      canvas.width = 200; canvas.height = 200;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, 200, 200);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      authUser.avatar = dataUrl;
-      setUser(authUser);
-      updateAuthUI();
-      var preview = document.getElementById('acc-avatar-preview');
-      if (preview) preview.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;">';
-      showAccMsg('头像已更新（本地），保存后同步到云端', true);
-    };
-    img.onerror = function() { showAccMsg('图片加载失败', false); };
-    img.src = URL.createObjectURL(file);
-  } catch (err) {
-    showAccMsg('上传失败: ' + err.message, false);
+  var imgUrl = URL.createObjectURL(file);
+  initAvatarCrop(imgUrl);
+  e.target.value = '';
+}
+
+// ===== Avatar Crop Editor =====
+var _avatarCropState = null;
+
+function initAvatarCrop(imgSrc) {
+  // Remove existing overlay if any
+  var old = document.getElementById('avatar-crop-overlay');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'avatar-crop-overlay';
+  overlay.className = 'avatar-crop-overlay';
+  overlay.innerHTML =
+    '<div class="avatar-crop-dialog">' +
+    '<div class="avatar-crop-header">' +
+    '<h4>裁剪头像</h4>' +
+    '<button class="avatar-crop-close-btn" id="avatar-crop-close">&times;</button>' +
+    '</div>' +
+    '<div class="avatar-crop-body">' +
+    '<div class="avatar-crop-viewport" id="avatar-crop-viewport">' +
+    '<img id="avatar-crop-img" draggable="false">' +
+    '<div class="avatar-crop-mask"></div>' +
+    '</div>' +
+    '</div>' +
+    '<div class="avatar-crop-controls">' +
+    '<span>缩放</span>' +
+    '<input type="range" id="avatar-crop-zoom" min="80" max="300" value="100" oninput="updateAvatarCropZoom()">' +
+    '<span id="avatar-crop-zoom-val">100%</span>' +
+    '</div>' +
+    '<div class="avatar-crop-actions">' +
+    '<button class="btn btn-secondary" id="avatar-crop-cancel">取消</button>' +
+    '<button class="btn btn-primary" id="avatar-crop-confirm">确认</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  _avatarCropState = {
+    imgSrc: imgSrc,
+    zoom: 100,
+    offsetX: 0,
+    offsetY: 0,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    origOffsetX: 0,
+    origOffsetY: 0
+  };
+
+  document.getElementById('avatar-crop-close').onclick = cancelAvatarCrop;
+  document.getElementById('avatar-crop-cancel').onclick = cancelAvatarCrop;
+  document.getElementById('avatar-crop-confirm').onclick = confirmAvatarCrop;
+
+  var img = document.getElementById('avatar-crop-img');
+  img.onload = function() {
+    // Center the image initially
+    var vp = document.getElementById('avatar-crop-viewport');
+    var vpSize = vp.clientWidth;
+    var naturalW = img.naturalWidth;
+    var naturalH = img.naturalHeight;
+    // Fit image so both dimensions cover viewport (cover)
+    var scale = Math.max(vpSize / naturalW, vpSize / naturalH);
+    var displayW = naturalW * scale;
+    var displayH = naturalH * scale;
+    img.style.width = displayW + 'px';
+    img.style.height = displayH + 'px';
+    _avatarCropState.baseScale = scale;
+    _avatarCropState.offsetX = (vpSize - displayW) / 2;
+    _avatarCropState.offsetY = (vpSize - displayH) / 2;
+    img.style.transform = 'translate(' + _avatarCropState.offsetX + 'px,' + _avatarCropState.offsetY + 'px) scale(1)';
+  };
+  img.src = imgSrc;
+
+  // Drag event bindings
+  var vp = document.getElementById('avatar-crop-viewport');
+  img.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    _avatarCropState.dragging = true;
+    _avatarCropState.dragStartX = e.clientX;
+    _avatarCropState.dragStartY = e.clientY;
+    _avatarCropState.origOffsetX = _avatarCropState.offsetX;
+    _avatarCropState.origOffsetY = _avatarCropState.offsetY;
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!_avatarCropState || !_avatarCropState.dragging) return;
+    var dx = e.clientX - _avatarCropState.dragStartX;
+    var dy = e.clientY - _avatarCropState.dragStartY;
+    _avatarCropState.offsetX = _avatarCropState.origOffsetX + dx;
+    _avatarCropState.offsetY = _avatarCropState.origOffsetY + dy;
+    applyAvatarCropTransform();
+  });
+  document.addEventListener('mouseup', function() {
+    if (_avatarCropState) _avatarCropState.dragging = false;
+  });
+  // Touch events
+  img.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) {
+      _avatarCropState.dragging = true;
+      _avatarCropState.dragStartX = e.touches[0].clientX;
+      _avatarCropState.dragStartY = e.touches[0].clientY;
+      _avatarCropState.origOffsetX = _avatarCropState.offsetX;
+      _avatarCropState.origOffsetY = _avatarCropState.offsetY;
+    }
+  }, { passive: false });
+  document.addEventListener('touchmove', function(e) {
+    if (!_avatarCropState || !_avatarCropState.dragging) return;
+    e.preventDefault();
+    var dx = e.touches[0].clientX - _avatarCropState.dragStartX;
+    var dy = e.touches[0].clientY - _avatarCropState.dragStartY;
+    _avatarCropState.offsetX = _avatarCropState.origOffsetX + dx;
+    _avatarCropState.offsetY = _avatarCropState.origOffsetY + dy;
+    applyAvatarCropTransform();
+  }, { passive: false });
+  document.addEventListener('touchend', function() {
+    if (_avatarCropState) _avatarCropState.dragging = false;
+  });
+}
+
+function applyAvatarCropTransform() {
+  var img = document.getElementById('avatar-crop-img');
+  if (!img || !_avatarCropState) return;
+  var s = _avatarCropState.zoom / 100;
+  img.style.transform = 'translate(' + _avatarCropState.offsetX + 'px,' + _avatarCropState.offsetY + 'px) scale(' + s + ')';
+}
+
+function updateAvatarCropZoom() {
+  var slider = document.getElementById('avatar-crop-zoom');
+  var val = document.getElementById('avatar-crop-zoom-val');
+  if (!slider || !_avatarCropState) return;
+  _avatarCropState.zoom = parseInt(slider.value);
+  if (val) val.textContent = _avatarCropState.zoom + '%';
+  applyAvatarCropTransform();
+}
+
+function cancelAvatarCrop() {
+  var overlay = document.getElementById('avatar-crop-overlay');
+  if (overlay) overlay.remove();
+  if (_avatarCropState && _avatarCropState.imgSrc) {
+    URL.revokeObjectURL(_avatarCropState.imgSrc);
   }
+  _avatarCropState = null;
+}
+
+function confirmAvatarCrop() {
+  if (!_avatarCropState) return;
+
+  var img = document.getElementById('avatar-crop-img');
+  var vp = document.getElementById('avatar-crop-viewport');
+  if (!img || !vp) return;
+
+  var vpSize = vp.clientWidth;
+  var outputSize = 200;
+  var canvas = document.createElement('canvas');
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  var ctx = canvas.getContext('2d');
+
+  // Calculate source region: the circular area in viewport maps to image natural coords
+  var s = _avatarCropState.zoom / 100;
+  var displayW = img.clientWidth * s;
+  var displayH = img.clientHeight * s;
+  var naturalW = img.naturalWidth;
+  var naturalH = img.naturalHeight;
+
+  // Image center in viewport
+  var imgCenterX = _avatarCropState.offsetX + displayW / 2;
+  var imgCenterY = _avatarCropState.offsetY + displayH / 2;
+  var vpCenter = vpSize / 2;
+
+  // Source rect in natural image space
+  var srcX = (vpCenter - imgCenterX) / displayW * naturalW;
+  var srcY = (vpCenter - imgCenterY) / displayH * naturalH;
+  var srcSize = vpSize / displayW * naturalW; // square region in natural coords
+
+  ctx.save();
+  // Clip to circle
+  ctx.beginPath();
+  ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  // Draw the source region
+  ctx.drawImage(img, srcX, srcY, srcSize, srcSize * naturalH / naturalW,
+    0, 0, outputSize, outputSize);
+  ctx.restore();
+
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+  authUser.avatar = dataUrl;
+  setUser(authUser);
+  updateAuthUI();
+  var preview = document.getElementById('acc-avatar-preview');
+  if (preview) preview.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;">';
+  showAccMsg('头像已更新（本地），保存后同步到云端', true);
+
+  cancelAvatarCrop();
 }
 
 function removeAvatar() {
@@ -420,11 +596,11 @@ function showAccMsg(msg, success) {
 function formatDuration(ms) {
   if (ms <= 0) return '已过期';
   var d = Math.floor(ms / 86400000);
+  if (d > 0) return d + ' 天';
   var h = Math.floor((ms % 86400000) / 3600000);
-  if (d > 0) return d + '天' + h + '小时';
+  if (h > 0) return h + ' 小时';
   var m = Math.floor((ms % 3600000) / 60000);
-  if (h > 0) return h + '小时' + m + '分钟';
-  return m + '分钟';
+  return m + ' 分钟';
 }
 
 function formatFileSize(bytes) {
@@ -481,9 +657,14 @@ async function renderFilesPage() {
   html += '<div class="account-manage-section">';
   html += '<h4>&#128193; 文件池</h4>';
   html += '<p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">上传资料到文件池，可分配给不同章节使用。默认保存 7 天。</p>';
-  html += '<div style="margin-bottom:12px;">';
+  html += '<div class="drop-zone" id="file-pool-drop-zone">';
+  html += '<div class="drop-zone-icon">&#128228;</div>';
+  html += '<div class="drop-zone-text">拖拽文件到此处上传</div>';
+  html += '<div class="drop-zone-hint">支持批量上传，单文件 ≤20MB</div>';
+  html += '</div>';
+  html += '<div style="margin-top:10px;margin-bottom:12px;">';
   html += '<button class="btn btn-primary btn-small" onclick="uploadToFilePool()">&#128228; 上传文件</button>';
-  html += '<input type="file" id="file-pool-input" style="display:none;" onchange="handleFilePoolUpload(event)" accept=".pdf,.doc,.docx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp">';
+  html += '<input type="file" id="file-pool-input" multiple style="display:none;" onchange="handleFilePoolUpload(event)" accept=".pdf,.doc,.docx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp">';
   html += '</div>';
 
   if (poolFiles.length > 0) {
@@ -524,7 +705,7 @@ async function renderFilesPage() {
       html += '<div class="file-meta">' + formatFileSize(f.fileSize) + ' · ' + new Date(f.createdAt).toLocaleDateString('zh-CN') + '</div>';
       html += '</div>';
       html += '<div class="file-actions">';
-      html += '<button class="btn btn-danger btn-small" onclick="deleteFileFromPool(' + f.id + ')" style="font-size:11px;">删除</button>';
+      html += '<button class="btn btn-danger btn-small" onclick="removeFileFromChapter(' + f.id + ')" style="font-size:11px;">移除</button>';
       html += '</div></div>';
     });
     html += '</div>';
@@ -534,30 +715,69 @@ async function renderFilesPage() {
   html += '</div>';
 
   body.innerHTML = html;
+  setupFilePoolDragDrop();
 }
 
 function uploadToFilePool() {
   document.getElementById('file-pool-input').click();
 }
 
+function setupFilePoolDragDrop() {
+  var dropZone = document.getElementById('file-pool-drop-zone');
+  if (!dropZone) return;
+
+  ['dragenter', 'dragover'].forEach(function(evt) {
+    dropZone.addEventListener(evt, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add('drop-zone-active');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function(evt) {
+    dropZone.addEventListener(evt, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('drop-zone-active');
+    });
+  });
+
+  dropZone.addEventListener('drop', function(e) {
+    var files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    var input = document.getElementById('file-pool-input');
+    var dt = new DataTransfer();
+    for (var i = 0; i < files.length; i++) { dt.items.add(files[i]); }
+    input.files = dt.files;
+    handleFilePoolUpload({ target: input });
+  });
+}
+
 async function handleFilePoolUpload(e) {
-  var file = e.target.files[0];
-  if (!file) return;
-  if (file.size > 20 * 1024 * 1024) { alert('文件不能超过 20MB'); return; }
+  var files = e.target.files;
+  if (!files || files.length === 0) return;
 
-  var formData = new FormData();
-  formData.append('file', file);
-
-  try {
-    var res = await fetchWithAuth('/files/upload', { method: 'POST', body: formData, headers: {} });
-    if (!res || !res.ok) {
-      var err = await (res ? res.json().catch(function() { return {}; }) : {});
-      alert('上传失败: ' + (err.error || '网络错误'));
-      return;
+  var successCount = 0;
+  var failCount = 0;
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (file.size > 20 * 1024 * 1024) {
+      alert(file.name + ' 超过 20MB，已跳过');
+      failCount++;
+      continue;
     }
-    renderFilesPage();
-  } catch (err) {
-    alert('上传失败: ' + err.message);
+    var formData = new FormData();
+    formData.append('file', file);
+    try {
+      var res = await fetchWithAuth('/files/upload', { method: 'POST', body: formData, headers: {} });
+      if (res && res.ok) { successCount++; }
+      else { failCount++; }
+    } catch (err) {
+      failCount++;
+    }
+  }
+  renderFilesPage();
+  if (failCount > 0) {
+    alert('上传完成：' + successCount + ' 个成功' + (failCount > 0 ? '，' + failCount + ' 个失败' : ''));
   }
   e.target.value = '';
 }
@@ -593,6 +813,21 @@ async function deleteFileFromPool(fileId) {
     renderFilesPage();
   } catch (err) {
     alert('删除失败: ' + err.message);
+  }
+}
+
+async function removeFileFromChapter(fileId) {
+  if (!confirm('确定要从此章节移除该文件吗？文件仍会保留在文件池中。')) return;
+  try {
+    var res = await fetchWithAuth('/files/' + fileId + '/unassign', { method: 'POST' });
+    if (!res || !res.ok) {
+      var err = await (res ? res.json().catch(function() { return {}; }) : {});
+      alert('移除失败: ' + (err.error || '网络错误'));
+      return;
+    }
+    renderFilesPage();
+  } catch (err) {
+    alert('移除失败: ' + err.message);
   }
 }
 

@@ -107,19 +107,23 @@ async function _aiExecuteTask(task) {
   if (!ch) { task.status = 'failed'; task.error = '章节已删除'; saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); return; }
   var materials = getChapterMaterials(task.chapterId);
   if (!materials.length) { task.status = 'failed'; task.error = '资料已被删除'; saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); return; }
+  var localMaterials = materials.filter(function(m) { return !m._poolFile; });
   var abortController = new AbortController();
   aiTaskAbortController = abortController;
   try {
     var fd = new FormData();
-    for (var i = 0; i < materials.length; i++) {
-      var m = materials[i];
+    for (var i = 0; i < localMaterials.length; i++) {
+      var m = localMaterials[i];
       var dataUrl = await idbGetMaterial(m.id);
       if (!dataUrl) { task.status = 'failed'; task.error = '资料 ' + m.name + ' 数据丢失'; saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); return; }
       var dec = atob(dataUrl.split(',')[1]); var bin = new Uint8Array(dec.length); for(var j=0;j<dec.length;j++) bin[j]=dec.charCodeAt(j); fd.append('files', new Blob([bin]), m.name);
     }
-    var uploadRes = await fetch(API_BASE+'/ai/upload', {method:'POST', headers:{'Authorization':'Bearer '+getToken()}, body:fd});
-    if (!uploadRes.ok) { var err = await uploadRes.json().catch(function(){return {};}); throw new Error(err.error || '上传失败: '+uploadRes.status); }
-    var uploadData = await uploadRes.json();
+    var uploadData = { text: '', images: [] };
+    if (localMaterials.length > 0) {
+      var uploadRes = await fetch(API_BASE+'/ai/upload', {method:'POST', headers:{'Authorization':'Bearer '+getToken()}, body:fd});
+      if (!uploadRes.ok) { var err = await uploadRes.json().catch(function(){return {};}); throw new Error(err.error || '上传失败: '+uploadRes.status); }
+      uploadData = await uploadRes.json();
+    }
     // 上传后稍作等待，避免立即调用 API 触发限流
     await sleep(1000);
     var tagStats = {}; var totalQuestions = 0; var totalAnswered = 0; var totalWrong = 0;
@@ -469,9 +473,16 @@ async function assignFilePoolToChapter(fileId, fileName) {
     if (overlay && overlay.querySelector('h3') && overlay.querySelector('h3').textContent.indexOf('文件池') >= 0) {
       overlay.remove();
     }
+    // Add pool reference to chapter materials so button enables
+    var materials = getChapterMaterials(ch.id);
+    if (!materials.some(function(m) { return m._poolFile && m.name === fileName; })) {
+      materials.push({ name: fileName, size: 0, addedAt: Date.now(), id: 'pool_' + fileId, _poolFile: true });
+      saveChapterMaterials(ch.id, materials);
+    }
     renderChapterMaterialsDialog();
     renderAiMaterialList();
     updateAiMaterialCount();
+    updateGenerateButtonState();
   } catch(e) { alert('分配失败: ' + e.message); }
 }
 function renderChapterMaterialsDialog() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const container=document.getElementById('cm-dialog-list'); if(!materials.length){container.innerHTML='<div class="empty-state">暂无复习资料</div>';return;} let html=''; materials.forEach((m,i)=>{ html+='<div class="ai-material-file"><span class="am-name">'+escapeHtml(m.name)+'</span><span class="am-size">'+formatFileSize(m.size)+'</span><button class="am-del" onclick="removeChapterMaterial('+i+');renderChapterMaterialsDialog();">✕</button></div>'; }); container.innerHTML=html; }
