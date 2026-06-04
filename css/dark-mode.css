@@ -247,3 +247,22 @@ body.dark-mode .history-q-item .q-detail { color: #a0a0a8; }
 body.dark-mode .history-q-item .q-answer.your-answer { background: #4a1a1a; color: #f5a0a0; }
 body.dark-mode .history-q-item .q-answer.correct-answer { background: #1a3a1a; color: #7acc7a; }
 body.dark-mode .history-q-item .q-explanation { background: #28282e; color: #a0a0a8; border-left-color: #7aade0; }
+
+/* File management */
+body.dark-mode .file-item { background: #1e1e22; border-color: #2a2a30; }
+body.dark-mode .file-item:hover { border-color: #4facfe; }
+body.dark-mode .file-item.expired { border-color: #2a2a30; }
+body.dark-mode .file-name { color: #e4e4e8; }
+body.dark-mode .file-meta { color: #707078; }
+
+/* File expiry banner dark mode */
+body.dark-mode .file-expiry-banner {
+  background: #302818;
+  color: #f0c060;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Storage points dark mode */
+body.dark-mode .storage-points-value {
+  color: #7aade0;
+}

@@ -104,22 +104,35 @@ async function init(){ try{
 		if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;
 		renderSubjectList();
 		const saved=state.lastScreen||'start';
-		// 如果上次离开时正在答题页面，先处理未完成的题目
-		if (saved === 'quiz') {
-			var as = getActiveSet();
-			if (as && as.userAnswers && as.userAnswers.some(function(a) { return a === undefined; })) {
-				finalizeUnansweredQuestions(as);
-				saveState();
-				// 保存历史记录并跳转到报告页
-				saveQuizHistory({ id: as.setId, questions: as.questions, userAnswers: as.userAnswers, setName: as.setName, setId: as.setId });
-				updateSRSAfterExam({ setId: as.setId, questions: as.questions, userAnswers: as.userAnswers });
-				if (as.setId) autoUpdateChapterWeakTags(state.chapters[as.setId]);
-				autoBackup();
-				checkAchievements();
-				openQuizModal('report');
-				renderReportForSet(as);
+		// 恢复未完成的答题进度（从服务端 + 本地）
+		await restoreQuizFromServer();
+		var as = getActiveSet();
+		var hasPartialProgress = false;
+		if (as && as.questions && as.questions.length > 0 && as.userAnswers) {
+			var answered = 0;
+			for (var _i = 0; _i < as.userAnswers.length; _i++) {
+				if (as.userAnswers[_i] !== undefined) answered++;
+			}
+			hasPartialProgress = (answered > 0 && answered < as.questions.length);
+		}
+		if (saved === 'quiz' || hasPartialProgress) {
+			if (as && as.questions && as.questions.length > 0) {
+				if (hasPartialProgress) {
+					var _a = answered;
+					if (confirm("检测到未完成的答题进度（已答 " + _a + "/" + as.questions.length + " 题），是否继续？")) {
+						openQuizModal('quiz');
+						renderQuestion();
+						updateProgress();
+					} else {
+						showScreen(saved === 'quiz' ? 'start' : saved);
+					}
+				} else {
+					openQuizModal('quiz');
+					renderQuestion();
+					updateProgress();
+				}
 			} else {
-				openQuizModal('quiz');
+				showScreen(saved === 'quiz' ? 'start' : saved);
 			}
 		} else {
 			showScreen(saved);
@@ -138,6 +151,10 @@ async function init(){ try{
 		updateSrsCard();
 		updateAuthUI();
 		updateSyncStatus();
+		// Check for files nearing expiry and notify
+		if (isOnlineMode && getToken()) {
+			checkExpiredFilesOnLogin();
+		}
 		if (!getToken()) { try{ document.getElementById('login-guide-dialog').classList.add('active'); }catch(e){} }
 			loadNotices();
 		document.addEventListener('click', function(e){ const tt=document.getElementById('ai-mode-tooltip'); if(tt && tt.style.display!=='none' && !tt.contains(e.target) && e.target.id!=='ai-global-toggle') closeAiModeTooltip(); });
@@ -158,6 +175,37 @@ function edgeBubbleHover(isHovered) {
       card.classList.remove('edge-bubble-card--visible');
     }, 100);
   }
+}
+
+// Check for expired/near-expiry files on login, notify user
+async function checkExpiredFilesOnLogin() {
+  try {
+    var res = await fetchWithAuth('/files?pool=true');
+    if (!res || !res.ok) return;
+    var data = await res.json();
+    var files = data.files || [];
+    if (files.length === 0) return;
+    // Check for files expiring within 24 hours
+    var expiringSoon = files.filter(function(f) {
+      if (!f.poolExpiresAt) return false;
+      var remaining = new Date(f.poolExpiresAt).getTime() - Date.now();
+      return remaining > 0 && remaining < 24 * 3600 * 1000;
+    });
+    if (expiringSoon.length > 0) {
+      var msg = expiringSoon.length === 1
+        ? '文件池中有 1 个文件将在 24 小时内过期'
+        : '文件池中有 ' + expiringSoon.length + ' 个文件将在 24 小时内过期';
+      // Use a non-intrusive notice — show in the notice bar area if possible
+      console.log('[FileExpiry] ' + msg);
+      // Show subtle notification via a temporary banner
+      var banner = document.createElement('div');
+      banner.className = 'file-expiry-banner';
+      banner.textContent = msg + ' — 点击查看';
+      banner.onclick = function() { banner.remove(); openUserCenterModal('files'); };
+      document.body.appendChild(banner);
+      setTimeout(function() { if (banner.parentNode) banner.remove(); }, 8000);
+    }
+  } catch(e) { /* silent */ }
 }
 
 // ===== 用户中心弹窗 =====
@@ -199,6 +247,7 @@ function switchUcModalTab(tab) {
   // 渲染对应内容
   if (tab === 'account') renderAccountPage();
   else if (tab === 'data') renderDataPage();
+  else if (tab === 'files') renderFilesPage();
   else if (tab === 'achievements') renderAchievements();
   else if (tab === 'admin') renderAdminPage();
 }
@@ -240,6 +289,13 @@ async function renderAccountPage() {
   html += '<div class="account-field">';
   html += '<input type="password" id="acc-new-password2" placeholder="确认新密码">';
   html += '</div></div>';
+  // Storage points
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#128230; 存储积分</h4>';
+  html += '<div style="display:flex;align-items:center;gap:12px;">';
+  html += '<span style="font-size:28px;font-weight:700;color:var(--color-primary);">' + (authUser.storagePoints || 0) + '</span>';
+  html += '<span style="font-size:13px;color:var(--text-secondary);">积分可用于延长文件池存储时间（10积分/7天）</span>';
+  html += '</div></div>';
   // Save
   html += '<div id="acc-msg" style="font-size:13px;margin-bottom:10px;min-height:20px;"></div>';
   html += '<button class="btn btn-primary" style="width:100%;" onclick="saveAccountChanges()">&#128190; 保存更改</button>';
@@ -256,16 +312,23 @@ async function handleAvatarUpload(e) {
   if (!file.type.startsWith('image/')) { showAccMsg('请选择图片文件', false); return; }
   if (file.size > 2 * 1024 * 1024) { showAccMsg('图片不能超过 2MB', false); return; }
   try {
-    var reader = new FileReader();
-    reader.onload = async function(ev) {
-      var dataUrl = ev.target.result;
+    // Compress to 200x200 via canvas before storing
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = 200; canvas.height = 200;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, 200, 200);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       authUser.avatar = dataUrl;
       setUser(authUser);
       updateAuthUI();
-      document.getElementById('acc-avatar-preview').innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;">';
-      showAccMsg('头像已更新（本地）', true);
+      var preview = document.getElementById('acc-avatar-preview');
+      if (preview) preview.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;">';
+      showAccMsg('头像已更新（本地），保存后同步到云端', true);
     };
-    reader.readAsDataURL(file);
+    img.onerror = function() { showAccMsg('图片加载失败', false); };
+    img.src = URL.createObjectURL(file);
   } catch (err) {
     showAccMsg('上传失败: ' + err.message, false);
   }
@@ -293,15 +356,43 @@ async function saveAccountChanges() {
     if (newPw !== newPw2) { showAccMsg('两次输入的新密码不一致', false); return; }
   }
   try {
+    // Upload avatar if changed (data URL from canvas compression)
+    if (authUser.avatar && authUser.avatar.startsWith('data:')) {
+      var avRes = await fetchWithAuth('/users/me/avatar', { method: 'PUT', body: JSON.stringify({ avatar: authUser.avatar }) });
+      if (avRes && avRes.ok) {
+        var avJson = await avRes.json().catch(function() { return {}; });
+        if (avJson.user) {
+          authUser.avatarUrl = avJson.user.avatarUrl;
+        }
+      }
+    }
     var res = await fetchWithAuth('/users/me', { method: 'PUT', body: JSON.stringify({ displayName: displayName, password: oldPw || undefined, newPassword: newPw || undefined }) });
     if (!res) { showAccMsg('请求失败，请检查网络', false); return; }
     var json = await res.json().catch(function() { return {}; });
     if (!res.ok) { showAccMsg(json.error || '保存失败', false); return; }
     if (json.user) {
       authUser = json.user;
+      // Preserve avatar data URL if server doesn't return one
+      if (!authUser.avatarUrl && authUser.avatar && authUser.avatar.startsWith('data:')) {
+        authUser.avatarUrl = authUser.avatar;
+      }
       setUser(authUser);
       updateAuthUI();
-      openUserCenter();
+      // Refresh account page UI in-place instead of reopening modal
+      renderAccountPage();
+      // Update modal header
+      var name = authUser.displayName || authUser.username;
+      var nameEl = document.getElementById('ucm-name');
+      if (nameEl) nameEl.textContent = name;
+      var avatarEl = document.getElementById('ucm-avatar');
+      if (avatarEl) {
+        if (authUser.avatarUrl || authUser.avatar) {
+          avatarEl.innerHTML = '<img src="' + (authUser.avatarUrl || authUser.avatar) + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+        } else {
+          avatarEl.innerHTML = '';
+          avatarEl.textContent = name.charAt(0).toUpperCase();
+        }
+      }
     }
     showAccMsg('保存成功', true);
     document.getElementById('acc-old-password').value = '';
@@ -319,6 +410,203 @@ function showAccMsg(msg, success) {
   el.style.color = success ? '#2ed573' : '#e94560';
   el.style.display = 'block';
   setTimeout(function() { el.style.display = 'none'; }, 3000);
+}
+
+// ===== 文件管理页面 =====
+function formatDuration(ms) {
+  if (ms <= 0) return '已过期';
+  var d = Math.floor(ms / 86400000);
+  var h = Math.floor((ms % 86400000) / 3600000);
+  if (d > 0) return d + '天' + h + '小时';
+  var m = Math.floor((ms % 3600000) / 60000);
+  if (h > 0) return h + '小时' + m + '分钟';
+  return m + '分钟';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function getFileIcon(mimeType) {
+  if (/pdf/.test(mimeType)) return '📄';
+  if (/word|doc/.test(mimeType)) return '📝';
+  if (/presentation|ppt/.test(mimeType)) return '📊';
+  if (/image/.test(mimeType)) return '🖼️';
+  if (/text|markdown/.test(mimeType)) return '📃';
+  return '📎';
+}
+
+async function renderFilesPage() {
+  var body = document.getElementById('ucm-tab-files');
+  if (!body) return;
+
+  body.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">加载中...</div>';
+
+  var poolFiles = [];
+  var chapterFiles = [];
+
+  try {
+    var pRes = await fetchWithAuth('/files?pool=true');
+    if (pRes && pRes.ok) {
+      var pData = await pRes.json();
+      poolFiles = pData.files || [];
+    }
+    var ch = getCh();
+    if (ch) {
+      var cRes = await fetchWithAuth('/files?chapter_id=' + encodeURIComponent(ch.id));
+      if (cRes && cRes.ok) {
+        var cData = await cRes.json();
+        chapterFiles = cData.files || [];
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load files:', e);
+  }
+
+  var html = '';
+
+  // Storage points badge
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">';
+  html += '<span style="font-size:13px;color:var(--text-secondary);">&#128230; 存储积分：<b style="color:var(--color-primary);">' + (authUser.storagePoints || 0) + '</b></span>';
+  html += '<span style="font-size:11px;color:var(--text-muted);">续期消耗 10 积分/7天（功能预留）</span>';
+  html += '</div>';
+
+  // File pool section
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#128193; 文件池</h4>';
+  html += '<p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">上传资料到文件池，可分配给不同章节使用。默认保存 7 天。</p>';
+  html += '<div style="margin-bottom:12px;">';
+  html += '<button class="btn btn-primary btn-small" onclick="uploadToFilePool()">&#128228; 上传文件</button>';
+  html += '<input type="file" id="file-pool-input" style="display:none;" onchange="handleFilePoolUpload(event)" accept=".pdf,.doc,.docx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp">';
+  html += '</div>';
+
+  if (poolFiles.length > 0) {
+    html += '<div class="files-list">';
+    poolFiles.forEach(function(f) {
+      var expiry = f.poolExpiresAt ? new Date(f.poolExpiresAt).getTime() - Date.now() : 0;
+      var expired = expiry <= 0;
+      html += '<div class="file-item' + (expired ? ' expired' : '') + '">';
+      html += '<span class="file-icon">' + getFileIcon(f.mimeType) + '</span>';
+      html += '<div class="file-info">';
+      html += '<div class="file-name" title="' + escapeHtml(f.originalName) + '">' + escapeHtml(f.originalName) + '</div>';
+      html += '<div class="file-meta">' + formatFileSize(f.fileSize) + ' · <span class="file-expiry' + (expired ? ' expired-text' : '') + '">' + (expired ? '已过期' : formatDuration(expiry) + ' 后过期') + '</span></div>';
+      html += '</div>';
+      html += '<div class="file-actions">';
+      if (ch && !expired) {
+        html += '<button class="btn btn-primary btn-small" onclick="assignFileToChapter(' + f.id + ')" style="font-size:11px;">分配到当前章节</button>';
+      }
+      html += '<button class="btn btn-warning btn-small" onclick="extendFileInPool(' + f.id + ')" style="font-size:11px;' + (f.pointsExtended ? 'opacity:0.5;' : '') + '" title="续期 7 天（需 10 积分，功能预留）">续期 (10积分)</button>';
+      html += '<button class="btn btn-danger btn-small" onclick="deleteFileFromPool(' + f.id + ')" style="font-size:11px;">删除</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<p style="font-size:13px;color:var(--text-muted);text-align:center;padding:16px;">文件池为空，上传文件开始使用</p>';
+  }
+  html += '</div>';
+
+  // Chapter files section
+  html += '<div class="account-manage-section">';
+  html += '<h4>&#128218; 当前章节资料</h4>';
+  if (ch) {
+    html += '<p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">章节：' + escapeHtml(ch.name) + '</p>';
+  }
+  if (chapterFiles.length > 0) {
+    html += '<div class="files-list">';
+    chapterFiles.forEach(function(f) {
+      html += '<div class="file-item">';
+      html += '<span class="file-icon">' + getFileIcon(f.mimeType) + '</span>';
+      html += '<div class="file-info">';
+      html += '<div class="file-name" title="' + escapeHtml(f.originalName) + '">' + escapeHtml(f.originalName) + '</div>';
+      html += '<div class="file-meta">' + formatFileSize(f.fileSize) + ' · ' + new Date(f.createdAt).toLocaleDateString('zh-CN') + '</div>';
+      html += '</div>';
+      html += '<div class="file-actions">';
+      html += '<button class="btn btn-danger btn-small" onclick="deleteFileFromPool(' + f.id + ')" style="font-size:11px;">删除</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<p style="font-size:13px;color:var(--text-muted);text-align:center;padding:16px;">暂无章节资料，从文件池分配或上传</p>';
+  }
+  html += '</div>';
+
+  body.innerHTML = html;
+}
+
+function uploadToFilePool() {
+  document.getElementById('file-pool-input').click();
+}
+
+async function handleFilePoolUpload(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) { alert('文件不能超过 20MB'); return; }
+
+  var formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    var res = await fetchWithAuth('/files/upload', { method: 'POST', body: formData, headers: {} });
+    if (!res || !res.ok) {
+      var err = await (res ? res.json().catch(function() { return {}; }) : {});
+      alert('上传失败: ' + (err.error || '网络错误'));
+      return;
+    }
+    renderFilesPage();
+  } catch (err) {
+    alert('上传失败: ' + err.message);
+  }
+  e.target.value = '';
+}
+
+async function assignFileToChapter(fileId) {
+  var ch = getCh();
+  if (!ch) { alert('请先选择章节'); return; }
+  try {
+    var res = await fetchWithAuth('/files/' + fileId + '/assign', {
+      method: 'POST',
+      body: JSON.stringify({ chapterId: ch.id })
+    });
+    if (!res || !res.ok) {
+      var err = await (res ? res.json().catch(function() { return {}; }) : {});
+      alert('分配失败: ' + (err.error || '网络错误'));
+      return;
+    }
+    renderFilesPage();
+  } catch (err) {
+    alert('分配失败: ' + err.message);
+  }
+}
+
+async function deleteFileFromPool(fileId) {
+  if (!confirm('确定要删除此文件吗？此操作不可恢复。')) return;
+  try {
+    var res = await fetchWithAuth('/files/' + fileId, { method: 'DELETE' });
+    if (!res || !res.ok) {
+      var err = await (res ? res.json().catch(function() { return {}; }) : {});
+      alert('删除失败: ' + (err.error || '网络错误'));
+      return;
+    }
+    renderFilesPage();
+  } catch (err) {
+    alert('删除失败: ' + err.message);
+  }
+}
+
+async function extendFileInPool(fileId) {
+  try {
+    var res = await fetchWithAuth('/files/' + fileId + '/extend', { method: 'POST' });
+    if (!res || !res.ok) {
+      var err = await (res ? res.json().catch(function() { return {}; }) : {});
+      alert('续期失败: ' + (err.error || '网络错误'));
+      return;
+    }
+    renderFilesPage();
+  } catch (err) {
+    alert('续期失败: ' + err.message);
+  }
 }
 
 // ===== 数据管理页面 =====

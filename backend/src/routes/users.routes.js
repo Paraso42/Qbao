@@ -40,10 +40,10 @@ module.exports = function (app) {
   // GET /api/v1/users/me — 当前用户
   app.get('/api/v1/users/me', requireAuth, async (req, res) => {
     try {
-      const r = await pool.query('SELECT id, username, display_name, role, created_at, avatar_url, last_login_at, last_active_at, is_banned FROM users WHERE id = $1', [req.userId]);
+      const r = await pool.query('SELECT id, username, display_name, role, created_at, avatar_url, last_login_at, last_active_at, is_banned, storage_points FROM users WHERE id = $1', [req.userId]);
       if (r.rows.length === 0) return res.status(404).json({ error: '用户不存在' });
       const u = r.rows[0];
-      res.json({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, createdAt: u.created_at, avatarUrl: u.avatar_url || null, lastLoginAt: u.last_login_at, lastActiveAt: u.last_active_at, isBanned: u.is_banned });
+      res.json({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, createdAt: u.created_at, avatarUrl: u.avatar_url || null, lastLoginAt: u.last_login_at, lastActiveAt: u.last_active_at, isBanned: u.is_banned, storagePoints: parseInt(u.storage_points) || 0 });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

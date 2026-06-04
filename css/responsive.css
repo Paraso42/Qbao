@@ -238,4 +238,20 @@
 
 	  .quiz-modal-box { height: 100vh; overflow-y: auto; }
 	  .quiz-modal-box #quiz-modal-close-btn { display: block !important; }
+	  /* File expiry banner full-width on mobile */
+	  .file-expiry-banner {
+	    left: 8px;
+	    right: 8px;
+	    max-width: none;
+	    top: auto;
+	    bottom: 16px;
+	  }
+
+	  /* Storage points mobile */
+	  .storage-points-display {
+	    flex-direction: column;
+	    align-items: flex-start;
+	    gap: 4px;
+	  }
+	  .storage-points-value { font-size: 22px; }
 	}
