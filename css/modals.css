@@ -140,12 +140,18 @@
 .uc-divider { height: 1px; background: var(--border-light); margin: var(--space-xs) 0; }
 
 /* Account management (in modals) */
-.account-manage-section { margin-bottom: var(--space-xl); }
-.account-manage-section h4 { font-size: var(--fs-base); margin-bottom: var(--space-md); color: var(--text-primary); display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; }
-.account-field { margin-bottom: var(--space-md); }
+.account-manage-section {
+  background: var(--surface-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: var(--space-md);
+}
+.account-manage-section h4 { font-size: var(--fs-base); margin-bottom: 12px; color: var(--text-primary); display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; }
+.account-field { margin-bottom: 0; }
 .account-field label { display: block; font-size: var(--fs-xs); color: var(--text-secondary); margin-bottom: var(--space-xs); }
-.account-field input[type="text"], .account-field input[type="password"] { width: 100%; padding: 8px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--fs-base); color: var(--text-primary); }
-.account-field input:focus { outline: none; border-color: var(--border-focus); }
+.account-field input[type="text"], .account-field input[type="password"] { width: 100%; padding: 9px 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--fs-base); color: var(--text-primary); background: var(--surface-card); }
+.account-field input:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 2px var(--color-primary-light); }
 
 .avatar-upload-area { display: flex; align-items: center; gap: var(--space-md); }
 .avatar-preview { width: 60px; height: 60px; border-radius: 50%; background: var(--surface-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -306,6 +312,20 @@
   border: none;
   padding: 0;
   margin-bottom: 0;
+}
+
+/* Report bottom bar — sticky inside quiz modal */
+.report-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px 0 4px;
+  margin-top: 12px;
+  background: var(--surface-card);
+  border-top: 1px solid var(--border-light);
 }
 
 /* ===== Start Quiz Button ===== */

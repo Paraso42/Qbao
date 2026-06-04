@@ -260,19 +260,16 @@
     </div>
     <div class="dialog-overlay" id="backup-dialog">
       <div class="dialog-box">
-        <h3>💾 备份文件夹设置</h3>
-        <div id="backup-dialog-content">
-          <div id="backup-current-status" style="padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:12px;text-align:center;font-size:13px;color:#888;">检测中...</div>
-          <div class="dialog-actions" id="backup-dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeBackupDialog()">关闭</button></div>
-        </div>
+        <h3>💾 数据备份</h3>
+        <p style="color:#666;font-size:13px;margin-bottom:12px;">备份将以 JSON 文件下载到本地，可用于后续回档恢复。</p>
+        <div class="dialog-actions"><button class="btn btn-primary btn-small" onclick="doManualBackup();closeBackupDialog();">📥 下载备份文件</button><button class="btn btn-secondary btn-small" onclick="closeBackupDialog()">关闭</button></div>
       </div>
     </div>
     <div class="dialog-overlay" id="restore-dialog">
       <div class="dialog-box">
-        <h3>⏪ 回档 — 选择备份恢复</h3>
-        <p style="color:#666;font-size:14px;margin-bottom:8px;">选择备份文件恢复（当前数据将被替换）：</p>
-        <div id="restore-list" style="max-height:320px;overflow-y:auto;"></div>
-        <div class="dialog-actions"><button class="btn btn-secondary btn-small" onclick="closeRestoreDialog()">关闭</button></div>
+        <h3>⏪ 回档 — 上传备份文件</h3>
+        <p style="color:#666;font-size:13px;margin-bottom:12px;">选择之前下载的备份文件恢复数据（当前数据将被替换）：</p>
+        <div class="dialog-actions"><button class="btn btn-warning btn-small" onclick="restoreFromFile();closeRestoreDialog();">📂 选择备份文件</button><button class="btn btn-secondary btn-small" onclick="closeRestoreDialog()">关闭</button></div>
       </div>
     </div>
     <div class="dialog-overlay" id="chapter-history-dialog">
@@ -454,8 +451,7 @@
         <div id="quiz-modal-view-report" style="display:none;">
           <h1>📊 本轮报告</h1>
           <div class="report-card" id="report-content"><div class="empty-state">暂无数据</div></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-            <button class="btn btn-primary btn-small" onclick="resetQuiz()">🔄 重新开始</button>
+          <div class="report-bottom-bar">
             <button class="btn btn-success btn-small" id="btn-review-wrong" onclick="showWrongOnlyReport()" style="background:#f59e0b;color:#fff;display:none;">👀 只看错题</button>
             <button class="btn btn-secondary btn-small" onclick="closeQuizModal()">🏠 返回首页</button>
           </div>
