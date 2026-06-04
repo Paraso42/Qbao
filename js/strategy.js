@@ -1,6 +1,8 @@
 function loadChapterStrategyToUI() {
-  const ch = getCh(); if (!ch) { document.getElementById('chapter-prompt-card').style.display = 'none'; return; }
-  document.getElementById('chapter-prompt-card').style.display = 'block';
+  const ch = getCh(); const card = document.getElementById('chapter-prompt-card');
+  if (!card) return;
+  if (!ch) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
   document.getElementById('ch-strategy-name').textContent = escapeHtml(ch.name);
   const s = getChStrategy(ch.id); if (!s) return;
   document.getElementById('tc-single').value = s.typeCounts.single || 10;
@@ -46,11 +48,13 @@ function generatePromptText(chId) {
 }
 function updateChapterPromptTemplate() {
   const ch = getCh(); if (!ch) return;
-  document.getElementById('prompt-text').textContent = generatePromptText(ch.id);
+  const el = document.getElementById('prompt-text');
+  if (el) el.textContent = generatePromptText(ch.id);
 }
 function selectPrompt() { const el = document.getElementById('prompt-text'); if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
 function updateQuickActions() {
   const ch = getCh(); const container = document.getElementById('chapter-quick-actions');
+  if (!container) return;
   if (!ch) { container.style.display = 'none'; return; }
   document.getElementById('chapter-quick-title').textContent = '📖 当前：' + escapeHtml(ch.name);
   // 检测当前章节是否有正在运行的流式任务

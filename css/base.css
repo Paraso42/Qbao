@@ -26,7 +26,12 @@ body {
 }
 
 .screen { display: none; }
-.screen.active { display: block; }
+.screen.active { display: block; animation: screenFadeIn 0.25s ease; }
+
+@keyframes screenFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 h1 {
   font-size: var(--fs-h1);

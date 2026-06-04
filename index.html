@@ -48,13 +48,10 @@
       </button>
     </div>
     <div class="tb-divider"></div>
-    <button class="tb-item" onclick="renderAchievements();showScreen('achievements')">
-      <span class="tb-icon">🏆</span> 成就
-    </button>
-    <div class="tb-divider"></div>
-    <button class="tb-item" onclick="state.settingsPrevScreen=state.lastScreen||'start';renderSettings();showScreen('settings')">
+    <button class="tb-item" onclick="openSettingsModal()">
       <span class="tb-icon">⚙️</span> 设置
     </button>
+    <span id="topbar-ai-indicator" class="tb-ai-indicator" title="AI 任务状态" onclick="openAiTaskQueueDialog()" style="display:none;"></span>
   </div>
   <div id="app-body">
   <aside id="sidebar">
@@ -72,11 +69,10 @@
         <label class="toggle-switch"><input type="checkbox" id="ai-global-toggle" onchange="onAiGlobalToggle()"><span class="toggle-slider"></span></label>
         <div id="ai-mode-tooltip" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:12px;color:#555;line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:1100;">
           <div style="margin-bottom:8px;">🤖 已开启 AI 模式。请先在设置中配置 API Key，然后上传资料即可自动生成题目。</div>
-          <button class="btn btn-primary" style="font-size:11px;padding:4px 12px;" onclick="event.stopPropagation();closeAiModeTooltip();state.settingsPrevScreen='start';renderSettings();switchSettingsTab('aiconfig');showScreen('settings');">去配置</button>
+          <button class="btn btn-primary" style="font-size:11px;padding:4px 12px;" onclick="event.stopPropagation();closeAiModeTooltip();openSettingsModal();switchSettingsTab('aiconfig');">去配置</button>
         </div>
       </div>
       <div id="sync-status" style="font-size:11px;color:#555;text-align:center;">🔴 离线</div>
-      <div class="ai-task-status" id="ai-task-status" onclick="openAiTaskQueueDialog()"></div>
       <div id="backup-status" style="font-size:11px;color:#555;text-align:center;margin-top:4px;">未设置</div>
     </div>
   </aside>
@@ -163,31 +159,6 @@
         </div>
       </div>
     </div>
-    <div id="screen-quiz" class="screen">
-      <div class="quiz-card">
-        <div class="quiz-header">
-          <span class="quiz-tag" id="quiz-tag">标签</span>
-          <span class="quiz-type" id="quiz-type">题型</span>
-          <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-left:auto;">← 返回</button>
-        </div>
-        <div id="question-area"><div class="empty-state">📭 暂无题目</div></div>
-        <div class="quiz-nav" id="quiz-nav"></div>
-        <div class="quiz-actions">
-          <button class="btn btn-primary btn-small" id="btn-submit" onclick="submitAnswer()">提交答案</button>
-          <button class="btn btn-secondary btn-small" id="btn-next" onclick="nextQuestion()" style="display:none;">下一题 ➡️</button>
-          <button class="btn btn-danger btn-small" onclick="endExam()">🏁 结束考试</button>
-          <button class="btn btn-small" id="btn-ignore" onclick="ignoreCurrentQuestion()" style="background:#8b5cf6;color:#fff;">👍 我会了</button>
-        </div>
-      </div>
-    </div>
-    <div id="screen-report" class="screen">
-      <h1>📊 本轮报告</h1>
-      <div class="report-card" id="report-content"><div class="empty-state">暂无数据</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-primary btn-small" onclick="resetQuiz()">🔄 重新开始</button>
-        <button class="btn btn-success btn-small" onclick="showScreen('start')">🔄 导入下一轮</button>
-      </div>
-    </div>
     <div id="screen-history" class="screen">
       <h1>📜 全部答题历史</h1>
       <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
@@ -207,82 +178,6 @@
       <div id="subj-tab-srs-review" class="subj-tab-content"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-secondary btn-small" onclick="showScreen('start')">← 返回首页</button>
-      </div>
-    </div>
-    <div id="screen-achievements" class="screen">
-      <h1>🏆 成就</h1>
-      <button class="btn btn-small btn-secondary" onclick="showScreen('start')" style="margin-bottom:12px;">← 返回</button>
-      <div class="achievements-header"><div class="achievements-count" id="ach-count-display">已解锁 <strong>0</strong> / 20</div></div>
-      <div class="achievements-grid" id="achievements-grid"></div>
-    </div>
-    <div id="screen-settings" class="screen">
-      <h1>⚙️ 设置</h1>
-      <button class="btn btn-small btn-secondary" onclick="showScreen(state.settingsPrevScreen||'start')" style="margin-bottom:12px;">← 返回</button>
-      <div class="subj-tabs" id="settings-tabs">
-        <div class="subj-tab active" data-tab="personalize" onclick="switchSettingsTab('personalize')">🎨 个性化</div>
-        <div class="subj-tab" data-tab="aiconfig" onclick="switchSettingsTab('aiconfig')">🤖 AI 配置</div>
-      </div>
-      <div id="settings-tab-personalize" class="settings-subtab active">
-      <div class="card">
-        <div class="settings-section">
-          <h4>📌 边栏</h4>
-          <div class="settings-row"><label>边栏字体大小</label><input type="range" id="settings-sidebar-font-size" min="11" max="16" value="13" step="1" oninput="onSettingsSidebarFontSize()"><span class="settings-val" id="settings-sidebar-font-size-val">13px</span></div>
-        </div>
-        <div class="settings-section">
-          <h4>🔝 顶栏</h4>
-          <div class="settings-row"><label>顶栏字体大小</label><input type="range" id="settings-topbar-font-size" min="11" max="18" value="14" step="1" oninput="onSettingsTopbarFontSize()"><span class="settings-val" id="settings-topbar-font-size-val">14px</span></div>
-        </div>
-        <div class="settings-section">
-          <h4>📄 主页区域</h4>
-          <div class="settings-row"><label>主页字体大小</label><input type="range" id="settings-main-font-size" min="15" max="22" value="17" step="1" oninput="onSettingsMainFontSize()"><span class="settings-val" id="settings-main-font-size-val">17px</span></div>
-        </div>
-        <div class="settings-section">
-          <h4>🔤 答题区域</h4>
-          <div class="settings-row"><label>题目字体大小</label><input type="range" id="settings-quiz-font-size" min="14" max="28" value="17" step="1" oninput="onSettingsQuizFontSize()"><span class="settings-val" id="settings-quiz-font-size-val">17px</span></div>
-        </div>
-        <div class="settings-section">
-          <h4>🌙 外观</h4>
-          <div class="settings-row"><label>夜间模式</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="settings-dark-mode" onchange="onSettingsDarkMode()" style="width:18px;height:18px;accent-color:#8b5cf6;"> 开启</label></div>
-        </div>
-      </div>
-      </div>
-      <div id="settings-tab-aiconfig" class="settings-subtab">
-      <div class="card">
-        <div class="settings-section">
-          <h4>🤖 AI API 配置</h4>
-          <p style="color:#666;font-size:13px;margin-bottom:10px;">配置华师大 AI API 密钥后，可在导入界面使用 AI 自动生成题目。</p>
-          <div class="settings-row"><label>API 地址</label><input type="text" id="ai-base-url" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" value="https://chat.ecnu.edu.cn/open/api/v1" readonly></div>
-          <div class="settings-row"><label>API 密钥</label><input type="password" id="ai-api-key" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" placeholder="粘贴你的 API Key"></div>
-          <div class="settings-row"><label>模型</label><select id="ai-model-select" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><option value="ecnu-plus">ecnu-plus (推荐)</option><option value="ecnu-max">ecnu-max</option></select></div>
-          <div class="settings-row" style="flex-direction:column;">
-            <label style="margin-bottom:4px;">环境提示词</label>
-            <p style="color:#666;font-size:12px;margin-bottom:6px;">这段提示词将作为所有 AI 对话的基础上下文，用于稳定规范大模型行为。<span id="ai-env-prompt-char-count" style="color:#999;font-size:11px;"></span></p>
-            <textarea id="ai-environment-prompt" style="width:100%;min-height:80px;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;" placeholder="例如：你是一名专业的教育学教授助手，擅长根据教材内容生成高质量题目。" maxlength="2000" oninput="updateEnvPromptCharCount()"></textarea>
-            <p style="color:#e94560;font-size:11px;margin-top:4px;display:none;" id="ai-env-prompt-warning">⚠️ 提示词过长可能导致服务器错误，建议控制在500字以内</p>
-          </div>
-          <div style="margin-top:10px;display:flex;gap:8px;">
-            <button class="btn btn-primary btn-small" onclick="saveAiConfig()">💾 保存配置</button>
-            <button class="btn btn-secondary btn-small" onclick="testAiConfig()">🔍 测试连接</button>
-          </div>
-          <div id="ai-config-status" style="margin-top:8px;font-size:13px;color:#888;"></div>
-        </div>
-        <div class="settings-section">
-          <h4>⚙️ 任务队列</h4>
-          <div class="settings-row"><label>📡 实时注入</label><input type="checkbox" id="ai-stream-mode" style="width:auto;height:auto;margin:0;"><span style="color:#888;font-size:11px;margin-left:6px;">出题过程中逐步注入答题模式，开启后将自动关闭严格格式</span></div>
-          <div class="settings-row"><label>📐 严格格式</label><input type="checkbox" id="ai-strict-format" checked style="width:auto;height:auto;margin:0;"><span style="color:#888;font-size:11px;margin-left:6px;">关闭可加速（仍自动重试3次保证格式）</span></div>
-          <div class="settings-row"><label>可答题阈值</label><input type="number" id="ai-stream-threshold" min="1" max="20" value="3" style="width:60px;padding:4px 6px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><span style="color:#888;font-size:11px;margin-left:6px;">注入多少题后显示"可答题"（1-20）</span></div>
-          <div class="settings-row"><label>任务间隔</label><input type="range" id="ai-task-interval" style="flex:1;" min="10" max="300" value="30" step="5" oninput="saveAiTaskInterval()"><span id="ai-task-interval-val" style="color:#666;font-size:13px;margin-left:8px;min-width:40px;text-align:right;">30s</span></div>
-          <p style="color:#666;font-size:12px;margin-top:4px;">AI 出题任务完成后的等待时间，避免触发 API 限流。</p>
-        </div>
-        <div class="settings-section">
-          <h4>📋 使用说明</h4>
-          <div style="font-size:13px;color:#666;line-height:1.8;">
-            <p>1. 从 <a href="https://chat.ecnu.edu.cn" target="_blank" style="color:#4facfe;">chat.ecnu.edu.cn</a> 获取 API 密钥</p>
-            <p>2. 粘贴密钥并保存</p>
-            <p>3. 在首页点击"AI 生成"即可上传资料并自动生成题目</p>
-          </div>
-        </div>
-      </div>
       </div>
     </div>
     <div class="dialog-overlay" id="import-dialog">
@@ -413,34 +308,151 @@
         </div>
       </div>
     </div>
-    <!-- 用户中心下拉菜单 -->
-    <div class="user-center-dropdown" id="user-center-dropdown" onmouseenter="cancelUcClose()" onmouseleave="ucCloseDelayed()">
-      <div class="uc-header" id="uc-header">
-        <div class="uc-avatar" id="uc-avatar">U</div>
-        <div class="uc-info">
-          <div class="uc-name" id="uc-name">用户名</div>
-          <div class="uc-username" id="uc-username">@用户名</div>
+    <!-- ===== 用户中心弹窗 ===== -->
+    <div class="dialog-overlay" id="user-center-modal" onclick="if(event.target===this)closeUserCenterModal()">
+      <div class="dialog-box uc-modal-box">
+        <button class="uc-modal-close" onclick="closeUserCenterModal()">&times;</button>
+        <div class="uc-modal-body">
+          <div class="uc-modal-sidebar">
+            <div class="uc-modal-sidebar-header">
+              <div class="uc-avatar" id="ucm-avatar">U</div>
+              <div class="ucm-user-info">
+                <div class="ucm-name" id="ucm-name">用户名</div>
+                <div class="ucm-username" id="ucm-username">@用户名</div>
+              </div>
+            </div>
+            <div class="uc-modal-nav">
+              <div class="ucm-nav-item active" data-uc-tab="account" onclick="switchUcModalTab('account')"><span class="uc-menu-icon">&#128100;</span>账号管理</div>
+              <div class="ucm-nav-item" data-uc-tab="data" onclick="switchUcModalTab('data')"><span class="uc-menu-icon">&#128190;</span>数据管理</div>
+              <div class="ucm-nav-item" data-uc-tab="achievements" onclick="switchUcModalTab('achievements')"><span class="uc-menu-icon">&#127942;</span>成就</div>
+              <div class="ucm-nav-item" data-uc-tab="admin" id="ucm-admin-nav" style="display:none;" onclick="switchUcModalTab('admin')"><span class="uc-menu-icon">&#128737;</span>管理员专区</div>
+              <div class="uc-divider"></div>
+              <div class="ucm-nav-item" style="color:#e94560;" onclick="closeUserCenterModal();doLogout()"><span class="uc-menu-icon">&#128681;</span>退出登录</div>
+            </div>
+          </div>
+          <div class="uc-modal-content">
+            <div id="ucm-tab-account" class="ucm-tab-content active"></div>
+            <div id="ucm-tab-data" class="ucm-tab-content"></div>
+            <div id="ucm-tab-achievements" class="ucm-tab-content">
+              <div class="achievements-header"><div class="achievements-count" id="ach-count-display">已解锁 <strong>0</strong> / 20</div></div>
+              <div class="achievements-grid" id="achievements-grid"></div>
+            </div>
+            <div id="ucm-tab-admin" class="ucm-tab-content"></div>
+          </div>
         </div>
       </div>
-      <div class="uc-menu-wrap" id="uc-menu"></div>
     </div>
 
-    <!-- 用户中心内部页面（与设置/成就页同设计） -->
-    <div id="screen-uc-account" class="screen">
-      <h1>&#128100; 账号管理</h1>
-      <button class="btn btn-small btn-secondary" onclick="ucCurrentScreen=null;showScreen(state.ucPrevScreen||'start')" style="margin-bottom:12px;">&larr; 返回</button>
-      <div id="uc-account-content"></div>
+    <!-- ===== 设置弹窗 ===== -->
+    <div class="dialog-overlay" id="settings-modal" onclick="if(event.target===this)closeSettingsModal()">
+      <div class="dialog-box settings-modal-box">
+        <button class="uc-modal-close" onclick="closeSettingsModal()">&times;</button>
+        <div class="settings-modal-body">
+          <div class="settings-modal-sidebar">
+            <div class="settings-nav-title">⚙️ 设置</div>
+            <div class="ucm-nav-item active" data-settings-tab="personalize" onclick="switchSettingsTab('personalize')"><span class="uc-menu-icon">🎨</span>个性化</div>
+            <div class="ucm-nav-item" data-settings-tab="aiconfig" onclick="switchSettingsTab('aiconfig')"><span class="uc-menu-icon">🤖</span>AI 配置</div>
+          </div>
+          <div class="settings-modal-content">
+            <div id="settings-tab-personalize" class="ucm-tab-content active">
+              <div class="card">
+                <div class="settings-section">
+                  <h4>📌 边栏</h4>
+                  <div class="settings-row"><label>边栏字体大小</label><input type="range" id="settings-sidebar-font-size" min="11" max="16" value="13" step="1" oninput="onSettingsSidebarFontSize()"><span class="settings-val" id="settings-sidebar-font-size-val">13px</span></div>
+                </div>
+                <div class="settings-section">
+                  <h4>🔝 顶栏</h4>
+                  <div class="settings-row"><label>顶栏字体大小</label><input type="range" id="settings-topbar-font-size" min="11" max="18" value="14" step="1" oninput="onSettingsTopbarFontSize()"><span class="settings-val" id="settings-topbar-font-size-val">14px</span></div>
+                </div>
+                <div class="settings-section">
+                  <h4>📄 主页区域</h4>
+                  <div class="settings-row"><label>主页字体大小</label><input type="range" id="settings-main-font-size" min="15" max="22" value="17" step="1" oninput="onSettingsMainFontSize()"><span class="settings-val" id="settings-main-font-size-val">17px</span></div>
+                </div>
+                <div class="settings-section">
+                  <h4>🔤 答题区域</h4>
+                  <div class="settings-row"><label>题目字体大小</label><input type="range" id="settings-quiz-font-size" min="14" max="28" value="17" step="1" oninput="onSettingsQuizFontSize()"><span class="settings-val" id="settings-quiz-font-size-val">17px</span></div>
+                </div>
+                <div class="settings-section">
+                  <h4>🌙 外观</h4>
+                  <div class="settings-row"><label>夜间模式</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="settings-dark-mode" onchange="onSettingsDarkMode()" style="width:18px;height:18px;accent-color:#8b5cf6;"> 开启</label></div>
+                </div>
+              </div>
+            </div>
+            <div id="settings-tab-aiconfig" class="ucm-tab-content">
+              <div class="card">
+                <div class="settings-section">
+                  <h4>🤖 AI API 配置</h4>
+                  <p style="color:#666;font-size:13px;margin-bottom:10px;">配置华师大 AI API 密钥后，可在导入界面使用 AI 自动生成题目。</p>
+                  <div class="settings-row"><label>API 地址</label><input type="text" id="ai-base-url" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" value="https://chat.ecnu.edu.cn/open/api/v1" readonly></div>
+                  <div class="settings-row"><label>API 密钥</label><input type="password" id="ai-api-key" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" placeholder="粘贴你的 API Key"></div>
+                  <div class="settings-row"><label>模型</label><select id="ai-model-select" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><option value="ecnu-plus">ecnu-plus (推荐)</option><option value="ecnu-max">ecnu-max</option></select></div>
+                  <div class="settings-row" style="flex-direction:column;">
+                    <label style="margin-bottom:4px;">环境提示词</label>
+                    <p style="color:#666;font-size:12px;margin-bottom:6px;">这段提示词将作为所有 AI 对话的基础上下文，用于稳定规范大模型行为。<span id="ai-env-prompt-char-count" style="color:#999;font-size:11px;"></span></p>
+                    <textarea id="ai-environment-prompt" style="width:100%;min-height:80px;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;" placeholder="例如：你是一名专业的教育学教授助手，擅长根据教材内容生成高质量题目。" maxlength="2000" oninput="updateEnvPromptCharCount()"></textarea>
+                    <p style="color:#e94560;font-size:11px;margin-top:4px;display:none;" id="ai-env-prompt-warning">⚠️ 提示词过长可能导致服务器错误，建议控制在500字以内</p>
+                  </div>
+                  <div style="margin-top:10px;display:flex;gap:8px;">
+                    <button class="btn btn-primary btn-small" onclick="saveAiConfig()">💾 保存配置</button>
+                    <button class="btn btn-secondary btn-small" onclick="testAiConfig()">🔍 测试连接</button>
+                  </div>
+                  <div id="ai-config-status" style="margin-top:8px;font-size:13px;color:#888;"></div>
+                </div>
+                <div class="settings-section">
+                  <h4>⚙️ 任务队列</h4>
+                  <div class="settings-row"><label>📡 实时注入</label><input type="checkbox" id="ai-stream-mode" style="width:auto;height:auto;margin:0;"><span style="color:#888;font-size:11px;margin-left:6px;">出题过程中逐步注入答题模式，开启后将自动关闭严格格式</span></div>
+                  <div class="settings-row"><label>📐 严格格式</label><input type="checkbox" id="ai-strict-format" checked style="width:auto;height:auto;margin:0;"><span style="color:#888;font-size:11px;margin-left:6px;">关闭可加速（仍自动重试3次保证格式）</span></div>
+                  <div class="settings-row"><label>可答题阈值</label><input type="number" id="ai-stream-threshold" min="1" max="20" value="3" style="width:60px;padding:4px 6px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><span style="color:#888;font-size:11px;margin-left:6px;">注入多少题后显示"可答题"（1-20）</span></div>
+                  <div class="settings-row"><label>任务间隔</label><input type="range" id="ai-task-interval" style="flex:1;" min="10" max="300" value="30" step="5" oninput="saveAiTaskInterval()"><span id="ai-task-interval-val" style="color:#666;font-size:13px;margin-left:8px;min-width:40px;text-align:right;">30s</span></div>
+                  <p style="color:#666;font-size:12px;margin-top:4px;">AI 出题任务完成后的等待时间，避免触发 API 限流。</p>
+                </div>
+                <div class="settings-section">
+                  <h4>📋 使用说明</h4>
+                  <div style="font-size:13px;color:#666;line-height:1.8;">
+                    <p>1. 从 <a href="https://chat.ecnu.edu.cn" target="_blank" style="color:#4facfe;">chat.ecnu.edu.cn</a> 获取 API 密钥</p>
+                    <p>2. 粘贴密钥并保存</p>
+                    <p>3. 在首页点击"AI 生成"即可上传资料并自动生成题目</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="screen-uc-data" class="screen">
-      <h1>&#128190; 数据管理</h1>
-      <button class="btn btn-small btn-secondary" onclick="ucCurrentScreen=null;showScreen(state.ucPrevScreen||'start')" style="margin-bottom:12px;">&larr; 返回</button>
-      <div id="uc-data-content"></div>
+<!-- ===== 答题弹窗 ===== -->
+    <div class="dialog-overlay" id="quiz-modal">
+      <div class="dialog-box quiz-modal-box">
+        <button class="uc-modal-close" id="quiz-modal-close-btn" onclick="closeQuizModal()" style="display:none;">&times;</button>
+        <div id="quiz-modal-view-quiz">
+          <div class="quiz-card">
+            <div class="quiz-header">
+              <span class="quiz-tag" id="quiz-tag">标签</span>
+              <span class="quiz-type" id="quiz-type">题型</span>
+              <button class="btn btn-small btn-secondary" onclick="closeQuizModal()" style="margin-left:auto;">← 返回首页</button>
+            </div>
+            <div id="question-area"><div class="empty-state">📭 暂无题目</div></div>
+            <div class="quiz-nav" id="quiz-nav"></div>
+            <div class="quiz-actions">
+              <button class="btn btn-primary btn-small" id="btn-submit" onclick="submitAnswer()">提交答案</button>
+              <button class="btn btn-primary btn-small" id="btn-next" onclick="nextQuestion()" style="display:none;">下一题 ➡️</button>
+              <button class="btn btn-small" id="btn-ignore" onclick="ignoreCurrentQuestion()" style="background:#8b5cf6;color:#fff;">👍 我会了</button>
+              <button class="btn btn-danger btn-small" onclick="endExam()">🏁 结束考试</button>
+            </div>
+          </div>
+        </div>
+        <div id="quiz-modal-view-report" style="display:none;">
+          <h1>📊 本轮报告</h1>
+          <div class="report-card" id="report-content"><div class="empty-state">暂无数据</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <button class="btn btn-primary btn-small" onclick="resetQuiz()">🔄 重新开始</button>
+            <button class="btn btn-success btn-small" id="btn-review-wrong" onclick="showWrongOnlyReport()" style="background:#f59e0b;color:#fff;display:none;">👀 只看错题</button>
+            <button class="btn btn-secondary btn-small" onclick="closeQuizModal()">🏠 返回首页</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="screen-uc-admin" class="screen">
-      <h1>&#128737; 管理员专区</h1>
-      <button class="btn btn-small btn-secondary" onclick="ucCurrentScreen=null;showScreen(state.ucPrevScreen||'start')" style="margin-bottom:12px;">&larr; 返回</button>
-      <div id="uc-admin-content"></div>
-    </div>
+
   </main>
   <!-- 备案号 -->
   <div id="footer-beian" style="text-align:center;padding:14px 20px;font-size:12px;color:#999;border-top:1px solid #eee;margin-top:auto;flex-shrink:0;">
