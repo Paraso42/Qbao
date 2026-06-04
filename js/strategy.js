@@ -1,10 +1,16 @@
+function numPickerStep(btn, delta) { var input = btn.parentElement.querySelector('.num-input'); var val = parseInt(input.value) || 0; val = Math.max(0, Math.min(50, val + delta)); input.value = val; input.dispatchEvent(new Event('change', { bubbles: true })); }
+function numPickerClamp(input) { var val = parseInt(input.value); if (isNaN(val) || val < 0) input.value = 0; if (val > 50) input.value = 50; }
+function initTypeCountPickers() { /* num-picker inputs are pre-initialized in HTML with defaults */ }
 function loadChapterStrategyToUI() {
   const ch = getCh(); const card = document.getElementById('chapter-prompt-card');
   if (!card) return;
-  if (!ch) { card.style.display = 'none'; return; }
+  var bar = document.getElementById('chapter-card-bottom-bar');
+  if (!ch) { card.style.display = 'none'; if (bar) bar.style.display = 'none'; document.getElementById('main').style.paddingBottom = ''; return; }
   card.style.display = 'block';
+  if (bar && bar.style.display !== 'none') { positionCardBottomBar(); document.getElementById('main').style.paddingBottom = '52px'; }
   document.getElementById('ch-strategy-name').textContent = escapeHtml(ch.name);
   const s = getChStrategy(ch.id); if (!s) return;
+  initTypeCountPickers();
   document.getElementById('tc-single').value = s.typeCounts.single || 10;
   document.getElementById('tc-judge').value = s.typeCounts.judge || 5;
   document.getElementById('tc-term').value = s.typeCounts.term || 1;
@@ -14,7 +20,7 @@ function loadChapterStrategyToUI() {
   updateChapterDualSliderUI(s.errPct || 0, s.reviewPct || 0, s.newPct || 0);
   renderChapterTags(); updateChapterPromptTemplate(); applyAiModeUi();
 }
-function onChapterStrategyChange() { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return; s.typeCounts.single = parseInt(document.getElementById('tc-single').value) || 0; s.typeCounts.judge = parseInt(document.getElementById('tc-judge').value) || 0; s.typeCounts.term = parseInt(document.getElementById('tc-term').value) || 0; s.typeCounts.short = parseInt(document.getElementById('tc-short').value) || 0; saveState(); updateChapterPromptTemplate(); }
+function onChapterStrategyChange() { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return; s.typeCounts.single = parseInt(document.getElementById('tc-single').value) || 0; s.typeCounts.judge = parseInt(document.getElementById('tc-judge').value) || 0; s.typeCounts.term = parseInt(document.getElementById('tc-term').value) || 0; s.typeCounts.short = parseInt(document.getElementById('tc-short').value) || 0; saveState(); updateChapterPromptTemplate(); updateGenerateButtonState(); }
 function onChapterDualSlider() {
   let v1 = parseInt(document.getElementById('s-err').value) || 0; let v2 = parseInt(document.getElementById('s-review').value) || 0;
   if (v1 > v2) { if (document.activeElement === document.getElementById('s-err')) { v2 = v1; document.getElementById('s-review').value = v2; } else { v1 = v2; document.getElementById('s-err').value = v1; } }

@@ -132,4 +132,4 @@ function startSrsReviewForSubj(subjId) {
   state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
   startExamQuiz(eid);
 }
-function showScreen(name){ document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active')); const t=document.getElementById('screen-'+name); if(t)t.classList.add('active'); state.lastScreen=name; saveState(); }
+

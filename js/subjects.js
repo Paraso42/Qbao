@@ -20,8 +20,7 @@ function deleteSubject(id) {
 function switchSubject(id) {
   if (!state.subjects[id]) return;
   state.currentSubjectId = id;
-  const s = state.subjects[id];
-  state.currentChapterId = s.chapterIds.length > 0 ? s.chapterIds[0] : null;
+  state.currentChapterId = null;
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount();
   showSubjectDashboard(id);
 }
@@ -34,7 +33,7 @@ function createChapter(subjId, name) {
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); checkAchievements();
   return state.chapters[id];
 }
-function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); showScreen('start'); }
+function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; break; } } saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); showScreen('start'); }
 function renameChapter(chId, newName) { const ch = state.chapters[chId]; if (!ch || !newName || !newName.trim()) return; ch.name = newName.trim(); saveState(); renderSubjectList(); }
 function deleteChapter(chId) {
   if (!confirm('删除该章节？')) return;

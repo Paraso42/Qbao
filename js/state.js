@@ -240,11 +240,12 @@ function migrateState(s) {
   if (!s.achievements) s.achievements = { unlocked: [], history: [] };
   if (!s.ignoredQuestions) s.ignoredQuestions = [];
   if (!s.srsData) s.srsData = {};
-  if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, topbarFontSize: 14, mainFontSize: 17, darkMode: false };
+  if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, topbarFontSize: 14, mainFontSize: 17, darkMode: false, showNoticeBar: true };
   if (!s.settings.sidebarFontSize) s.settings.sidebarFontSize = 13;
   if (!s.settings.topbarFontSize) s.settings.topbarFontSize = 14;
   if (!s.settings.mainFontSize) s.settings.mainFontSize = 17;
   if (typeof s.settings.darkMode !== 'boolean') s.settings.darkMode = false;
+  if (typeof s.settings.showNoticeBar !== 'boolean') s.settings.showNoticeBar = true;
   if (!s.generatedExams) s.generatedExams = {};
   if (!s.aiConfig) s.aiConfig = {};
   if (typeof s.aiConfig.systemPrompt !== 'string') s.aiConfig.systemPrompt = '';

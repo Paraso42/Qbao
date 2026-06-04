@@ -1,27 +1,19 @@
+/* ===== Notice bar early wrap (max-width: 900px) ===== */
+@media (max-width: 900px) {
+  #topbar { flex-wrap: wrap; height: auto; min-height: var(--topbar-height); }
+  #notice-bar-wrap { width: 100%; order: 10; flex: none; margin: 0; padding: 3px 8px; border-top: 1px solid var(--border-light); background: var(--surface-bg); }
+}
+
 /* ===== Responsive (max-width: 768px) ===== */
 @media (max-width: 768px) {
-  /* --- Footer --- */
-  #footer-beian {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 999;
-    margin-top: 0;
-    padding: 6px 12px;
-    font-size: 11px;
-    background: var(--surface-bg);
-    border-top: 1px solid var(--border-light);
-    line-height: 1;
-  }
-
   /* --- Topbar --- */
-  #topbar { padding: 0 8px; gap: 4px; }
+  #topbar { padding: 0 8px; gap: 4px; flex-wrap: wrap; height: auto; min-height: var(--topbar-height); }
   #topbar .tb-brand { font-size: var(--fs-md); margin-right: auto; }
   .tb-item { padding: 8px 8px; font-size: var(--fs-xs); min-width: 36px; min-height: 36px; justify-content: center; }
   .tb-divider { display: none; }
   .tb-breadcrumb { display: none !important; }
   #topbar-ai-indicator { margin: 0 4px; }
+  #notice-bar-wrap { width: 100%; order: 10; flex: none; margin: 0; padding: 3px 8px; border-top: 1px solid var(--border-light); background: var(--surface-bg); }
 
   /* --- Sidebar drawer --- */
   #sidebar {
@@ -109,6 +101,8 @@
   .type-counts { gap: var(--space-sm); }
   .type-count-item { padding: 6px 10px; }
   .type-count-item input[type="number"] { width: 44px; padding: 6px 4px; min-height: 32px; }
+  .num-picker .num-btn { width: 34px; height: 38px; font-size: 20px; }
+  .num-picker .num-input { width: 46px; font-size: 16px; }
 
   /* --- Tags --- */
   .tag-chip { padding: 6px 12px; min-height: 30px; font-size: var(--fs-xs); }

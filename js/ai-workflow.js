@@ -46,13 +46,14 @@ function showAiTaskNotification(type, message) {
   setTimeout(function() { toast.style.opacity = '0'; setTimeout(function() { toast.remove(); }, 500); }, 4000);
 }
 function openAiTaskQueueDialog() { renderAiTaskQueueDialog(); document.getElementById('ai-task-queue-dialog').classList.add('active'); }
+function closeAiTaskQueueDialog() { document.getElementById('ai-task-queue-dialog').classList.remove('active'); }
 function renderAiTaskQueueDialog() {
   var container = document.getElementById('ai-task-queue-list');
   if (!container) return;
   var queue = state.aiTaskQueue || [];
   if (queue.length === 0) { container.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">暂无任务</div>'; return; }
   var html = '';
-  queue.forEach(function(task) {
+  for (var i = queue.length - 1; i >= 0; i--) { var task = queue[i];
     var dotColor = task.status === 'completed' ? '#2ed573' : task.status === 'failed' ? '#e94560' : task.status === 'running' ? '#4facfe' : '#999';
     var animStyle = task.status === 'running' ? '' : 'animation:none;';
     html += '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #eee;font-size:13px;">';
@@ -76,27 +77,28 @@ function renderAiTaskQueueDialog() {
       html += '<button onclick="aiTaskCancelTask(\'' + task.id + '\')" style="font-size:11px;padding:2px 8px;cursor:pointer;border:1px solid #ddd;background:#fff;border-radius:4px;">取消</button>';
     }
     html += '</div>';
-  });
+  }
   container.innerHTML = html;
+  container.scrollTop = 0;
 }
 function aiTaskCancelTask(taskId) {
   var task = state.aiTaskQueue.find(function(t) { return t.id === taskId; });
   if (!task) return;
   if (task.status === 'pending') {
     state.aiTaskQueue = state.aiTaskQueue.filter(function(t) { return t.id !== taskId; });
-    saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar();
+    saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); updateGenerateButtonState();
     return;
   }
   if (task.status === 'running') {
     aiTaskRunnerActive = false;
     if (aiTaskAbortController) { aiTaskAbortController.abort(); aiTaskAbortController = null; }
     task.status = 'failed'; task.error = '用户取消';
-    saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar();
+    saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); updateGenerateButtonState();
   }
 }
 function aiTaskCancelAll() {
   cancelAiGenerate();
-  renderAiTaskQueueDialog();
+  renderAiTaskQueueDialog(); updateGenerateButtonState();
 }
 async function _aiExecuteTask(task) {
   task.status = 'running';
@@ -403,21 +405,25 @@ function aiEnqueueGenerate(chapterId) {
   renderAiTaskQueueDialog();
   var position = state.aiTaskQueue.filter(function(t) { return t.status === 'pending'; }).length;
   showAiTaskNotification('info', ch.name + ' 已加入队列，排在第 ' + position + ' 位');
+  updateGenerateButtonState();
 }
-function applyAiModeUi() { const enabled=!!state.aiEnabled; const toggle=document.getElementById('ai-global-toggle'); if(toggle)toggle.checked=enabled; const aiSections=[...document.querySelectorAll('#ai-materials-section, #ai-generate-section')]; const trad=document.getElementById('traditional-steps'); aiSections.forEach(s=>s.classList.toggle('ai-mode-hidden', !enabled)); if(trad)trad.classList.toggle('ai-mode-hidden', enabled); updateAiMaterialCount(); updateTopbarAiIndicator(); }
+function positionCardBottomBar() { var bar=document.getElementById('chapter-card-bottom-bar'); var card=document.getElementById('chapter-prompt-card'); if(!bar||!card||bar.style.display==='none')return; var cr=card.getBoundingClientRect(); bar.style.left=cr.left+'px'; bar.style.width=cr.width+'px'; }
+function applyAiModeUi() { const enabled=!!state.aiEnabled; const toggle=document.getElementById('ai-global-toggle'); if(toggle)toggle.checked=enabled; const aiSections=[...document.querySelectorAll('#ai-materials-section, #ai-generate-section')]; const trad=document.getElementById('traditional-steps'); aiSections.forEach(s=>s.classList.toggle('ai-mode-hidden', !enabled)); if(trad)trad.classList.toggle('ai-mode-hidden', enabled); var bar=document.getElementById('chapter-card-bottom-bar'); var ch=getCh(); if(bar){bar.style.display=(enabled&&ch)?'flex':'none';if(enabled&&ch)positionCardBottomBar();} var main=document.getElementById('main'); if(main)main.style.paddingBottom=(enabled&&ch)?'52px':''; updateAiMaterialCount(); updateTopbarAiIndicator(); updateGenerateButtonState(); }
+function updateGenerateButtonState() { var btn=document.getElementById('btn-ai-generate-sticky'); var status=document.getElementById('card-bar-status'); if(!btn)return; var ch=getCh(); var materials=ch?getChapterMaterials(ch.id):[]; var hasDup=state.aiTaskQueue&&state.aiTaskQueue.some(function(t){return t.chapterId===(ch?ch.id:null)&&(t.status==='pending'||t.status==='running');}); if(!ch){btn.className='btn btn-small btn-secondary';btn.disabled=true;if(status)status.textContent='请先选择一个章节';}else if(materials.length===0){btn.className='btn btn-small btn-secondary';btn.disabled=true;if(status)status.textContent='请先上传复习资料';}else if(!isOnlineMode||!getToken()){btn.className='btn btn-small btn-secondary';btn.disabled=true;if(status)status.textContent='请先登录';}else if(hasDup){btn.className='btn btn-small btn-secondary';btn.disabled=true;if(status)status.textContent='该章节已有任务在队列中';}else{btn.className='btn btn-success btn-small';btn.disabled=false;if(status)status.textContent='已准备就绪，共 '+materials.length+' 份资料';}}
+function handleStickyGenerate() { var ch=getCh(); if(!ch){alert('请先选择一个章节');return;} var materials=getChapterMaterials(ch.id); if(!materials||materials.length===0){alert('请先上传复习资料');return;} if(!isOnlineMode||!getToken()){alert('请先登录');return;} aiEnqueueGenerate(ch.id); }
 function updateAiMaterialCount() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const el=document.getElementById('ai-material-count'); if(el)el.textContent=materials.length?materials.length+' 份资料已上传':'请先上传资料'; }
 function formatFileSize(bytes) { if(bytes<1024)return bytes+' B'; if(bytes<1048576)return (bytes/1024).toFixed(1)+' KB'; return (bytes/1048576).toFixed(1)+' MB'; }
 function handleAiFileSelect(e) { const files=e.target.files; if(!files.length)return; handleAiFiles(files); e.target.value=''; }
 function handleAiMaterialDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('dragover'); handleAiFiles(e.dataTransfer.files); }
-function handleAiFiles(files) { const ch=getCh(); if(!ch){alert('请先选择章节');return;} const materials=getChapterMaterials(ch.id); var allowedExts=['pdf','doc','docx','pptx','txt','md']; let remaining=files.length; for(let i=0;i<files.length;i++){ const f=files[i]; var ext=f.name.split('.').pop().toLowerCase(); if(allowedExts.indexOf(ext)===-1){alert(f.name+' 类型不支持，已跳过');remaining--;continue;} if(f.size>20*1024*1024){alert(f.name+' 超过20MB，已跳过');remaining--;continue;} if(materials.find(function(m){return m.name===f.name&&m.size===f.size;})){alert(f.name+' 已存在，已跳过');remaining--;continue;} const reader=new FileReader(); (function(file, mat){ reader.onload=async function(ev){ var mid=generateMaterialId(); mat.push({name:file.name,size:file.size,addedAt:Date.now(),id:mid}); saveChapterMaterials(ch.id, mat); try{ await idbStoreMaterial(mid, ev.target.result); }catch(e){ alert('保存资料失败：'+file.name); var idx=mat.length-1; mat.splice(idx,1); saveChapterMaterials(ch.id, mat); } renderAiMaterialList(); updateAiMaterialCount(); }; })(f, materials); reader.readAsDataURL(f); } }
+function handleAiFiles(files) { const ch=getCh(); if(!ch){alert('请先选择章节');return;} const materials=getChapterMaterials(ch.id); var allowedExts=['pdf','doc','docx','pptx','txt','md']; let remaining=files.length; for(let i=0;i<files.length;i++){ const f=files[i]; var ext=f.name.split('.').pop().toLowerCase(); if(allowedExts.indexOf(ext)===-1){alert(f.name+' 类型不支持，已跳过');remaining--;continue;} if(f.size>20*1024*1024){alert(f.name+' 超过20MB，已跳过');remaining--;continue;} if(materials.find(function(m){return m.name===f.name&&m.size===f.size;})){alert(f.name+' 已存在，已跳过');remaining--;continue;} const reader=new FileReader(); (function(file, mat){ reader.onload=async function(ev){ var mid=generateMaterialId(); mat.push({name:file.name,size:file.size,addedAt:Date.now(),id:mid}); saveChapterMaterials(ch.id, mat); try{ await idbStoreMaterial(mid, ev.target.result); }catch(e){ alert('保存资料失败：'+file.name); var idx=mat.length-1; mat.splice(idx,1); saveChapterMaterials(ch.id, mat); } renderAiMaterialList(); updateAiMaterialCount(); updateGenerateButtonState(); }; })(f, materials); reader.readAsDataURL(f); } }
 function renderAiMaterialList() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const container=document.getElementById('ai-materials-file-list'); if(!container)return; if(!materials.length){container.innerHTML='<span style="color:#bbb;font-size:13px;">暂无资料</span>';return;} let html=''; materials.forEach((m,i)=>{ html+='<div class="ai-material-file"><span class="am-name">'+escapeHtml(m.name)+'</span><span class="am-size">'+formatFileSize(m.size)+'</span><button class="am-del" onclick="removeAiMaterial('+i+')" title="删除">✕</button></div>'; }); container.innerHTML=html; }
-function removeAiMaterial(idx) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); renderAiMaterialList(); updateAiMaterialCount(); }
+function removeAiMaterial(idx) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); renderAiMaterialList(); updateAiMaterialCount(); updateGenerateButtonState(); }
 function openChapterMaterialsDialog() { const ch=getCh(); if(!ch)return; document.getElementById('cm-dialog-chapter-name').textContent='📖 '+escapeHtml(ch.name); renderChapterMaterialsDialog(); document.getElementById('chapter-materials-dialog').classList.add('active'); }
 function closeChapterMaterialsDialog() { document.getElementById('chapter-materials-dialog').classList.remove('active'); }
 function renderChapterMaterialsDialog() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const container=document.getElementById('cm-dialog-list'); if(!materials.length){container.innerHTML='<div class="empty-state">暂无复习资料</div>';return;} let html=''; materials.forEach((m,i)=>{ html+='<div class="ai-material-file"><span class="am-name">'+escapeHtml(m.name)+'</span><span class="am-size">'+formatFileSize(m.size)+'</span><button class="am-del" onclick="removeChapterMaterial('+i+');renderChapterMaterialsDialog();">✕</button></div>'; }); container.innerHTML=html; }
 function removeChapterMaterial(idx) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); }
 function handleCmFileSelect(e) { const files=e.target.files; if(!files.length)return; handleCmFiles(files); e.target.value=''; }
-function handleCmFiles(files) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var allowedExts=['pdf','doc','docx','pptx','txt','md']; for(let i=0;i<files.length;i++){ const f=files[i]; var ext=f.name.split('.').pop().toLowerCase(); if(allowedExts.indexOf(ext)===-1){alert(f.name+' 类型不支持，已跳过');continue;} if(f.size>20*1024*1024){alert(f.name+' 超过20MB');continue;} if(materials.find(function(m){return m.name===f.name&&m.size===f.size;})){alert(f.name+' 已存在，已跳过');continue;} const reader=new FileReader(); (function(file, mat){ reader.onload=async function(ev){ var mid=generateMaterialId(); mat.push({name:file.name,size:file.size,addedAt:Date.now(),id:mid}); saveChapterMaterials(ch.id, mat); try{ await idbStoreMaterial(mid, ev.target.result); }catch(e){ alert('保存资料失败：'+file.name); var idx=mat.length-1; mat.splice(idx,1); saveChapterMaterials(ch.id, mat); } renderChapterMaterialsDialog(); renderAiMaterialList(); updateAiMaterialCount(); }; })(f, materials); reader.readAsDataURL(f); } }
+function handleCmFiles(files) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var allowedExts=['pdf','doc','docx','pptx','txt','md']; for(let i=0;i<files.length;i++){ const f=files[i]; var ext=f.name.split('.').pop().toLowerCase(); if(allowedExts.indexOf(ext)===-1){alert(f.name+' 类型不支持，已跳过');continue;} if(f.size>20*1024*1024){alert(f.name+' 超过20MB');continue;} if(materials.find(function(m){return m.name===f.name&&m.size===f.size;})){alert(f.name+' 已存在，已跳过');continue;} const reader=new FileReader(); (function(file, mat){ reader.onload=async function(ev){ var mid=generateMaterialId(); mat.push({name:file.name,size:file.size,addedAt:Date.now(),id:mid}); saveChapterMaterials(ch.id, mat); try{ await idbStoreMaterial(mid, ev.target.result); }catch(e){ alert('保存资料失败：'+file.name); var idx=mat.length-1; mat.splice(idx,1); saveChapterMaterials(ch.id, mat); } renderChapterMaterialsDialog(); renderAiMaterialList(); updateAiMaterialCount(); updateGenerateButtonState(); }; })(f, materials); reader.readAsDataURL(f); } }
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 async function fetchWithRetry(url, options, retries, delay) {
   for(let i=0;i<retries;i++){
@@ -453,4 +459,5 @@ function getQuestionId(chId,q) { return chId+':'+simpleHash((q.question||'')); }
 function isQuestionIgnored(chId,q) { return state.ignoredQuestions&&state.ignoredQuestions.includes(getQuestionId(chId,q)); }
 function isQuestionFavorite() { return false; }
 function toggleFavorite() {}
-function ignoreCurrentQuestion() { const as=getActiveSet(); if(!as)return; const q=as.questions[as.currentIdx]; if(!q)return; if(!state.ignoredQuestions)state.ignoredQuestions=[]; const qId=getQuestionId(as.setId,q); if(!state.ignoredQuestions.includes(qId)){state.ignoredQuestions.push(qId);} saveState(); if(as.currentIdx<as.questions.length-1){as.setCurrentIdx(as.currentIdx+1);} renderQuestion(); updateProgress(); }
+function ignoreCurrentQuestion() { const as=getActiveSet(); if(!as)return; const q=as.questions[as.currentIdx]; if(!q)return; if(!state.ignoredQuestions)state.ignoredQuestions=[]; const qId=getQuestionId(as.setId,q); if(!state.ignoredQuestions.includes(qId)){state.ignoredQuestions.push(qId);} saveState(); if(as.currentIdx<as.questions.length-1){as.setCurrentIdx(as.currentIdx+1);} renderQuestion(); updateProgress(); }
+window.addEventListener('resize', function() { positionCardBottomBar(); });
