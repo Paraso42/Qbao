@@ -124,7 +124,7 @@ function startQuizSession() {
   if (runningStreamTask && runningStreamTask.streamSetRef) {
     ch.currentQuizSetIdx = ch.quizSets.indexOf(runningStreamTask.streamSetRef);
     saveState();
-    showScreen('quiz');
+    openQuizModal('quiz');
     renderQuestion();
     updateProgress();
     return;
@@ -139,11 +139,11 @@ function startQuizSession() {
         alert('当前这组题目已全部答完，请导入新题目或 AI 出题');
         return;
       }
-      showScreen('quiz'); renderQuestion(); updateProgress(); return;
+      openQuizModal('quiz'); renderQuestion(); updateProgress(); return;
     }
   }
   // 兼容旧数据
-  if (ch.questions && ch.questions.length > 0) { showScreen('quiz'); renderQuestion(); updateProgress(); return; }
+  if (ch.questions && ch.questions.length > 0) { openQuizModal('quiz'); renderQuestion(); updateProgress(); return; }
   alert('暂无题目');
 }
 function finalizeUnansweredQuestions(as) {
@@ -170,7 +170,7 @@ function endQuizSession() {
     checkAchievements();
     var unusedStats = calcStats(as);
     saveState();
-    showScreen('report');
+    openQuizModal('report');
     renderReportForSet(as);
     return;
   }
@@ -185,7 +185,7 @@ function endQuizSession() {
   checkAchievements();
   var stats2 = calcStats(as);
   saveState();
-  showScreen('report');
+  openQuizModal('report');
   renderReportForSet(as);
 }
 function isObjType(t) { return t === 'single' || t === 'judge'; }

@@ -59,6 +59,62 @@
 .qbank-question .q-text { font-weight: 500; }
 .qbank-question .q-detail { color: var(--text-muted); font-size: var(--fs-xs); margin-top: 1px; }
 
+/* Report review items */
+.history-q-item {
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--border-default);
+  transition: border-color var(--transition-fast);
+  font-size: var(--fs-base);
+  line-height: var(--lh-relaxed);
+}
+.history-q-item:hover { border-left-color: var(--color-primary); }
+.history-q-item.correct { border-left-color: var(--color-success); background: var(--color-success-light); }
+.history-q-item.wrong { border-left-color: var(--color-danger); background: var(--color-danger-light); }
+.history-q-item .q-text {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+.history-q-item .q-detail {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-top: 4px;
+  padding-left: 4px;
+}
+.history-q-item .q-answer {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  margin-right: 8px;
+}
+.history-q-item .q-answer.your-answer { background: #fee2e2; color: #991b1b; }
+.history-q-item .q-answer.correct-answer { background: #dcfce7; color: #166534; }
+.history-q-item .q-explanation {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  border-left: 3px solid var(--color-primary);
+}
+.history-q-item .q-type-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  margin: 0 2px;
+}
+
 /* Subject dashboard */
 .subj-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border-light); margin-bottom: var(--space-xl); }
 .subj-tab { padding: var(--space-sm) var(--space-lg); cursor: pointer; font-size: var(--fs-base); color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color var(--transition-fast), border-color var(--transition-fast); font-weight: 500; }

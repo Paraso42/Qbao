@@ -1,6 +1,6 @@
 function getChapterMaterials(cid) { if(!state.chapterMaterials)state.chapterMaterials={}; return state.chapterMaterials[cid]||[]; }
 function saveChapterMaterials(cid, materials) { if(!state.chapterMaterials)state.chapterMaterials={}; state.chapterMaterials[cid]=materials; saveState(); }
-function onAiGlobalToggle() { const enabled=document.getElementById('ai-global-toggle').checked; state.aiEnabled=enabled; saveState(); applyAiModeUi(); if(enabled) showAiModeTooltip(); }
+function onAiGlobalToggle() { const enabled=document.getElementById('ai-global-toggle').checked; state.aiEnabled=enabled; saveState(); applyAiModeUi(); updateTopbarAiIndicator(); if(enabled) showAiModeTooltip(); }
 function showAiModeTooltip() { const t=document.getElementById('ai-mode-tooltip'); if(t){t.style.display='block'; if(state._aiTooltipTimer) clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=setTimeout(function(){closeAiModeTooltip();},5000);} }
 function closeAiModeTooltip() { const t=document.getElementById('ai-mode-tooltip'); if(t)t.style.display='none'; if(state._aiTooltipTimer){clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=null;} }
 function cancelAiGenerate() {
@@ -20,20 +20,22 @@ function cancelAiGenerate() {
 // ===== AI 任务队列函数 =====
 function updateAiTaskStatusBar() {
   const el = document.getElementById('ai-task-status');
-  if (!el) return;
   const queue = state.aiTaskQueue || [];
   const running = queue.filter(t => t.status === 'running').length;
   const pending = queue.filter(t => t.status === 'pending').length;
-  if (running > 0) {
-    el.innerHTML = '<div class="ai-task-bar"><span class="ai-task-dot"></span></div>' + running + ' 运行中, ' + pending + ' 等待中';
-    el.classList.add('active');
-  } else if (pending > 0) {
-    el.innerHTML = '<div class="ai-task-bar"><span class="ai-task-dot" style="animation:none;"></span></div>' + pending + ' 等待中';
-    el.classList.add('active');
-  } else {
-    el.textContent = '';
-    el.classList.remove('active');
+  if (el) {
+    if (running > 0) {
+      el.innerHTML = '<div class="ai-task-bar"><span class="ai-task-dot"></span></div>' + running + ' 运行中, ' + pending + ' 等待中';
+      el.classList.add('active');
+    } else if (pending > 0) {
+      el.innerHTML = '<div class="ai-task-bar"><span class="ai-task-dot" style="animation:none;"></span></div>' + pending + ' 等待中';
+      el.classList.add('active');
+    } else {
+      el.textContent = '';
+      el.classList.remove('active');
+    }
   }
+  updateTopbarAiIndicator();
 }
 function showAiTaskNotification(type, message) {
   var toast = document.createElement('div');
@@ -402,7 +404,7 @@ function aiEnqueueGenerate(chapterId) {
   var position = state.aiTaskQueue.filter(function(t) { return t.status === 'pending'; }).length;
   showAiTaskNotification('info', ch.name + ' 已加入队列，排在第 ' + position + ' 位');
 }
-function applyAiModeUi() { const enabled=!!state.aiEnabled; const toggle=document.getElementById('ai-global-toggle'); if(toggle)toggle.checked=enabled; const aiSections=[...document.querySelectorAll('#ai-materials-section, #ai-generate-section')]; const trad=document.getElementById('traditional-steps'); aiSections.forEach(s=>s.classList.toggle('ai-mode-hidden', !enabled)); if(trad)trad.classList.toggle('ai-mode-hidden', enabled); updateAiMaterialCount(); }
+function applyAiModeUi() { const enabled=!!state.aiEnabled; const toggle=document.getElementById('ai-global-toggle'); if(toggle)toggle.checked=enabled; const aiSections=[...document.querySelectorAll('#ai-materials-section, #ai-generate-section')]; const trad=document.getElementById('traditional-steps'); aiSections.forEach(s=>s.classList.toggle('ai-mode-hidden', !enabled)); if(trad)trad.classList.toggle('ai-mode-hidden', enabled); updateAiMaterialCount(); updateTopbarAiIndicator(); }
 function updateAiMaterialCount() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const el=document.getElementById('ai-material-count'); if(el)el.textContent=materials.length?materials.length+' 份资料已上传':'请先上传资料'; }
 function formatFileSize(bytes) { if(bytes<1024)return bytes+' B'; if(bytes<1048576)return (bytes/1024).toFixed(1)+' KB'; return (bytes/1048576).toFixed(1)+' MB'; }
 function handleAiFileSelect(e) { const files=e.target.files; if(!files.length)return; handleAiFiles(files); e.target.value=''; }

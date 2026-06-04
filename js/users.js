@@ -75,7 +75,7 @@ function updateAuthUI() {
   const ta = document.getElementById('topbar-auth-area');
   if (ta) {
     if (isOnlineMode && authUser) {
-      ta.innerHTML = '<div id="topbar-user" style="cursor:pointer;" onmouseenter="openUserCenter()" onmouseleave="ucCloseDelayed()"><span class="tb-username">' + escapeHtml(authUser.displayName || authUser.username) + '</span></div>';
+      ta.innerHTML = '<button class="tb-item" id="topbar-user-btn" onclick="openUserCenterModal()"><span class="tb-icon">👤</span> ' + escapeHtml(authUser.displayName || authUser.username) + '</button>';
     } else {
       ta.innerHTML = '<button class="tb-item" onclick="openAuthDialog()"><span class="tb-icon">☁️</span> 登录/注册</button>';
     }
@@ -116,10 +116,10 @@ async function init(){ try{
 				if (as.setId) autoUpdateChapterWeakTags(state.chapters[as.setId]);
 				autoBackup();
 				checkAchievements();
-				showScreen('report');
+				openQuizModal('report');
 				renderReportForSet(as);
 			} else {
-				showScreen('quiz');
+				openQuizModal('quiz');
 			}
 		} else {
 			showScreen(saved);
@@ -160,74 +160,50 @@ function edgeBubbleHover(isHovered) {
   }
 }
 
-// ===== 用户中心 =====
-var ucCloseTimer = null;
-var ucCurrentScreen = null;
-function openUserCenter() {
-  if (!authUser) return;
-  var dropdown = document.getElementById('user-center-dropdown');
-  var topbarEl = document.getElementById('topbar-user');
-  if (!dropdown || !topbarEl) return;
-
-  var rect = topbarEl.getBoundingClientRect();
-  dropdown.style.top = (rect.bottom + 4) + 'px';
-  dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-  dropdown.style.left = 'auto';
-
+// ===== 用户中心弹窗 =====
+function openUserCenterModal(initialTab) {
+  if (!authUser) { openAuthDialog(); return; }
+  var activeTab = initialTab || 'account';
+  // 填充用户信息
   var name = authUser.displayName || authUser.username;
-  document.getElementById('uc-name').textContent = name;
-  document.getElementById('uc-username').textContent = '@' + (authUser.username || '');
-
-  var avatarEl = document.getElementById('uc-avatar');
+  document.getElementById('ucm-name').textContent = name;
+  document.getElementById('ucm-username').textContent = '@' + (authUser.username || '');
+  var avatarEl = document.getElementById('ucm-avatar');
   if (authUser.avatar) {
-    avatarEl.innerHTML = '<img src="' + authUser.avatar + '" alt="">';
+    avatarEl.innerHTML = '<img src="' + authUser.avatar + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
   } else {
     avatarEl.innerHTML = '';
     avatarEl.textContent = name.charAt(0).toUpperCase();
   }
-
-  var isAdmin = authUser.role === 'admin';
-  var menuHtml = '';
-  menuHtml += '<div class="uc-menu-item" onclick="ucNavigateTo(\'account\')"><span class="uc-menu-icon">&#128100;</span>账号管理</div>';
-  menuHtml += '<div class="uc-menu-item" onclick="ucNavigateTo(\'data\')"><span class="uc-menu-icon">&#128190;</span>数据管理</div>';
-  if (isAdmin) {
-    menuHtml += '<div class="uc-divider"></div>';
-    menuHtml += '<div class="uc-menu-item" onclick="ucNavigateTo(\'admin\')"><span class="uc-menu-icon">&#128737;</span>管理员专区</div>';
-  }
-  menuHtml += '<div class="uc-divider"></div>';
-  menuHtml += '<div class="uc-menu-item" style="color:#e94560;" onclick="ucClose();doLogout()"><span class="uc-menu-icon">&#128681;</span>退出登录</div>';
-  document.getElementById('uc-menu').innerHTML = menuHtml;
-
-  dropdown.classList.add('active');
-  cancelUcClose();
+  // 显示/隐藏管理员导航
+  var adminNav = document.getElementById('ucm-admin-nav');
+  if (adminNav) adminNav.style.display = (authUser.role === 'admin') ? 'flex' : 'none';
+  // 显示弹窗
+  document.getElementById('user-center-modal').classList.add('active');
+  switchUcModalTab(activeTab);
 }
 
-function ucClose() {
-  var dropdown = document.getElementById('user-center-dropdown');
-  if (dropdown) dropdown.classList.remove('active');
-  cancelUcClose();
+function closeUserCenterModal() {
+  document.getElementById('user-center-modal').classList.remove('active');
 }
 
-function ucCloseDelayed() {
-  cancelUcClose();
-  ucCloseTimer = setTimeout(function() { ucClose(); }, 150);
-}
-
-function cancelUcClose() {
-  if (ucCloseTimer) { clearTimeout(ucCloseTimer); ucCloseTimer = null; }
-}
-
-function ucNavigateTo(page) {
-  ucClose();
-  state.ucPrevScreen = state.lastScreen || 'start';
-  showScreen('uc-' + page);
-  ucCurrentScreen = page;
-  if (page === 'account') renderAccountPage();
-  else if (page === 'data') renderDataPage();
-  else if (page === 'admin') renderAdminPage();
+function switchUcModalTab(tab) {
+  document.querySelectorAll('.ucm-nav-item[data-uc-tab]').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.ucTab === tab);
+  });
+  document.querySelectorAll('.ucm-tab-content').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var target = document.getElementById('ucm-tab-' + tab);
+  if (target) target.classList.add('active');
+  // 渲染对应内容
+  if (tab === 'account') renderAccountPage();
+  else if (tab === 'data') renderDataPage();
+  else if (tab === 'achievements') renderAchievements();
+  else if (tab === 'admin') renderAdminPage();
 }
 async function renderAccountPage() {
-  var body = document.getElementById('uc-account-content');
+  var body = document.getElementById('ucm-tab-account');
   if (!body) return;
   var html = '';
   html += '<div style="margin-bottom:16px;"><h4 style="font-size:14px;margin-bottom:8px;">&#128247; 头像</h4>';
@@ -333,7 +309,7 @@ function showAccMsg(msg, success) {
 
 // ===== 数据管理页面 =====
 async function renderDataPage() {
-  var body = document.getElementById('uc-data-content');
+  var body = document.getElementById('ucm-tab-data');
   if (!body) return;
 
   var hasBackup = !!backupDirHandle;
@@ -363,7 +339,7 @@ async function renderDataPage() {
 
 // ===== 管理员专区页面 =====
 async function renderAdminPage() {
-  var body = document.getElementById('uc-admin-content');
+  var body = document.getElementById('ucm-tab-admin');
   if (!body) return;
   if (!authUser || authUser.role !== 'admin') {
     body.innerHTML = '<p style="color:#e94560;font-size:14px;text-align:center;padding:20px;">此功能仅限管理员使用</p>';
@@ -385,12 +361,12 @@ async function renderAdminPage() {
   html += '</div>';
 
   html += '</div>';
-  html += '<div id="uc-admin-subsection" style="display:none;"></div>';
+  html += '<div id="ucm-admin-subsection" style="display:none;"></div>';
   body.innerHTML = html;
 }
 
 function adminOpenSubSection(section) {
-  var subsection = document.getElementById('uc-admin-subsection');
+  var subsection = document.getElementById('ucm-admin-subsection');
   if (!subsection) return;
 
   if (section === 'notices') {
@@ -402,7 +378,7 @@ function adminOpenSubSection(section) {
     html += '<button class="btn btn-primary btn-small" onclick="closeUcAndOpenNoticeEditor()" style="font-size:12px;padding:4px 10px;">＋ 新增消息</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="loadAdminNoticesInUc()" style="font-size:12px;padding:4px 10px;">&#128260; 刷新</button>';
     html += '</div></div>';
-    html += '<div id="uc-notice-list-container" style="font-size:13px;"></div>';
+    html += '<div id="ucm-notice-list-container" style="font-size:13px;"></div>';
     html += '</div>';
     subsection.innerHTML = html;
     loadAdminNoticesInUc();
@@ -414,12 +390,12 @@ function adminOpenSubSection(section) {
     html += '<div style="display:flex;gap:8px;">';
     html += '<button class="btn btn-secondary btn-small" onclick="loadAdminUsers()" style="font-size:12px;padding:4px 10px;">&#128260; 刷新</button>';
     html += '</div></div>';
-    html += '<div id="uc-user-search" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">';
-    html += '<input type="text" id="uc-user-search-input" placeholder="搜索用户名..." style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" onkeydown="if(event.key===\'Enter\')loadAdminUsers()">';
+    html += '<div id="ucm-user-search" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">';
+    html += '<input type="text" id="ucm-user-search-input" placeholder="搜索用户名..." style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" onkeydown="if(event.key===\'Enter\')loadAdminUsers()">';
     html += '<button class="btn btn-primary btn-small" onclick="loadAdminUsers()" style="font-size:12px;padding:4px 10px;">搜索</button>';
     html += '</div>';
-    html += '<div id="uc-user-stats-bar" style="display:flex;gap:12px;margin-bottom:12px;font-size:12px;color:#888;padding:8px 12px;background:#f8f9fa;border-radius:6px;"></div>';
-    html += '<div id="uc-user-list-container" style="font-size:13px;"></div>';
+    html += '<div id="ucm-user-stats-bar" style="display:flex;gap:12px;margin-bottom:12px;font-size:12px;color:#888;padding:8px 12px;background:#f8f9fa;border-radius:6px;"></div>';
+    html += '<div id="ucm-user-list-container" style="font-size:13px;"></div>';
     html += '</div>';
     subsection.innerHTML = html;
     loadAdminUsers();
@@ -427,7 +403,7 @@ function adminOpenSubSection(section) {
 }
 
 function renderAdminUserList(users) {
-  var container = document.getElementById('uc-user-list-container');
+  var container = document.getElementById('ucm-user-list-container');
   if (!container) return;
   if (users.length === 0) { container.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">暂无用户</div>'; return; }
   var html = '';
@@ -541,9 +517,9 @@ async function adminToggleBan(uid, username, currentlyBanned) {
 }
 async function loadAdminUsers() {
   if (!getToken()) return;
-  var container = document.getElementById('uc-user-list-container');
-  var statsBar = document.getElementById('uc-user-stats-bar');
-  var searchInput = document.getElementById('uc-user-search-input');
+  var container = document.getElementById('ucm-user-list-container');
+  var statsBar = document.getElementById('ucm-user-stats-bar');
+  var searchInput = document.getElementById('ucm-user-search-input');
   if (container) container.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">加载中...</div>';
   try {
     var url = '/users?limit=100';
@@ -572,7 +548,7 @@ function closeUcAndOpenNoticeEditor() {
 
 async function loadAdminNoticesInUc() {
   if (!getToken()) return;
-  var container = document.getElementById('uc-notice-list-container');
+  var container = document.getElementById('ucm-notice-list-container');
   if (container) container.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">加载中...</div>';
   try {
     var res = await fetchWithAuth('/notices/all');
@@ -585,7 +561,7 @@ async function loadAdminNoticesInUc() {
 }
 
 function renderNoticeListInUc(notices) {
-  var container = document.getElementById('uc-notice-list-container');
+  var container = document.getElementById('ucm-notice-list-container');
   if (!container) return;
   if (!notices || notices.length === 0) {
     container.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">暂无消息</div>';
