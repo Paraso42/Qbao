@@ -1,0 +1,35 @@
+/* ===== Quiz History ===== */
+.ch-history-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+  cursor: pointer;
+  border-left: 3px solid var(--border-default);
+  transition: border-color var(--transition-fast);
+}
+
+.ch-history-card.expanded { border-left-color: var(--color-primary); }
+.ch-history-card-header { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-md); }
+.ch-round-badge { background: var(--color-primary-light); color: var(--color-primary-dark); padding: 2px 10px; border-radius: var(--radius-full); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+.ch-history-card-date { font-size: var(--fs-xs); color: var(--text-muted); flex: 1; }
+.ch-history-card-stats { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+.ch-history-card-detail { display: none; border-top: 1px solid var(--border-light); padding: var(--space-sm); }
+.ch-history-card.expanded .ch-history-card-detail { display: block; }
+
+.ch-history-q {
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: 4px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: var(--lh-normal);
+}
+
+.ch-history-q.correct { background: var(--color-success-light); }
+.ch-history-q.wrong { background: var(--color-danger-light); }
+.ch-history-q-icon { font-size: 10px; }
+.ch-history-q-exp { margin-top: var(--space-xs); padding-top: var(--space-xs); border-top: 1px dashed var(--border-default); color: var(--text-secondary); font-size: var(--fs-xs); }

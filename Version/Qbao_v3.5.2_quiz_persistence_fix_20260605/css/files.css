@@ -1,0 +1,130 @@
+/* ===== File Management ===== */
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  background: var(--surface-card, #fff);
+  transition: border-color 0.2s;
+}
+
+.file-item:hover {
+  border-color: #4facfe;
+}
+
+.file-item.expired {
+  opacity: 0.55;
+  border-color: #e0e0e0;
+}
+
+.file-item.expired:hover {
+  border-color: #e94560;
+}
+
+.file-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #222);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  font-size: 11px;
+  color: var(--text-muted, #999);
+  margin-top: 2px;
+}
+
+.file-expiry.expired-text {
+  color: #e94560;
+  font-weight: 500;
+}
+
+.file-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* File expiry notification banner */
+.file-expiry-banner {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  background: #fff3cd;
+  color: #856404;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 2000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  cursor: pointer;
+  max-width: 320px;
+  animation: fileExpiryBannerIn 0.3s ease-out;
+}
+@keyframes fileExpiryBannerIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Drop zone for drag-and-drop upload */
+.drop-zone {
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover,
+.drop-zone.drop-zone-active {
+  border-color: var(--color-primary, #4facfe);
+  background: rgba(79, 172, 254, 0.05);
+}
+.drop-zone-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.drop-zone-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #222);
+  margin-bottom: 4px;
+}
+.drop-zone-hint {
+  font-size: 11px;
+  color: var(--text-muted, #999);
+}
+
+/* Storage points display */
+.storage-points-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.storage-points-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-primary, #4facfe);
+}

@@ -1,0 +1,1456 @@
+{
+  "backupVersion": 8,
+  "createdAt": "2026-06-04T06:45:00.557Z",
+  "state": {
+    "history": [
+      {
+        "id": "mpz3xe08",
+        "date": "2026/6/4 14:21:21",
+        "rate": 50,
+        "total": 13,
+        "wrong": 5,
+        "correct": 8,
+        "chapterId": "ch_mpy4hf4q33",
+        "questions": [
+          {
+            "tag": "消化道平滑肌电生理",
+            "type": "single",
+            "options": [
+              "壁细胞",
+              "G细胞",
+              "Cajal细胞",
+              "主细胞"
+            ],
+            "question": "消化道平滑肌慢波电位（基本电节律）的起搏细胞是：",
+            "isCorrect": true,
+            "userAnswer": 2,
+            "explanation": "Cajal细胞位于纵行肌与环形肌之间，是慢波电位的起源。来源：课件PPT第21页；教师发言多次强调。"
+          },
+          {
+            "tag": "胃液分泌调节",
+            "type": "single",
+            "options": [
+              "头期",
+              "胃期",
+              "肠期",
+              "吸收期"
+            ],
+            "question": "在消化期胃液分泌的三个时期中，分泌量最大、酸度和酶含量都很高的是：",
+            "isCorrect": false,
+            "userAnswer": 2,
+            "explanation": "胃期通过神经调节（迷走-迷走反射+局部反射）和体液调节（胃泌素），其分泌量最大，酸度和酶含量很高。来源：课件PPT第36页。"
+          },
+          {
+            "tag": "脂肪吸收",
+            "type": "single",
+            "options": [
+              "所有脂肪酸均直接进入血液",
+              "中短链脂肪酸进入淋巴，长链脂肪酸进入血液",
+              "中短链脂肪酸直接进入血液，长链脂肪酸形成乳糜微粒进入淋巴",
+              "所有脂肪酸均形成乳糜微粒进入淋巴"
+            ],
+            "question": "关于脂肪吸收途径的描述，正确的是：",
+            "isCorrect": false,
+            "userAnswer": 1,
+            "explanation": "中短链脂肪酸水溶性，直接进入血液；长链脂肪酸和甘油一酯形成乳糜微粒，进入淋巴管（乳糜管）。来源：课件PPT第41页；教师发言重点。"
+          },
+          {
+            "tag": "胃液成分",
+            "type": "single",
+            "options": [
+              "盐酸",
+              "胃蛋白酶原",
+              "内因子",
+              "黏液"
+            ],
+            "question": "胃液中缺乏哪种物质会导致维生素B12吸收障碍，进而引起巨幼细胞性贫血？",
+            "isCorrect": true,
+            "userAnswer": 2,
+            "explanation": "内因子由壁细胞分泌，与维生素B12结合形成复合物，保护其不被消化并促进其在回肠吸收。缺乏内因子会导致维生素B12缺乏。来源：课件PPT第34页；易混淆点总结。"
+          },
+          {
+            "tag": "消化腺功能",
+            "type": "single",
+            "options": [
+              "胰液",
+              "胃液",
+              "胆汁",
+              "小肠液"
+            ],
+            "question": "下列哪种消化液不含消化酶，但对脂肪的消化和吸收至关重要？",
+            "isCorrect": true,
+            "userAnswer": 2,
+            "explanation": "胆汁不含消化酶，但其中的胆盐能乳化脂肪，增加酶作用面积，并促进脂肪及脂溶性维生素的吸收。来源：课件PPT第39页；易混淆点总结。"
+          },
+          {
+            "tag": "消化道平滑肌特性",
+            "type": "judge",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "消化道平滑肌对电刺激特别敏感，而对牵张、温度和化学刺激不敏感。",
+            "isCorrect": false,
+            "userAnswer": 0,
+            "explanation": "消化道平滑肌对电刺激不敏感，但对牵张、温度、化学刺激特别敏感。来源：课件PPT第20页。"
+          },
+          {
+            "tag": "神经支配",
+            "type": "judge",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "交感神经兴奋时促进消化腺分泌和胃肠运动，副交感神经兴奋时抑制消化活动。",
+            "isCorrect": false,
+            "userAnswer": 0,
+            "explanation": "副交感神经（迷走神经）促进消化，对应“休养生息”；交感神经抑制消化，对应“应激战斗”。来源：课件PPT第25页；教师发言强调。"
+          },
+          {
+            "tag": "胃液分泌机制",
+            "type": "judge",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "胃酸分泌时，壁细胞将H+泵入胃腔的同时，会将HCO3-排入血液，导致血液暂时碱化，称为“餐后碱潮”。",
+            "isCorrect": true,
+            "userAnswer": 0,
+            "explanation": "这是胃酸分泌的伴随现象，称为餐后碱潮。来源：课件PPT第33页。"
+          },
+          {
+            "tag": "糖的吸收",
+            "type": "judge",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "葡萄糖在小肠的吸收属于继发性主动转运，依赖于Na+的电化学梯度。",
+            "isCorrect": true,
+            "userAnswer": 0,
+            "explanation": "葡萄糖通过Na+-葡萄糖协同转运蛋白进行继发性主动转运进入细胞。来源：课件PPT第41页。"
+          },
+          {
+            "tag": "胃肠激素",
+            "type": "judge",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "缩胆囊素（CCK）的主要功能是促进胰液（尤其是HCO3-）的分泌。",
+            "isCorrect": false,
+            "userAnswer": 0,
+            "explanation": "促进胰液（尤其是HCO3-）分泌的是促胰液素（Secretin）；缩胆囊素（CCK）主要促进胰酶分泌和胆囊收缩。来源：课件PPT第27页；PPT原题。"
+          },
+          {
+            "tag": "消化道平滑肌电生理",
+            "type": "term",
+            "question": "名词解释：慢波电位（基本电节律）",
+            "isCorrect": true,
+            "userAnswer": "0",
+            "explanation": "在静息电位基础上产生的节律性、自发性去极化波。它本身不引起肌肉收缩，但反映平滑肌兴奋性的周期性变化。当慢波使膜电位接近阈电位时，可触发动作电位从而引起收缩。起源于Cajal细胞。来源：课件PPT第21页。"
+          },
+          {
+            "tag": "胃液成分",
+            "type": "term",
+            "question": "名词解释：内因子",
+            "isCorrect": true,
+            "userAnswer": "0",
+            "explanation": "由胃壁细胞分泌的一种糖蛋白。它能与维生素B12结合形成复合物，保护维生素B12不被消化酶破坏，并促进其在回肠末端的吸收。缺乏内因子会导致维生素B12吸收障碍，引起巨幼细胞性贫血。来源：课件PPT第34页。"
+          },
+          {
+            "tag": "胃液分泌调节",
+            "type": "short",
+            "question": "简述消化期胃液分泌的三个时期及其主要特点。",
+            "isCorrect": true,
+            "userAnswer": "0",
+            "explanation": "1. 头期：由食物的色香味刺激引起，通过神经调节（迷走神经）和神经-体液调节（胃泌素）。特点是持续时间长、分泌量多、酸度和酶含量均很高。\n2. 胃期：食物进入胃后刺激胃壁引起，通过神经调节（迷走-迷走反射、局部反射）和体液调节（胃泌素）。特点是分泌量最大，酸度和酶含量很高。\n3. 肠期：食糜进入小肠后引起，主要通过体液调节（胃泌素、肠泌酸素）。特点是量少，酸度不高，消化力不强。来源：课件PPT第36页。"
+          }
+        ]
+      },
+      {
+        "id": "mpz4rdls",
+        "chapterId": "ch_mpy4hid3hv",
+        "date": "2026/6/4 14:44:40",
+        "total": 4,
+        "correct": 3,
+        "wrong": 1,
+        "rate": 50,
+        "questions": [
+          {
+            "question": "关于Na⁺-K⁺泵（钠钾泵）的工作机制，下列描述正确的是？",
+            "type": "single",
+            "tag": "Na⁺-K⁺泵",
+            "userAnswer": 2,
+            "explanation": "根据资料中“Na⁺-K⁺泵”部分，其工作机制为：每分解1个ATP分子，将3个Na⁺泵出细胞外，2个K⁺泵入细胞内。来源：第二部分-二、Na⁺-K⁺泵。",
+            "options": [
+              "每分解1个ATP分子，将2个Na⁺泵出细胞外，3个K⁺泵入细胞内",
+              "每分解1个ATP分子，将3个Na⁺泵出细胞外，2个K⁺泵入细胞内",
+              "每分解1个ATP分子，将3个Na⁺泵入细胞内，2个K⁺泵出细胞外",
+              "每分解1个ATP分子，将2个Na⁺泵入细胞内，3个K⁺泵出细胞外"
+            ],
+            "isCorrect": false
+          },
+          {
+            "question": "动作电位具有“全或无”特性，即一旦刺激达到阈电位，动作电位即以最大幅度爆发，且其幅度不随刺激强度的增加而增大。",
+            "type": "judge",
+            "tag": "动作电位特性",
+            "userAnswer": 0,
+            "explanation": "资料明确指出：动作电位的“全或无”特性是指一旦刺激达到阈电位，动作电位即以最大幅度爆发；刺激强度低于阈值则不产生；一旦产生，幅度不随刺激强度增加而增大。来源：第二部分-三、3. 动作电位的“全或无”特性。",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "isCorrect": true
+          },
+          {
+            "question": "名词解释：肌小节（Sarcomere）",
+            "type": "term",
+            "tag": "肌小节",
+            "userAnswer": "0",
+            "explanation": "肌小节是两条Z线之间的区域，由1/2明带+暗带+1/2明带组成，是骨骼肌收缩和舒张的基本功能单位。来源：第三部分-三、1. 肌小节。",
+            "isCorrect": true
+          },
+          {
+            "question": "简述静息电位（Resting Potential）产生的主要离子机制。",
+            "type": "short",
+            "tag": "静息电位机制",
+            "userAnswer": "0",
+            "explanation": "静息电位产生的主要机制是K⁺的平衡电位。在静息状态下，细胞膜对K⁺的通透性远大于Na⁺。由于细胞内K⁺浓度远高于细胞外，K⁺顺浓度梯度外流，导致正电荷留在膜外，负电荷（如蛋白质阴离子）留在膜内，从而形成外正内负的电位差。虽然还有少量Na⁺内流和Na⁺-K⁺泵的贡献，但静息电位主要接近于K⁺的平衡电位。来源：第二部分-一、2. 产生机制。",
+            "isCorrect": true
+          }
+        ]
+      }
+    ],
+    "notices": [
+      {
+        "id": 4,
+        "content": "我们目前无法处理图片信息，所以如果你上传的资料中有图片内容，建议先分析转化为文字",
+        "type": "warning",
+        "link": null,
+        "sort_order": 0,
+        "duration": 5000
+      },
+      {
+        "id": 6,
+        "content": "ecnu-max对应DeepSeek-V4-Flash；ecnu-plus对应Qwen3.6-27B",
+        "type": "notice",
+        "link": null,
+        "sort_order": 0,
+        "duration": 2500
+      },
+      {
+        "id": 10,
+        "content": "在答题过程中刷新页面会导致答题状态丢失，这一操作目前无法恢复",
+        "type": "warning",
+        "link": null,
+        "sort_order": 0,
+        "duration": 6000
+      },
+      {
+        "id": 19,
+        "content": "点击此处查看模型状态",
+        "type": "tip",
+        "link": "https://chat.ecnu.edu.cn/status",
+        "sort_order": 0,
+        "duration": 4000
+      }
+    ],
+    "srsData": {
+      "ch_mpy4hf4q33:9u1uda": {
+        "interval": 1,
+        "easeFactor": 2.0999999999999996,
+        "nextReview": 1780640481321,
+        "repetitions": 0
+      },
+      "ch_mpy4hf4q33:f3kgv1": {
+        "interval": 3,
+        "easeFactor": 2.5,
+        "nextReview": 1780640481321,
+        "repetitions": 2
+      },
+      "ch_mpy4hf4q33:vnzu69": {
+        "interval": 3,
+        "easeFactor": 2.5,
+        "nextReview": 1780640481321,
+        "repetitions": 2
+      },
+      "exam_mpyu3n9j:3mp2ww": {
+        "interval": 1,
+        "easeFactor": 2.3,
+        "nextReview": 1780623999641,
+        "repetitions": 0
+      },
+      "exam_mpyu3n9j:mxxb56": {
+        "interval": 1,
+        "easeFactor": 2.3,
+        "nextReview": 1780623999641,
+        "repetitions": 0
+      },
+      "exam_mpyu3n9j:vl0ssm": {
+        "interval": 1,
+        "easeFactor": 2.3,
+        "nextReview": 1780623999641,
+        "repetitions": 0
+      },
+      "exam_mpyu3n9j:w0dt66": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "nextReview": 1780623999641,
+        "repetitions": 1
+      },
+      "ch_mpy4hf4q33:-8c41pg": {
+        "interval": 1,
+        "easeFactor": 2.0999999999999996,
+        "nextReview": 1780640481321,
+        "repetitions": 0
+      },
+      "ch_mpy4hf4q33:-f67kh8": {
+        "interval": 3,
+        "easeFactor": 2.5,
+        "nextReview": 1780640481321,
+        "repetitions": 2
+      },
+      "ch_mpy4hf4q33:-fpxk2t": {
+        "interval": 3,
+        "easeFactor": 2.5,
+        "nextReview": 1780640481321,
+        "repetitions": 2
+      },
+      "ch_mpy4hf4q33:-hkepz4": {
+        "interval": 1,
+        "easeFactor": 2.0999999999999996,
+        "nextReview": 1780640481321,
+        "repetitions": 0
+      },
+      "ch_mpy4hf4q33:-mgfc50": {
+        "interval": 1,
+        "easeFactor": 2.0999999999999996,
+        "nextReview": 1780640481321,
+        "repetitions": 0
+      },
+      "ch_mpy4hf4q33:-o1e92s": {
+        "interval": 1,
+        "easeFactor": 2.0999999999999996,
+        "nextReview": 1780640481321,
+        "repetitions": 0
+      },
+      "ch_mpy4hf4q33:-peud82": {
+        "interval": 3,
+        "easeFactor": 2.5,
+        "nextReview": 1780640481321,
+        "repetitions": 2
+      },
+      "exam_mpyu3n9j:-82k01k": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "nextReview": 1780623999641,
+        "repetitions": 1
+      },
+      "exam_mpyu3n9j:-ag5xer": {
+        "interval": 1,
+        "easeFactor": 2.3,
+        "nextReview": 1780623999641,
+        "repetitions": 0
+      },
+      "exam_mpyu3n9j:-qwf3gu": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "nextReview": 1780623999641,
+        "repetitions": 1
+      },
+      "exam_mpyu3n9j:-tr3dzr": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "nextReview": 1780623999641,
+        "repetitions": 1
+      },
+      "ch_mpy4hid3hv:-ypo166": {
+        "interval": 1,
+        "easeFactor": 2.3,
+        "repetitions": 0,
+        "nextReview": 1780641880480
+      },
+      "ch_mpy4hid3hv:-6eu447": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "repetitions": 1,
+        "nextReview": 1780641880480
+      }
+    },
+    "aiConfig": {
+      "model": "ecnu-plus",
+      "apiKey": "sk-894508ed303545daa49926652ec3d286",
+      "apiKeySet": true,
+      "streamMode": false,
+      "strictFormat": true,
+      "systemPrompt": "",
+      "taskInterval": 30,
+      "streamThreshold": 3
+    },
+    "chapters": {
+      "ch_mpy4healoy": {
+        "id": "ch_mpy4healoy",
+        "name": "章节 1",
+        "strategy": {
+          "errPct": 40,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 40,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "createdAt": 1780494548637,
+        "questions": [],
+        "currentIdx": 0,
+        "userAnswers": []
+      },
+      "ch_mpy4hf4q33": {
+        "id": "ch_mpy4hf4q33",
+        "name": "章节 2",
+        "quizSets": [
+          {
+            "createdAt": 1780554034691,
+            "questions": [
+              {
+                "id": 1,
+                "tag": "消化道平滑肌电生理",
+                "type": "single",
+                "answer": 2,
+                "options": [
+                  "壁细胞",
+                  "G细胞",
+                  "Cajal细胞",
+                  "主细胞"
+                ],
+                "question": "消化道平滑肌慢波电位（基本电节律）的起搏细胞是：",
+                "explanation": "Cajal细胞位于纵行肌与环形肌之间，是慢波电位的起源。来源：课件PPT第21页；教师发言多次强调。"
+              },
+              {
+                "id": 2,
+                "tag": "胃液分泌调节",
+                "type": "single",
+                "answer": 1,
+                "options": [
+                  "头期",
+                  "胃期",
+                  "肠期",
+                  "吸收期"
+                ],
+                "question": "在消化期胃液分泌的三个时期中，分泌量最大、酸度和酶含量都很高的是：",
+                "explanation": "胃期通过神经调节（迷走-迷走反射+局部反射）和体液调节（胃泌素），其分泌量最大，酸度和酶含量很高。来源：课件PPT第36页。"
+              },
+              {
+                "id": 3,
+                "tag": "脂肪吸收",
+                "type": "single",
+                "answer": 2,
+                "options": [
+                  "所有脂肪酸均直接进入血液",
+                  "中短链脂肪酸进入淋巴，长链脂肪酸进入血液",
+                  "中短链脂肪酸直接进入血液，长链脂肪酸形成乳糜微粒进入淋巴",
+                  "所有脂肪酸均形成乳糜微粒进入淋巴"
+                ],
+                "question": "关于脂肪吸收途径的描述，正确的是：",
+                "explanation": "中短链脂肪酸水溶性，直接进入血液；长链脂肪酸和甘油一酯形成乳糜微粒，进入淋巴管（乳糜管）。来源：课件PPT第41页；教师发言重点。"
+              },
+              {
+                "id": 4,
+                "tag": "胃液成分",
+                "type": "single",
+                "answer": 2,
+                "options": [
+                  "盐酸",
+                  "胃蛋白酶原",
+                  "内因子",
+                  "黏液"
+                ],
+                "question": "胃液中缺乏哪种物质会导致维生素B12吸收障碍，进而引起巨幼细胞性贫血？",
+                "explanation": "内因子由壁细胞分泌，与维生素B12结合形成复合物，保护其不被消化并促进其在回肠吸收。缺乏内因子会导致维生素B12缺乏。来源：课件PPT第34页；易混淆点总结。"
+              },
+              {
+                "id": 5,
+                "tag": "消化腺功能",
+                "type": "single",
+                "answer": 2,
+                "options": [
+                  "胰液",
+                  "胃液",
+                  "胆汁",
+                  "小肠液"
+                ],
+                "question": "下列哪种消化液不含消化酶，但对脂肪的消化和吸收至关重要？",
+                "explanation": "胆汁不含消化酶，但其中的胆盐能乳化脂肪，增加酶作用面积，并促进脂肪及脂溶性维生素的吸收。来源：课件PPT第39页；易混淆点总结。"
+              },
+              {
+                "id": 6,
+                "tag": "消化道平滑肌特性",
+                "type": "judge",
+                "answer": 1,
+                "options": [
+                  "正确",
+                  "错误"
+                ],
+                "question": "消化道平滑肌对电刺激特别敏感，而对牵张、温度和化学刺激不敏感。",
+                "explanation": "消化道平滑肌对电刺激不敏感，但对牵张、温度、化学刺激特别敏感。来源：课件PPT第20页。"
+              },
+              {
+                "id": 7,
+                "tag": "神经支配",
+                "type": "judge",
+                "answer": 1,
+                "options": [
+                  "正确",
+                  "错误"
+                ],
+                "question": "交感神经兴奋时促进消化腺分泌和胃肠运动，副交感神经兴奋时抑制消化活动。",
+                "explanation": "副交感神经（迷走神经）促进消化，对应“休养生息”；交感神经抑制消化，对应“应激战斗”。来源：课件PPT第25页；教师发言强调。"
+              },
+              {
+                "id": 8,
+                "tag": "胃液分泌机制",
+                "type": "judge",
+                "answer": 0,
+                "options": [
+                  "正确",
+                  "错误"
+                ],
+                "question": "胃酸分泌时，壁细胞将H+泵入胃腔的同时，会将HCO3-排入血液，导致血液暂时碱化，称为“餐后碱潮”。",
+                "explanation": "这是胃酸分泌的伴随现象，称为餐后碱潮。来源：课件PPT第33页。"
+              },
+              {
+                "id": 9,
+                "tag": "糖的吸收",
+                "type": "judge",
+                "answer": 0,
+                "options": [
+                  "正确",
+                  "错误"
+                ],
+                "question": "葡萄糖在小肠的吸收属于继发性主动转运，依赖于Na+的电化学梯度。",
+                "explanation": "葡萄糖通过Na+-葡萄糖协同转运蛋白进行继发性主动转运进入细胞。来源：课件PPT第41页。"
+              },
+              {
+                "id": 10,
+                "tag": "胃肠激素",
+                "type": "judge",
+                "answer": 1,
+                "options": [
+                  "正确",
+                  "错误"
+                ],
+                "question": "缩胆囊素（CCK）的主要功能是促进胰液（尤其是HCO3-）的分泌。",
+                "explanation": "促进胰液（尤其是HCO3-）分泌的是促胰液素（Secretin）；缩胆囊素（CCK）主要促进胰酶分泌和胆囊收缩。来源：课件PPT第27页；PPT原题。"
+              },
+              {
+                "id": 11,
+                "tag": "消化道平滑肌电生理",
+                "type": "term",
+                "question": "名词解释：慢波电位（基本电节律）",
+                "explanation": "在静息电位基础上产生的节律性、自发性去极化波。它本身不引起肌肉收缩，但反映平滑肌兴奋性的周期性变化。当慢波使膜电位接近阈电位时，可触发动作电位从而引起收缩。起源于Cajal细胞。来源：课件PPT第21页。"
+              },
+              {
+                "id": 12,
+                "tag": "胃液成分",
+                "type": "term",
+                "question": "名词解释：内因子",
+                "explanation": "由胃壁细胞分泌的一种糖蛋白。它能与维生素B12结合形成复合物，保护维生素B12不被消化酶破坏，并促进其在回肠末端的吸收。缺乏内因子会导致维生素B12吸收障碍，引起巨幼细胞性贫血。来源：课件PPT第34页。"
+              },
+              {
+                "id": 13,
+                "tag": "胃液分泌调节",
+                "type": "short",
+                "question": "简述消化期胃液分泌的三个时期及其主要特点。",
+                "explanation": "1. 头期：由食物的色香味刺激引起，通过神经调节（迷走神经）和神经-体液调节（胃泌素）。特点是持续时间长、分泌量多、酸度和酶含量均很高。\n2. 胃期：食物进入胃后刺激胃壁引起，通过神经调节（迷走-迷走反射、局部反射）和体液调节（胃泌素）。特点是分泌量最大，酸度和酶含量很高。\n3. 肠期：食糜进入小肠后引起，主要通过体液调节（胃泌素、肠泌酸素）。特点是量少，酸度不高，消化力不强。来源：课件PPT第36页。"
+              }
+            ],
+            "currentIdx": 12,
+            "userAnswers": [
+              2,
+              2,
+              1,
+              2,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ],
+        "strategy": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [
+            {
+              "name": "胃液分泌调节",
+              "active": true
+            },
+            {
+              "name": "脂肪吸收",
+              "active": true
+            },
+            {
+              "name": "消化道平滑肌特性",
+              "active": true
+            },
+            {
+              "name": "神经支配",
+              "active": true
+            },
+            {
+              "name": "胃肠激素",
+              "active": true
+            }
+          ],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 2,
+            "judge": 5,
+            "short": 1,
+            "single": 5
+          }
+        },
+        "createdAt": 1780494549722,
+        "questions": [
+          {
+            "id": 1,
+            "tag": "消化道平滑肌电生理",
+            "type": "single",
+            "answer": 2,
+            "options": [
+              "壁细胞",
+              "G细胞",
+              "Cajal细胞",
+              "主细胞"
+            ],
+            "question": "消化道平滑肌慢波电位（基本电节律）的起搏细胞是：",
+            "explanation": "Cajal细胞位于纵行肌与环形肌之间，是慢波电位的起源。来源：课件PPT第21页；教师发言多次强调。"
+          },
+          {
+            "id": 2,
+            "tag": "胃液分泌调节",
+            "type": "single",
+            "answer": 1,
+            "options": [
+              "头期",
+              "胃期",
+              "肠期",
+              "吸收期"
+            ],
+            "question": "在消化期胃液分泌的三个时期中，分泌量最大、酸度和酶含量都很高的是：",
+            "explanation": "胃期通过神经调节（迷走-迷走反射+局部反射）和体液调节（胃泌素），其分泌量最大，酸度和酶含量很高。来源：课件PPT第36页。"
+          },
+          {
+            "id": 3,
+            "tag": "脂肪吸收",
+            "type": "single",
+            "answer": 2,
+            "options": [
+              "所有脂肪酸均直接进入血液",
+              "中短链脂肪酸进入淋巴，长链脂肪酸进入血液",
+              "中短链脂肪酸直接进入血液，长链脂肪酸形成乳糜微粒进入淋巴",
+              "所有脂肪酸均形成乳糜微粒进入淋巴"
+            ],
+            "question": "关于脂肪吸收途径的描述，正确的是：",
+            "explanation": "中短链脂肪酸水溶性，直接进入血液；长链脂肪酸和甘油一酯形成乳糜微粒，进入淋巴管（乳糜管）。来源：课件PPT第41页；教师发言重点。"
+          },
+          {
+            "id": 4,
+            "tag": "胃液成分",
+            "type": "single",
+            "answer": 2,
+            "options": [
+              "盐酸",
+              "胃蛋白酶原",
+              "内因子",
+              "黏液"
+            ],
+            "question": "胃液中缺乏哪种物质会导致维生素B12吸收障碍，进而引起巨幼细胞性贫血？",
+            "explanation": "内因子由壁细胞分泌，与维生素B12结合形成复合物，保护其不被消化并促进其在回肠吸收。缺乏内因子会导致维生素B12缺乏。来源：课件PPT第34页；易混淆点总结。"
+          },
+          {
+            "id": 5,
+            "tag": "消化腺功能",
+            "type": "single",
+            "answer": 2,
+            "options": [
+              "胰液",
+              "胃液",
+              "胆汁",
+              "小肠液"
+            ],
+            "question": "下列哪种消化液不含消化酶，但对脂肪的消化和吸收至关重要？",
+            "explanation": "胆汁不含消化酶，但其中的胆盐能乳化脂肪，增加酶作用面积，并促进脂肪及脂溶性维生素的吸收。来源：课件PPT第39页；易混淆点总结。"
+          },
+          {
+            "id": 6,
+            "tag": "消化道平滑肌特性",
+            "type": "judge",
+            "answer": 1,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "消化道平滑肌对电刺激特别敏感，而对牵张、温度和化学刺激不敏感。",
+            "explanation": "消化道平滑肌对电刺激不敏感，但对牵张、温度、化学刺激特别敏感。来源：课件PPT第20页。"
+          },
+          {
+            "id": 7,
+            "tag": "神经支配",
+            "type": "judge",
+            "answer": 1,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "交感神经兴奋时促进消化腺分泌和胃肠运动，副交感神经兴奋时抑制消化活动。",
+            "explanation": "副交感神经（迷走神经）促进消化，对应“休养生息”；交感神经抑制消化，对应“应激战斗”。来源：课件PPT第25页；教师发言强调。"
+          },
+          {
+            "id": 8,
+            "tag": "胃液分泌机制",
+            "type": "judge",
+            "answer": 0,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "胃酸分泌时，壁细胞将H+泵入胃腔的同时，会将HCO3-排入血液，导致血液暂时碱化，称为“餐后碱潮”。",
+            "explanation": "这是胃酸分泌的伴随现象，称为餐后碱潮。来源：课件PPT第33页。"
+          },
+          {
+            "id": 9,
+            "tag": "糖的吸收",
+            "type": "judge",
+            "answer": 0,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "葡萄糖在小肠的吸收属于继发性主动转运，依赖于Na+的电化学梯度。",
+            "explanation": "葡萄糖通过Na+-葡萄糖协同转运蛋白进行继发性主动转运进入细胞。来源：课件PPT第41页。"
+          },
+          {
+            "id": 10,
+            "tag": "胃肠激素",
+            "type": "judge",
+            "answer": 1,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "缩胆囊素（CCK）的主要功能是促进胰液（尤其是HCO3-）的分泌。",
+            "explanation": "促进胰液（尤其是HCO3-）分泌的是促胰液素（Secretin）；缩胆囊素（CCK）主要促进胰酶分泌和胆囊收缩。来源：课件PPT第27页；PPT原题。"
+          },
+          {
+            "id": 11,
+            "tag": "消化道平滑肌电生理",
+            "type": "term",
+            "question": "名词解释：慢波电位（基本电节律）",
+            "explanation": "在静息电位基础上产生的节律性、自发性去极化波。它本身不引起肌肉收缩，但反映平滑肌兴奋性的周期性变化。当慢波使膜电位接近阈电位时，可触发动作电位从而引起收缩。起源于Cajal细胞。来源：课件PPT第21页。"
+          },
+          {
+            "id": 12,
+            "tag": "胃液成分",
+            "type": "term",
+            "question": "名词解释：内因子",
+            "explanation": "由胃壁细胞分泌的一种糖蛋白。它能与维生素B12结合形成复合物，保护维生素B12不被消化酶破坏，并促进其在回肠末端的吸收。缺乏内因子会导致维生素B12吸收障碍，引起巨幼细胞性贫血。来源：课件PPT第34页。"
+          },
+          {
+            "id": 13,
+            "tag": "胃液分泌调节",
+            "type": "short",
+            "question": "简述消化期胃液分泌的三个时期及其主要特点。",
+            "explanation": "1. 头期：由食物的色香味刺激引起，通过神经调节（迷走神经）和神经-体液调节（胃泌素）。特点是持续时间长、分泌量多、酸度和酶含量均很高。\n2. 胃期：食物进入胃后刺激胃壁引起，通过神经调节（迷走-迷走反射、局部反射）和体液调节（胃泌素）。特点是分泌量最大，酸度和酶含量很高。\n3. 肠期：食糜进入小肠后引起，主要通过体液调节（胃泌素、肠泌酸素）。特点是量少，酸度不高，消化力不强。来源：课件PPT第36页。"
+          }
+        ],
+        "currentIdx": 0,
+        "userAnswers": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "currentQuizSetIdx": 0
+      },
+      "ch_mpy4hid3hv": {
+        "id": "ch_mpy4hid3hv",
+        "name": "章节 3",
+        "strategy": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [
+            {
+              "name": "Na⁺-K⁺泵",
+              "active": true
+            }
+          ],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 1,
+            "judge": 1,
+            "short": 1,
+            "single": 1
+          }
+        },
+        "createdAt": 1780494553911,
+        "questions": [
+          {
+            "id": 1,
+            "type": "single",
+            "tag": "Na⁺-K⁺泵",
+            "question": "关于Na⁺-K⁺泵（钠钾泵）的工作机制，下列描述正确的是？",
+            "options": [
+              "每分解1个ATP分子，将2个Na⁺泵出细胞外，3个K⁺泵入细胞内",
+              "每分解1个ATP分子，将3个Na⁺泵出细胞外，2个K⁺泵入细胞内",
+              "每分解1个ATP分子，将3个Na⁺泵入细胞内，2个K⁺泵出细胞外",
+              "每分解1个ATP分子，将2个Na⁺泵入细胞内，3个K⁺泵出细胞外"
+            ],
+            "answer": 1,
+            "explanation": "根据资料中“Na⁺-K⁺泵”部分，其工作机制为：每分解1个ATP分子，将3个Na⁺泵出细胞外，2个K⁺泵入细胞内。来源：第二部分-二、Na⁺-K⁺泵。"
+          },
+          {
+            "id": 2,
+            "type": "judge",
+            "tag": "动作电位特性",
+            "question": "动作电位具有“全或无”特性，即一旦刺激达到阈电位，动作电位即以最大幅度爆发，且其幅度不随刺激强度的增加而增大。",
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "answer": 0,
+            "explanation": "资料明确指出：动作电位的“全或无”特性是指一旦刺激达到阈电位，动作电位即以最大幅度爆发；刺激强度低于阈值则不产生；一旦产生，幅度不随刺激强度增加而增大。来源：第二部分-三、3. 动作电位的“全或无”特性。"
+          },
+          {
+            "id": 3,
+            "type": "term",
+            "tag": "肌小节",
+            "question": "名词解释：肌小节（Sarcomere）",
+            "explanation": "肌小节是两条Z线之间的区域，由1/2明带+暗带+1/2明带组成，是骨骼肌收缩和舒张的基本功能单位。来源：第三部分-三、1. 肌小节。"
+          },
+          {
+            "id": 4,
+            "type": "short",
+            "tag": "静息电位机制",
+            "question": "简述静息电位（Resting Potential）产生的主要离子机制。",
+            "explanation": "静息电位产生的主要机制是K⁺的平衡电位。在静息状态下，细胞膜对K⁺的通透性远大于Na⁺。由于细胞内K⁺浓度远高于细胞外，K⁺顺浓度梯度外流，导致正电荷留在膜外，负电荷（如蛋白质阴离子）留在膜内，从而形成外正内负的电位差。虽然还有少量Na⁺内流和Na⁺-K⁺泵的贡献，但静息电位主要接近于K⁺的平衡电位。来源：第二部分-一、2. 产生机制。"
+          }
+        ],
+        "currentIdx": 0,
+        "userAnswers": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "quizSets": [
+          {
+            "questions": [
+              {
+                "id": 1,
+                "type": "single",
+                "tag": "Na⁺-K⁺泵",
+                "question": "关于Na⁺-K⁺泵（钠钾泵）的工作机制，下列描述正确的是？",
+                "options": [
+                  "每分解1个ATP分子，将2个Na⁺泵出细胞外，3个K⁺泵入细胞内",
+                  "每分解1个ATP分子，将3个Na⁺泵出细胞外，2个K⁺泵入细胞内",
+                  "每分解1个ATP分子，将3个Na⁺泵入细胞内，2个K⁺泵出细胞外",
+                  "每分解1个ATP分子，将2个Na⁺泵入细胞内，3个K⁺泵出细胞外"
+                ],
+                "answer": 1,
+                "explanation": "根据资料中“Na⁺-K⁺泵”部分，其工作机制为：每分解1个ATP分子，将3个Na⁺泵出细胞外，2个K⁺泵入细胞内。来源：第二部分-二、Na⁺-K⁺泵。"
+              },
+              {
+                "id": 2,
+                "type": "judge",
+                "tag": "动作电位特性",
+                "question": "动作电位具有“全或无”特性，即一旦刺激达到阈电位，动作电位即以最大幅度爆发，且其幅度不随刺激强度的增加而增大。",
+                "options": [
+                  "正确",
+                  "错误"
+                ],
+                "answer": 0,
+                "explanation": "资料明确指出：动作电位的“全或无”特性是指一旦刺激达到阈电位，动作电位即以最大幅度爆发；刺激强度低于阈值则不产生；一旦产生，幅度不随刺激强度增加而增大。来源：第二部分-三、3. 动作电位的“全或无”特性。"
+              },
+              {
+                "id": 3,
+                "type": "term",
+                "tag": "肌小节",
+                "question": "名词解释：肌小节（Sarcomere）",
+                "explanation": "肌小节是两条Z线之间的区域，由1/2明带+暗带+1/2明带组成，是骨骼肌收缩和舒张的基本功能单位。来源：第三部分-三、1. 肌小节。"
+              },
+              {
+                "id": 4,
+                "type": "short",
+                "tag": "静息电位机制",
+                "question": "简述静息电位（Resting Potential）产生的主要离子机制。",
+                "explanation": "静息电位产生的主要机制是K⁺的平衡电位。在静息状态下，细胞膜对K⁺的通透性远大于Na⁺。由于细胞内K⁺浓度远高于细胞外，K⁺顺浓度梯度外流，导致正电荷留在膜外，负电荷（如蛋白质阴离子）留在膜内，从而形成外正内负的电位差。虽然还有少量Na⁺内流和Na⁺-K⁺泵的贡献，但静息电位主要接近于K⁺的平衡电位。来源：第二部分-一、2. 产生机制。"
+              }
+            ],
+            "userAnswers": [
+              2,
+              0,
+              "0",
+              "0"
+            ],
+            "currentIdx": 3,
+            "createdAt": 1780555466964
+          }
+        ],
+        "currentQuizSetIdx": 0
+      },
+      "ch_mpy4hny2p0": {
+        "id": "ch_mpy4hny2p0",
+        "name": "章节 4",
+        "strategy": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "createdAt": 1780494561146,
+        "questions": [],
+        "currentIdx": 0,
+        "userAnswers": []
+      },
+      "ch_mpz1oi6zhx": {
+        "id": "ch_mpz1oi6zhx",
+        "name": "章节 1",
+        "strategy": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "createdAt": 1780550307611,
+        "questions": [],
+        "currentIdx": 0,
+        "userAnswers": []
+      },
+      "ch_mpz1oikeov": {
+        "id": "ch_mpz1oikeov",
+        "name": "章节 2",
+        "strategy": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "createdAt": 1780550308094,
+        "questions": [],
+        "currentIdx": 0,
+        "userAnswers": []
+      },
+      "ch_mpz1oj06o5": {
+        "id": "ch_mpz1oj06o5",
+        "name": "章节 3",
+        "strategy": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "createdAt": 1780550308662,
+        "questions": [],
+        "currentIdx": 0,
+        "userAnswers": []
+      }
+    },
+    "settings": {
+      "darkMode": false,
+      "mainFontSize": 17,
+      "quizFontSize": 16,
+      "showNoticeBar": true,
+      "topbarFontSize": 15,
+      "sidebarFontSize": 13
+    },
+    "subjects": {
+      "subj_mpy44m87": {
+        "id": "subj_mpy44m87",
+        "name": "默认科目",
+        "chapterIds": [
+          "ch_mpy4healoy",
+          "ch_mpy4hf4q33",
+          "ch_mpy4hid3hv",
+          "ch_mpy4hny2p0"
+        ]
+      },
+      "subj_mpz1oh0b": {
+        "id": "subj_mpz1oh0b",
+        "name": "科目 2",
+        "chapterIds": [
+          "ch_mpz1oi6zhx",
+          "ch_mpz1oikeov",
+          "ch_mpz1oj06o5"
+        ]
+      }
+    },
+    "userRole": "user",
+    "aiEnabled": true,
+    "lastScreen": "start",
+    "aiTaskQueue": [
+      {
+        "id": "task_1780494697496_id3grte99js",
+        "error": "",
+        "status": "completed",
+        "chapterId": "ch_mpy4hjbhh5",
+        "createdAt": 1780494697496,
+        "promptText": "重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：10 道单选题，5 道判断题，1 道名词解释题，1 道简答题。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 \"single\", \"judge\", \"term\", \"short\"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 [\"正确\", \"错误\"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：0% 针对错题，0% 滚动复习，100% 新考点。\n6. 请在 explanation 中标注来源。\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如：\"三角函数\"、\"牛顿定律\"、\"文艺复兴\"等。",
+        "chapterName": "章节 1",
+        "completedAt": 1780494856894,
+        "materialNames": [
+          "l4第四章消化_ds.docx"
+        ],
+        "questionCount": 17,
+        "strategySnapshot": {
+          "errPct": 0,
+          "newPct": 100,
+          "weakTags": [],
+          "reviewPct": 0,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "streamQuestionCount": 0
+      },
+      {
+        "id": "task_1780497788403_7iw369gr3xe",
+        "error": "",
+        "status": "completed",
+        "chapterId": "ch_mpy4hjbhh5",
+        "createdAt": 1780497788403,
+        "promptText": "重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：10 道单选题，5 道判断题，1 道名词解释题，1 道简答题。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 \"single\", \"judge\", \"term\", \"short\"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 [\"正确\", \"错误\"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：0% 针对错题，0% 滚动复习，100% 新考点。\n6. 请在 explanation 中标注来源。\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如：\"三角函数\"、\"牛顿定律\"、\"文艺复兴\"等。",
+        "chapterName": "章节 1",
+        "completedAt": 1780497820060,
+        "materialNames": [
+          "l4第四章消化_ds.docx"
+        ],
+        "questionCount": 17,
+        "strategySnapshot": {
+          "errPct": 0,
+          "newPct": 100,
+          "weakTags": [],
+          "reviewPct": 0,
+          "typeCounts": {
+            "term": 1,
+            "judge": 5,
+            "short": 1,
+            "single": 10
+          }
+        },
+        "streamQuestionCount": 0
+      },
+      {
+        "id": "task_1780553872364_fwogpa1gsn4",
+        "error": "资料 l3第三章循环_ds.docx 数据丢失",
+        "status": "failed",
+        "chapterId": "ch_mpy4hf4q33",
+        "createdAt": 1780553872364,
+        "promptText": "重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：5 道单选题，5 道判断题，2 道名词解释题，1 道简答题。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 \"single\", \"judge\", \"term\", \"short\"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 [\"正确\", \"错误\"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：60% 针对错题，20% 滚动复习，20% 新考点。\n6. 请在 explanation 中标注来源。\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如：\"三角函数\"、\"牛顿定律\"、\"文艺复兴\"等。",
+        "chapterName": "章节 2",
+        "completedAt": null,
+        "materialNames": [
+          "l3第三章循环_ds.docx"
+        ],
+        "questionCount": 0,
+        "strategySnapshot": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 2,
+            "judge": 5,
+            "short": 1,
+            "single": 5
+          }
+        },
+        "streamQuestionCount": 0
+      },
+      {
+        "id": "task_1780553887096_313jkw9dlzt",
+        "error": "",
+        "status": "completed",
+        "chapterId": "ch_mpy4hf4q33",
+        "createdAt": 1780553887096,
+        "promptText": "重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：5 道单选题，5 道判断题，2 道名词解释题，1 道简答题。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 \"single\", \"judge\", \"term\", \"short\"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 [\"正确\", \"错误\"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：60% 针对错题，20% 滚动复习，20% 新考点。\n6. 请在 explanation 中标注来源。\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如：\"三角函数\"、\"牛顿定律\"、\"文艺复兴\"等。",
+        "chapterName": "章节 2",
+        "completedAt": 1780554034691,
+        "materialNames": [
+          "l4第四章消化_ds.docx"
+        ],
+        "questionCount": 13,
+        "strategySnapshot": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 2,
+            "judge": 5,
+            "short": 1,
+            "single": 5
+          }
+        },
+        "streamQuestionCount": 0
+      },
+      {
+        "id": "task_1780555386625_m1ex00plmx",
+        "chapterId": "ch_mpy4hf4q33",
+        "chapterName": "章节 2",
+        "status": "failed",
+        "promptText": "重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：5 道单选题，5 道判断题，2 道名词解释题，1 道简答题。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 \"single\", \"judge\", \"term\", \"short\"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 [\"正确\", \"错误\"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：60% 针对错题，20% 滚动复习，20% 新考点。\n6. 请在 explanation 中标注来源。\n7. 【薄弱点重点出题】请重点针对以下知识点标签出题：胃液分泌调节、脂肪吸收、消化道平滑肌特性、神经支配、胃肠激素。确保这些知识点在题目中得到充分覆盖。\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如：\"三角函数\"、\"牛顿定律\"、\"文艺复兴\"等。\n\n【已有知识点标签】胃液分泌调节、脂肪吸收、消化道平滑肌特性、神经支配、胃肠激素\n如果题目知识点与以上已有标签相似，请优先使用已有标签名称；如果是全新知识点，再创建新标签。",
+        "materialNames": [
+          "l4第四章消化_ds.docx"
+        ],
+        "strategySnapshot": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [
+            {
+              "name": "胃液分泌调节",
+              "active": true
+            },
+            {
+              "name": "脂肪吸收",
+              "active": true
+            },
+            {
+              "name": "消化道平滑肌特性",
+              "active": true
+            },
+            {
+              "name": "神经支配",
+              "active": true
+            },
+            {
+              "name": "胃肠激素",
+              "active": true
+            }
+          ],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 2,
+            "judge": 5,
+            "short": 1,
+            "single": 5
+          }
+        },
+        "createdAt": 1780555386625,
+        "completedAt": null,
+        "questionCount": 0,
+        "error": "资料 l4第四章消化_ds.docx 数据丢失",
+        "streamQuestionCount": 0,
+        "streamSetRef": null
+      },
+      {
+        "id": "task_1780555439036_oepxo6fhsd",
+        "chapterId": "ch_mpy4hid3hv",
+        "chapterName": "章节 3",
+        "status": "completed",
+        "promptText": "重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：1 道单选题，1 道判断题，1 道名词解释题，1 道简答题。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 \"single\", \"judge\", \"term\", \"short\"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 [\"正确\", \"错误\"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：60% 针对错题，20% 滚动复习，20% 新考点。\n6. 请在 explanation 中标注来源。\n7. 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如：\"三角函数\"、\"牛顿定律\"、\"文艺复兴\"等。",
+        "materialNames": [
+          "l2第二章运动_ds.docx"
+        ],
+        "strategySnapshot": {
+          "errPct": 60,
+          "newPct": 20,
+          "weakTags": [],
+          "reviewPct": 20,
+          "typeCounts": {
+            "term": 1,
+            "judge": 1,
+            "short": 1,
+            "single": 1
+          }
+        },
+        "createdAt": 1780555439036,
+        "completedAt": 1780555466964,
+        "questionCount": 4,
+        "error": "",
+        "streamQuestionCount": 0,
+        "streamSetRef": null
+      }
+    ],
+    "quizSession": null,
+    "achievements": {
+      "history": [
+        {
+          "id": "two_subjects",
+          "date": "2026/6/3 21:39:17"
+        },
+        {
+          "id": "five_subjects",
+          "date": "2026/6/3 21:40:09"
+        },
+        {
+          "id": "first_step",
+          "date": "2026/6/4 14:21:21"
+        },
+        {
+          "id": "first_correct",
+          "date": "2026/6/4 14:21:21"
+        },
+        {
+          "id": "first_chapter",
+          "date": "2026/6/4 14:21:21"
+        },
+        {
+          "id": "five_answers",
+          "date": "2026/6/4 14:21:21"
+        },
+        {
+          "id": "ten_questions",
+          "date": "2026/6/4 14:21:21"
+        }
+      ],
+      "unlocked": [
+        "two_subjects",
+        "five_subjects",
+        "first_step",
+        "first_correct",
+        "first_chapter",
+        "five_answers",
+        "ten_questions"
+      ]
+    },
+    "ucPrevScreen": "subject-dash",
+    "currentExamId": null,
+    "generatedExams": {
+      "exam_mpyu3n9j": {
+        "id": "exam_mpyu3n9j",
+        "name": "大考卷 2026/6/4 09:46:17",
+        "type": "exam",
+        "createdAt": 1780537577095,
+        "questions": [
+          {
+            "id": 1,
+            "tag": "消化道平滑肌特性",
+            "type": "single",
+            "answer": 1,
+            "options": [
+              "自律性",
+              "紧张性",
+              "伸展性",
+              "对理化刺激敏感"
+            ],
+            "question": "教师曾用“睡觉时胃肠也不会完全松弛，否则就乱掉了”来形象解释消化道平滑肌的哪一生理特性？",
+            "explanation": "紧张性是指平滑肌经常保持微弱持续的收缩状态，维持消化道形状和位置。来源：课件PPT第20页；教师发言。"
+          },
+          {
+            "id": 2,
+            "tag": "胃液分泌",
+            "type": "single",
+            "answer": 1,
+            "options": [
+              "激活胃蛋白酶原",
+              "促进维生素B₁₂的吸收",
+              "杀灭随食物进入的细菌",
+              "使蛋白质变性"
+            ],
+            "question": "胃壁细胞分泌的内因子的主要生理功能是？",
+            "explanation": "内因子由壁细胞分泌，与维生素B₁₂结合形成复合物，保护其不被消化并促进其在回肠的吸收。来源：课件PPT第32-36页。"
+          },
+          {
+            "id": 8,
+            "tag": "胆汁功能",
+            "type": "single",
+            "answer": 2,
+            "options": [
+              "胆固醇",
+              "胆色素",
+              "胆盐",
+              "卵磷脂"
+            ],
+            "question": "胆汁中不含消化酶，其促进脂肪消化的主要成分是？",
+            "explanation": "胆盐是胆汁中最重要的成分，能乳化脂肪，增加酶作用面积，并促进脂肪吸收。来源：课件PPT第37-40页。"
+          },
+          {
+            "id": 6,
+            "tag": "脂肪吸收",
+            "type": "single",
+            "answer": 1,
+            "options": [
+              "乳糜微粒 → 血液",
+              "乳糜微粒 → 淋巴",
+              "脂蛋白 → 血液",
+              "游离脂肪酸 → 淋巴"
+            ],
+            "question": "长链脂肪酸和甘油一酯在肠道吸收后，首先形成的复合物及进入的运输途径是？",
+            "explanation": "长链脂肪酸和甘油一酯形成乳糜微粒，进入淋巴管（乳糜管），最终入血。来源：课件PPT第41页；教师强调。"
+          },
+          {
+            "id": 2,
+            "tag": "消化道平滑肌电生理",
+            "type": "single",
+            "answer": 2,
+            "options": [
+              "Na⁺",
+              "K⁺",
+              "Ca²⁺",
+              "Cl⁻"
+            ],
+            "question": "消化道平滑肌动作电位的上升支主要由哪种离子的内流引起？",
+            "explanation": "与骨骼肌不同，平滑肌动作电位上升支主要由Ca²⁺内流引起。来源：课件PPT第24页；教师强调易混淆点。"
+          },
+          {
+            "id": 14,
+            "tag": "小肠吸收",
+            "type": "judge",
+            "answer": 0,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "乳糖不耐受是因为小肠液中缺乏乳糖酶，导致乳糖不能被消化吸收。",
+            "explanation": "乳糖不耐受确实是由于小肠液缺乏乳糖酶，导致乳糖无法分解吸收，引起腹胀腹泻。来源：课件PPT第37-40页。"
+          },
+          {
+            "id": 15,
+            "tag": "胆汁成分",
+            "type": "judge",
+            "answer": 1,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "胆汁中含有多种消化酶，能够直接分解脂肪为脂肪酸和甘油。",
+            "explanation": "胆汁不含消化酶，其主要作用是乳化脂肪。脂肪的分解主要依靠胰脂肪酶。来源：课件PPT第37-40页。"
+          },
+          {
+            "id": 13,
+            "tag": "胃肠激素",
+            "type": "judge",
+            "answer": 0,
+            "options": [
+              "正确",
+              "错误"
+            ],
+            "question": "缩胆囊素（CCK）的主要生理功能包括促进胰酶分泌和促进胆囊收缩。",
+            "explanation": "CCK由I细胞分泌，主要功能是促进胰酶分泌和胆囊收缩。来源：课件PPT第27页。"
+          },
+          {
+            "id": 16,
+            "tag": "消化道平滑肌电生理",
+            "type": "term",
+            "question": "名词解释：慢波电位（Slow Wave）",
+            "explanation": "慢波电位，又称基本电节律（Basic Electrical Rhythm）或电控制活动（ECA），是指在静息电位基础上产生的节律性、自发性去极化波。它起源于Cajal细胞，本身不引起肌肉收缩，但反映平滑肌兴奋性的周期性变化，当去极化达到阈电位时可触发动作电位。来源：课件PPT第21-24页。"
+          },
+          {
+            "id": 17,
+            "tag": "胃液分泌调节",
+            "type": "short",
+            "question": "简述消化期胃液分泌的三个时期及其主要调节机制。",
+            "explanation": "1. 头期：由神经调节（迷走神经→ACh）和神经-体液调节（迷走→胃泌素）介导，分泌量多，酸度和酶含量高。\n2. 胃期：由神经调节（迷走-迷走反射+局部反射）和体液调节（胃泌素）介导，分泌量最大，酸度和酶含量高。\n3. 肠期：主要由体液调节（胃泌素、肠泌酸素）介导，分泌量少，酸度不高，消化力不强。来源：课件PPT第32-36页。"
+          }
+        ],
+        "subjectId": "subj_mpy44q6a",
+        "currentIdx": 9,
+        "userAnswers": [
+          0,
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          "0",
+          "0"
+        ]
+      }
+    },
+    "_aiTooltipTimer": 6,
+    "chapterMaterials": {
+      "ch_mpy4healoy": [
+        {
+          "id": "mat_mpz296wd_rarpc9",
+          "name": "l4第四章消化_ds.docx",
+          "size": 29581,
+          "addedAt": 1780551272750
+        }
+      ],
+      "ch_mpy4hf4q33": [
+        {
+          "name": "l4第四章消化_ds.docx",
+          "size": 29581,
+          "addedAt": 1780555397294,
+          "id": "mat_mpz4plf2_qor1rs"
+        }
+      ],
+      "ch_mpy4hjbhh5": [
+        {
+          "id": "mat_mpy4khjd_msxhfy",
+          "name": "l4第四章消化_ds.docx",
+          "size": 29581,
+          "addedAt": 1780494692809
+        }
+      ],
+      "ch_mpz1oi6zhx": [
+        {
+          "id": "mat_mpz272mv_fgpfh1",
+          "name": "l6第六章泌尿_ds.docx",
+          "size": 38805,
+          "addedAt": 1780551173911
+        }
+      ],
+      "ch_mpy4hid3hv": [
+        {
+          "name": "l2第二章运动_ds.docx",
+          "size": 29279,
+          "addedAt": 1780555436753,
+          "id": "mat_mpz4qfv5_pen1hl"
+        }
+      ]
+    },
+    "currentChapterId": "ch_mpy4hid3hv",
+    "currentSubjectId": "subj_mpy44m87",
+    "ignoredQuestions": [],
+    "settingsPrevScreen": "start"
+  }
+}
