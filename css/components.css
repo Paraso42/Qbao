@@ -303,9 +303,11 @@
 
 /* ===== Tag Management Panel v2 (Three-Column Layout) ===== */
 .tags-manager-v2 { display: flex; gap: 8px; margin: var(--space-sm) 0; }
-.tag-column { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border-default); border-radius: var(--radius-md); overflow: hidden; }
-.tag-col-header { padding: 6px 8px; font-size: var(--fs-xs); font-weight: 600; text-align: center; border-bottom: 1px solid var(--border-default); background: var(--surface-secondary); }
-.tag-col-list { flex: 1; min-height: 48px; max-height: 160px; overflow-y: auto; padding: 4px; display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; }
+.tag-column { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.tag-col-header { padding: 6px 8px; font-size: var(--fs-xs); font-weight: 600; text-align: center; border-bottom: 1px solid var(--border-default); background: var(--surface-secondary); flex-shrink: 0; }
+.tag-col-list { flex: 1 1 auto; min-height: 48px; max-height: 140px; overflow-y: auto; padding: 4px; display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; }
+.tag-col-list::-webkit-scrollbar { width: 4px; }
+.tag-col-list::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
 .tag-col-list.drag-over { background: var(--color-primary-light); }
 .tag-chip-v2 { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: var(--radius-sm); font-size: 11px; cursor: grab; user-select: none; border: 1px solid var(--border-default); background: var(--surface-card); white-space: nowrap; }
 .tag-chip-v2:active { cursor: grabbing; }

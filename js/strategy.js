@@ -235,7 +235,7 @@ function generatePromptText(chId) {
   var formatNote = '重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n';
   var base = formatNote;
 
-  base += '请根据提供的学习资料生成题目。为每道题标注合适的 tag 字段（知识点标签），优先使用下方已有标签。\n\n';
+  base += '请根据提供的学习资料生成题目。\n\n';
 
   base += '【当前标签分类】\n';
   base += '- 错题标签：' + errStr + '\n';
@@ -250,12 +250,15 @@ function generatePromptText(chId) {
   base += '4. JSON 字段结构：所有题目必须包含 id, type("single"/"judge"/"term"/"short"), tag(知识点标签), question, explanation, strategy("error"/"review"/"new")。\n';
   base += '   单选增加 options(数组), answer(索引 0-3)；判断增加 options(["正确","错误"]), answer(0或1)；名词解释和简答不需要 options 和 answer。\n';
   base += '5. 出题策略分配 — 严格遵循：\n';
-  base += '   - 错题回顾 (error)：' + errTarget + ' 道 — 从错题标签范围出变式题\n';
-  base += '   - 滚动复习 (review)：' + reviewTarget + ' 道 — 从复习标签范围出巩固题\n';
-  base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从新知识点标签范围出题\n';
+  base += '   - 错题回顾 (error)：' + errTarget + ' 道 — 从错题标签范围出变式题，tag 使用对应错题标签\n';
+  base += '   - 滚动复习 (review)：' + reviewTarget + ' 道 — 从复习标签范围出巩固题，tag 使用对应复习标签\n';
+  base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从资料中挖掘尚未被以上标签覆盖的全新知识点\n';
   base += '   每道题的 strategy 字段必须恰好是 "error"、"review"、"new" 之一。\n';
+  if (newTarget > 0) {
+    base += '   【重要】strategy="new" 的题目：其 tag 必须是与错题标签、复习标签不同的全新知识点标签（从资料中挖掘未覆盖的考点）。禁止在 new 题上复用错题标签或复习标签中的已有标签。如果新知识点标签列表非空则优先使用，否则自行从资料中提取新知识点作为 tag。\n';
+  }
   base += '   如果某个区块写"暂无"，则该区块分配的数量归入新考点探索。\n';
-  base += '6. 请为每道题标注知识标签（tag 字段），如果知识点与已有标签相似请归入已有标签。\n';
+  base += '6. strategy="error"或"review"的题目，tag 应使用对应的已有标签；只有 strategy="new"的题目才创建新标签。\n';
 
   return base;
 }
