@@ -2,6 +2,66 @@
 
 ---
 
+## 2026-06-05 — 标签系统收敛 + 拖拽全面重写 v3.6.4（仅测试环境 8080）
+
+### 一、移除独立 AI 标签提取（性能优化）
+- 移除 `POST /ai/extract-tags` 端点及前端 `_aiExtractTags()` 调用
+- 移除 `_aiExecuteTask()` 中出题前预注入标签的逻辑块
+- 新题标签来源改为：(1) 出题后从题目 tag 字段收集 (2) 用户手动添加 (3) 从错题/复习标签拖入
+- JSON Schema `tag` 和 `strategy` 保留在 `required` 中，确保每道题都有标签
+
+### 二、标签拖拽全面重写（三列互通）
+- 拖拽从内联 `ondragstart` 改为程序化 `addEventListener`（`_setupDragListeners()`）
+- 每个 chip 绑定 `dragstart`/`dragend`（`_hasDrag` 防重复），panel 绑定 `dragover`/`drop`（`_dropReady` 防重复）
+- drop 目标改为 `.tag-column` 整列匹配
+- 支持三列之间任意拖拽移动（错题↔复习↔新题）
+- 同列内拖到另一标签上触发合并（confirm 确认）
+- `moveTagBetweenColumns`/`mergeTagInCategory` 增加 console.log 全程追踪
+
+### 涉及文件
+- 后端：`backend/src/routes/ai.routes.js` — 移除 extract-tags 端点、保留 tag+strategy required
+- 前端：`js/strategy.js` — `renderTagColumns()` 程序化拖拽 + `_setupDragListeners()`
+- 前端：`js/ai-workflow.js` — 移除 pre-generation 块和 `_aiExtractTags()`，保留 post-generation 标签收集
+
+---
+
+## 2026-06-05 — AI 出题标签系统重构 v3.6.0（仅测试环境 8080）
+
+### 一、文件内容提取诊断系统
+- 后端 `extractText()` 返回结构化结果：`{type, content, extracted, empty, error, warning}`
+- 模块启动时预检 mammoth/pdf-parse/unzipper，缺失打 console.error
+- API 响应新增 `poolFilesStatus` 字段，逐文件记录提取状态和错误原因
+- 扫描型 PDF 标记 `empty:true, warning:"未提取到文字内容"`（纯事实描述）
+- 前端任务通知展示文件诊断：「使用 X/Y 份资料」及提取失败原因
+- 池文件在材料列表中显示蓝色「池」标签
+
+### 二、三类标签系统重构
+- `weakTags` 升级为三类标签：`errorTags`（错题）、`reviewTags`（复习）、`newTopicTags`（新知识点）
+- 新增 `tagMeta` 记录每标签的 totalQ 和 correct，支持正确率计算
+- 标签管理面板改为三列布局（错题/复习/新题），原 toggle 式 UI 废弃
+- 支持手动添加、拖拽跨列移动、同列内拖拽合并标签
+- 双击标签名可重命名
+- 答题结束后增量更新 tagMeta 并自动重新分类
+
+### 三、AI 出题策略
+- `generatePromptText()` 根据三类标签生成精确出题指令
+- 计算每类题目的精确数量（`totalQ × 百分比`）
+- 新增文件检测机制：`_hasNewFilesSinceLastGen` 标记控制是否让 AI 先提取标签
+- 出题后 `__meta` 解析 → 自动写入 `newTopicTags`
+- 策略合规校验：统计 strategy 分布，偏差 >±2 时通知警告
+- JSON Schema 新增 `strategy` 字段（enum: error/review/new）
+
+### 四、修复
+- `assignFileToChapter()` 现在同步 `chapterMaterials` 并设 `_hasNewFilesSinceLastGen`
+- `assignFilePoolToChapter()` 设 `_hasNewFilesSinceLastGen`
+
+### 涉及文件
+- 后端：`backend/src/routes/ai.routes.js`
+- 前端：`js/state.js`, `js/strategy.js`, `js/ai-workflow.js`, `js/quiz-engine.js`, `js/users.js`, `index.html`
+- 样式：`css/components.css`, `css/dark-mode.css`, `css/responsive.css`
+
+---
+
 ## 2026-06-05 — 答题进度持久化全面修复 v3.5.2（仅测试环境 8080）
 
 解决了答题进度在刷新/重进/跨设备场景下丢失或错误结算的问题。涉及 8 个文件。

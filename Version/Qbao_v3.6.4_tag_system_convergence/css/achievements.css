@@ -1,0 +1,29 @@
+/* ===== Achievements ===== */
+.achievements-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-xl); }
+.achievements-count { font-size: var(--fs-base); color: var(--text-muted); }
+.achievements-count strong { color: var(--color-success); font-size: var(--fs-lg); }
+
+.achievements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-md); margin: var(--space-lg) 0; }
+
+.achievement-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-lg);
+  box-shadow: var(--shadow-xs);
+  border-left: 4px solid var(--border-default);
+  border: 1px solid var(--border-light);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+  text-align: center;
+}
+
+.achievement-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+
+.achievement-card.unlocked { border-left-color: var(--color-success); background: linear-gradient(135deg, var(--color-success-light), var(--surface-card)); }
+.achievement-card.locked { opacity: 0.4; filter: grayscale(0.6); }
+
+.achievement-card .ach-icon { font-size: 32px; margin-bottom: var(--space-xs); }
+.achievement-card .ach-name { font-size: var(--fs-base); font-weight: 600; margin: var(--space-xs) 0; }
+.achievement-card .ach-desc { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+.achievement-card .ach-status { font-size: 11px; margin-top: var(--space-sm); color: var(--text-muted); }
+.achievement-card.unlocked .ach-status { color: #1b6e3a; font-weight: 500; }
+.achievement-card .ach-mystery { font-size: 40px; color: var(--border-default); }
