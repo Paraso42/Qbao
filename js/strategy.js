@@ -220,8 +220,6 @@ function generatePromptText(chId) {
   var reviewTarget = Math.round(totalQ * reviewPct / 100);
   var newTarget = totalQ - errTarget - reviewTarget;
 
-  var ch = state.chapters[chId];
-  var hasNew = ch && ch._hasNewFilesSinceLastGen;
   var errorTags = s.errorTags || [], reviewTags = s.reviewTags || [], newTopicTags = s.newTopicTags || [];
   var meta = s.tagMeta || {};
 
@@ -237,11 +235,7 @@ function generatePromptText(chId) {
   var formatNote = '重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n';
   var base = formatNote;
 
-  if (hasNew) {
-    base += '请基于我提供的学习资料生成题目。知识点标签已预先整理好（见下方标签分类），请优先使用已有标签为每道题标注 tag 字段。\n\n';
-  } else {
-    base += '请基于之前已分析过的学习资料，按照以下标签分类生成新一轮复习题目。\n\n';
-  }
+  base += '请根据提供的学习资料生成题目。为每道题标注合适的 tag 字段（知识点标签），优先使用下方已有标签。\n\n';
 
   base += '【当前标签分类】\n';
   base += '- 错题标签：' + errStr + '\n';
@@ -258,7 +252,7 @@ function generatePromptText(chId) {
   base += '5. 出题策略分配 — 严格遵循：\n';
   base += '   - 错题回顾 (error)：' + errTarget + ' 道 — 从错题标签范围出变式题\n';
   base += '   - 滚动复习 (review)：' + reviewTarget + ' 道 — 从复习标签范围出巩固题\n';
-  base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从' + (hasNew ? '新提取的' : '新') + '知识点标签范围出题\n';
+  base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从新知识点标签范围出题\n';
   base += '   每道题的 strategy 字段必须恰好是 "error"、"review"、"new" 之一。\n';
   base += '   如果某个区块写"暂无"，则该区块分配的数量归入新考点探索。\n';
   base += '6. 请为每道题标注知识标签（tag 字段），如果知识点与已有标签相似请归入已有标签。\n';
