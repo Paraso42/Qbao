@@ -28,7 +28,18 @@ module.exports = function (app) {
           var u = updRes.rows[0];
           return res.json({ session: formatSession(u) });
         }
-        // No in_progress session to complete — just create as completed
+        // No in_progress session to complete — create directly as completed
+        var compResult = await pool.query(
+          `INSERT INTO answer_sessions (user_id, chapter_id, subject_id, session_name, questions, user_answers, stats, status)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'completed')
+           ON CONFLICT (user_id, chapter_id)
+           DO UPDATE SET subject_id = $3, session_name = $4, questions = $5::jsonb, user_answers = $6::jsonb,
+             stats = $7::jsonb, status = 'completed', updated_at = NOW()
+           RETURNING *`,
+          [req.userId, chapterId, subjectId || null, sessionName || '',
+           JSON.stringify(questions || []), JSON.stringify(userAnswers || []), JSON.stringify(stats || {})]
+        );
+        return res.json({ session: formatSession(compResult.rows[0]) });
       }
 
       // For in_progress: upsert (only if not already completed)

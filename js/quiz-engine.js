@@ -2,9 +2,8 @@
 async function restoreQuizFromServer() {
   if (!isOnlineMode || !getToken()) return;
   var as = getActiveSet();
-  if (!as || !as.questions || !as.questions.length) return;
   var ch = getCh();
-  var chapterId = as.setId || (ch ? ch.id : null);
+  var chapterId = as ? (as.setId || (ch ? ch.id : null)) : (ch ? ch.id : null);
   if (!chapterId) return;
   try {
     // Only fetch in_progress sessions for recovery
@@ -25,33 +24,62 @@ async function restoreQuizFromServer() {
     if (!dRes || !dRes.ok) return;
     var dData = await dRes.json();
     var srv = dData.session;
-    if (srv && srv.userAnswers && Array.isArray(srv.userAnswers)) {
-      // Validate server questions match local questions by text, avoiding cross-round merge
-      var srvQs = srv.questions || [];
-      if (srvQs.length !== as.questions.length) {
-        console.warn('restoreQuizFromServer: question count mismatch, skipping merge (server=' + srvQs.length + ', local=' + as.questions.length + ')');
+    if (!srv || !srv.userAnswers || !Array.isArray(srv.userAnswers)) return;
+    var srvQs = srv.questions || [];
+
+    // If local has no questions, repopulate from server (cross-device restore)
+    if (!as || !as.questions || !as.questions.length) {
+      if (srvQs.length > 0 && ch) {
+        // Create a quizSet from server questions
+        if (!ch.quizSets) ch.quizSets = [];
+        // Check if a matching set already exists (same question count)
+        var existingSet = ch.quizSets.length > 0 ? ch.quizSets[ch.quizSets.length - 1] : null;
+        // Create new set or reuse last one
+        var cleanAnswers = srv.userAnswers.map(function(a) { return a === null ? undefined : a; });
+        var set = { questions: srvQs.slice(), userAnswers: cleanAnswers, currentIdx: 0, createdAt: Date.now() };
+        ch.quizSets.push(set);
+        ch.currentQuizSetIdx = ch.quizSets.length - 1;
+        // Sync to ch.questions for backward compat
+        if (!ch.questions) ch.questions = [];
+        ch.questions = srvQs.slice();
+        if (!ch.userAnswers) ch.userAnswers = [];
+        ch.userAnswers = cleanAnswers;
+        saveState();
+        console.log('restoreQuizFromServer: repopulated quizSet from server (' + srvQs.length + ' questions, ' + targetSession.answeredCount + ' answered)');
         return;
       }
-      var contentMismatch = false;
-      for (var qi = 0; qi < as.questions.length; qi++) {
-        if ((srvQs[qi] && srvQs[qi].question) !== (as.questions[qi] && as.questions[qi].question)) {
-          contentMismatch = true;
-          break;
-        }
+      return;
+    }
+
+    // Validate server questions match local questions by text, avoiding cross-round merge
+    if (srvQs.length !== as.questions.length) {
+      console.warn('restoreQuizFromServer: question count mismatch, skipping merge (server=' + srvQs.length + ', local=' + as.questions.length + ')');
+      return;
+    }
+    var contentMismatch = false;
+    for (var qi = 0; qi < as.questions.length; qi++) {
+      if ((srvQs[qi] && srvQs[qi].question) !== (as.questions[qi] && as.questions[qi].question)) {
+        contentMismatch = true;
+        break;
       }
-      if (contentMismatch) {
-        console.warn('restoreQuizFromServer: question content mismatch, skipping merge');
-        return;
-      }
-      for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
-        var srvAns = srv.userAnswers[j];
-        // Skip -1 (finalize marker) and null/undefined
-        if (srvAns !== -1 && srvAns !== null && srvAns !== undefined) {
+    }
+    if (contentMismatch) {
+      console.warn('restoreQuizFromServer: question content mismatch, skipping merge');
+      return;
+    }
+    for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
+      var srvAns = srv.userAnswers[j];
+      // Skip -1 (finalize marker) and null/undefined
+      if (srvAns !== -1 && srvAns !== null && srvAns !== undefined) {
+        var localAns = as.userAnswers[j];
+        if (localAns === undefined || localAns === -1 || localAns === null) {
           as.userAnswers[j] = srvAns;
         }
       }
-      saveState();
+      // Normalize any null values to undefined (JSON null from server)
+      if (as.userAnswers[j] === null) as.userAnswers[j] = undefined;
     }
+    saveState();
   } catch(e) { console.warn('restoreQuizFromServer failed:', e); }
 }
 
@@ -81,7 +109,7 @@ function syncAnswerToServer() {
   var subjectId = (as.subjectId) || (subj ? subj.id : null);
   var stats = calcStats(as);
   // Filter out -1 markers from synced answers
-  var syncAnswers = as.userAnswers.map(function(a) { return a === -1 ? undefined : a; });
+  var syncAnswers = as.userAnswers.map(function(a) { return (a === -1 || a === null) ? undefined : a; });
   fetchWithAuth('/quiz/session', {
     method: 'POST',
     body: JSON.stringify({
@@ -96,6 +124,23 @@ function syncAnswerToServer() {
     })
   }).catch(function(e) { console.warn('syncAnswerToServer failed:', e); });
 }
+
+// --- Page lifecycle: force immediate sync before page unload ---
+function _flushSyncBeforeUnload() {
+    if (_syncPending) { clearTimeout(_syncPending); _syncPending = null; }
+    _firstSyncDone = true;
+    _lastSyncTime = 0;
+    syncAnswerToServer();
+}
+window.addEventListener('beforeunload', function() {
+    _flushSyncBeforeUnload();
+});
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+        _flushSyncBeforeUnload();
+    }
+});
+
 async function syncAnswerToServerFinal() {
   if (!isOnlineMode || !getToken()) return;
   if (_syncPending) { clearTimeout(_syncPending); _syncPending = null; }
@@ -134,7 +179,7 @@ function renderQuestion() {
   const q = as.questions[qi]; if (!q) { if (area) area.innerHTML='<div class="empty-state">🎉 全部完成</div>'; return; }
   const typeMap = { single:'单选题', judge:'判断题', term:'名词解释', short:'简答题' };
   if (tagEl) tagEl.textContent = as.setName||'未标注'; if (typeEl) typeEl.textContent = typeMap[q.type]||q.type;
-  const hasAns = as.userAnswers[qi] !== undefined; const isCor = hasAns ? getCi(q, as.userAnswers[qi]) : null;
+  const ans = as.userAnswers[qi]; const hasAns = ans !== undefined && ans !== -1 && ans !== null; const isCor = hasAns ? getCi(q, as.userAnswers[qi]) : null;
   let html = '<div class="quiz-question"><strong>'+(qi+1)+'. </strong>'+renderMarkdown(q.question)+'</div>';
   if (q.type==='single'||q.type==='judge') {
     html += '<div class="quiz-options">';
@@ -143,15 +188,15 @@ function renderQuestion() {
   } else { html += '<div class="quiz-options"><textarea style="width:100%;min-height:60px;padding:8px;border:1px solid #dee2e6;border-radius:5px;font-size:15px;font-family:inherit;" placeholder="输入你的答案..." id="subjective-answer"'+(hasAns?' disabled':'')+'>'+(hasAns?escapeHtml(as.userAnswers[as.currentIdx]||''):'')+'</textarea></div>'; }
   if (hasAns&&q.explanation) html += '<div class="explanation-box"><h4>📖 参考答案</h4><p>'+renderMarkdown(q.explanation)+'</p></div>';
   if (area) area.innerHTML = html;
-  if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
+  if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined&&as.userAnswers[idx]!==null) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
   if (sb) sb.style.display = hasAns?'none':'inline-block'; const ig=document.getElementById('btn-ignore'); if(ig)ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block';
   if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
   applyQuizFontSize();
 }
-function selectOption(idx) { const as=getActiveSet(); if (!as||as.userAnswers[as.currentIdx]!==undefined) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); syncAnswerToServer(); }
+function selectOption(idx) { const as=getActiveSet(); if (!as||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); syncAnswerToServer(); }
 function submitAnswer() {
   const as=getActiveSet(); if (!as||!as.questions||!as.questions.length) return;
-  const q=as.questions[as.currentIdx]; if (!q||as.userAnswers[as.currentIdx]!==undefined) return;
+  const q=as.questions[as.currentIdx]; if (!q||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return;
   if (q.type==='term'||q.type==='short') { const ta=document.getElementById('subjective-answer'); if (!ta||!ta.value.trim()) { alert('请输入答案'); return; } as.userAnswers[as.currentIdx]=ta.value.trim(); }
   else { if (as.userAnswers[as.currentIdx]===undefined) { alert('请选择选项'); return; } }
   saveState(); renderQuestion(); updateProgress(); updateQuickActions(); checkAchievements(); syncAnswerToServer();

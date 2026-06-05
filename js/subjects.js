@@ -33,7 +33,7 @@ function createChapter(subjId, name) {
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); checkAchievements();
   return state.chapters[id];
 }
-function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; break; } } saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); showScreen('start'); }
+function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; break; } } saveState(); renderSubjectList(); updateQuickActions(); showScreen('start'); restoreQuizFromServer(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); }
 function renameChapter(chId, newName) { const ch = state.chapters[chId]; if (!ch || !newName || !newName.trim()) return; ch.name = newName.trim(); saveState(); renderSubjectList(); }
 function deleteChapter(chId) {
   if (!confirm('删除该章节？')) return;

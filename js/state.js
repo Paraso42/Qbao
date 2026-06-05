@@ -90,12 +90,12 @@ function getActiveSet() {
   const ex = getExam(); if (ex) return { _ref: ex, questions: ex.questions, userAnswers: ex.userAnswers, currentIdx: ex.currentIdx, setCurrentIdx: function(v){ex.currentIdx=v;}, setName: ex.name, isExam: true, setId: ex.id, subjectId: ex.subjectId };
   const ch = getCh(); if (!ch) return null;
   if (ch.quizSets && ch.quizSets.length > 0) {
-    const qs = ch.quizSets[ch.currentQuizSetIdx || ch.quizSets.length - 1];
+    var idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0) ? ch.currentQuizSetIdx : ch.quizSets.length - 1; const qs = ch.quizSets[idx];
     return { _ref: qs, _isSet: true, questions: qs.questions, userAnswers: qs.userAnswers, currentIdx: qs.currentIdx, setCurrentIdx: function(v){qs.currentIdx=v;}, setName: ch.name, isExam: false, setId: ch.id, subjectId: null };
   }
   return { _ref: ch, questions: ch.questions, userAnswers: ch.userAnswers, currentIdx: ch.currentIdx, setCurrentIdx: function(v){ch.currentIdx=v;}, setName: ch.name, isExam: false, setId: ch.id, subjectId: null };
 }
-function getCurrentQuizSet() { const ch=getCh(); if(!ch||!ch.quizSets||ch.quizSets.length===0) return null; return ch.quizSets[ch.currentQuizSetIdx||ch.quizSets.length-1]; }
+function getCurrentQuizSet() { const ch=getCh(); if(!ch||!ch.quizSets||ch.quizSets.length===0) return null; var idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0) ? ch.currentQuizSetIdx : ch.quizSets.length - 1; return ch.quizSets[idx]; }
 function createQuizSetForChapter(questions, chId) {
   const ch = state.chapters[chId]; if (!ch) return null;
   if (!ch.quizSets) ch.quizSets = [];
@@ -146,6 +146,13 @@ function startQuizSession() {
         qs.currentIdx = 0;
         saveState();
       }
+      // 如果有部分作答，将剩余的 -1 标记转为 undefined（允许继续作答未完成题目）
+      if (answered > 0 && answered < qs.questions.length && qs.userAnswers) {
+        for (var _j = 0; _j < qs.userAnswers.length; _j++) {
+          if (qs.userAnswers[_j] === -1 || qs.userAnswers[_j] === null) qs.userAnswers[_j] = undefined;
+        }
+        saveState();
+      }
       openQuizModal('quiz'); renderQuestion(); updateProgress(); return;
     }
   }
@@ -170,7 +177,7 @@ function endQuizSession() {
   if (streamStillRunning) {
     var answeredCopy = { questions: as.questions.slice(), userAnswers: as.userAnswers.slice() };
     finalizeUnansweredQuestions(answeredCopy);
-    saveQuizHistory({ id: as.setId, questions: answeredCopy.questions, userAnswers: answeredCopy.userAnswers, setName: as.setName, setId: as.setId });
+    saveQuizHistory({ id: as.setId, name: as.setName, questions: answeredCopy.questions, userAnswers: answeredCopy.userAnswers, setName: as.setName, setId: as.setId });
     updateSRSAfterExam({ setId: as.setId, questions: answeredCopy.questions, userAnswers: answeredCopy.userAnswers });
     if (as.setId) autoUpdateChapterWeakTags(state.chapters[as.setId]);
     autoBackup();
@@ -186,7 +193,7 @@ function endQuizSession() {
   saveState();
   syncAnswerToServerFinal();
   // 保存答题历史
-  saveQuizHistory({ id: as.setId, questions: as.questions, userAnswers: as.userAnswers, setName: as.setName, setId: as.setId });
+  saveQuizHistory({ id: as.setId, name: as.setName, questions: as.questions, userAnswers: as.userAnswers, setName: as.setName, setId: as.setId });
   updateSRSAfterExam({ setId: as.setId, questions: as.questions, userAnswers: as.userAnswers });
   // 更新薄弱标签
   if (as.setId) autoUpdateChapterWeakTags(state.chapters[as.setId]);
