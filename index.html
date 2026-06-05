@@ -123,13 +123,23 @@
             <div class="sv-item new"><div class="sv-num" id="sn-new">20</div><div class="sv-label">🟢 新考点</div></div>
           </div>
         </div>
-        <h4>🏷️ 第三步：管理薄弱知识点标签</h4>
-        <p style="color:#666;font-size:13px;margin-bottom:4px;">勾选 = 加入出题提示词，点击标签切换状态：</p>
-        <div class="tags-manager">
-          <div class="tags-list" id="tags-list-container"><span style="color:#bbb;font-size:13px;">暂无标签。</span></div>
-          <div class="tag-add-input">
-            <input type="text" id="tag-input" placeholder="手动输入标签..." onkeydown="if(event.key==='Enter')addManualTag()">
-            <button class="btn btn-small btn-primary" onclick="addManualTag()">＋ 添加</button>
+        <h4>🏷️ 第三步：知识点标签管理</h4>
+        <p style="color:#666;font-size:13px;margin-bottom:6px;">拖拽标签可调整分类，同列内拖标签到另一个标签上可合并</p>
+        <div class="tags-manager-v2" id="tags-manager-v2">
+          <div class="tag-column" data-cat="error">
+            <div class="tag-col-header">🔴 错题标签</div>
+            <div class="tag-col-list" id="tag-col-error"></div>
+            <input class="tag-col-input" placeholder="＋ 添加标签" data-cat="error" onkeydown="if(event.key==='Enter')addTagToCategory(this.dataset.cat,this)">
+          </div>
+          <div class="tag-column" data-cat="review">
+            <div class="tag-col-header">🟡 复习标签</div>
+            <div class="tag-col-list" id="tag-col-review"></div>
+            <input class="tag-col-input" placeholder="＋ 添加标签" data-cat="review" onkeydown="if(event.key==='Enter')addTagToCategory(this.dataset.cat,this)">
+          </div>
+          <div class="tag-column" data-cat="new">
+            <div class="tag-col-header">🟢 新题标签</div>
+            <div class="tag-col-list" id="tag-col-new"></div>
+            <input class="tag-col-input" placeholder="＋ 添加标签" data-cat="new" onkeydown="if(event.key==='Enter')addTagToCategory(this.dataset.cat,this)">
           </div>
         </div>
         <div id="ai-materials-section" class="ai-materials-area ai-mode-hidden">

@@ -1,86 +1,91 @@
 // --- Server answer recovery (called on init) ---
-async function restoreQuizFromServer() {
+// restoreAll: when true, restore all chapters with in_progress sessions
+async function restoreQuizFromServer(restoreAll) {
   if (!isOnlineMode || !getToken()) return;
-  var as = getActiveSet();
-  var ch = getCh();
-  var chapterId = as ? (as.setId || (ch ? ch.id : null)) : (ch ? ch.id : null);
-  if (!chapterId) return;
   try {
-    // Only fetch in_progress sessions for recovery
     var sRes = await fetchWithAuth('/quiz/sessions?status=in_progress');
     if (!sRes || !sRes.ok) return;
     var sData = await sRes.json();
     var sessions = sData.sessions || [];
-    // Find session matching this chapter, prefer most recent (already sorted by updated_at DESC)
-    var targetSession = null;
-    for (var i = 0; i < sessions.length; i++) {
-      if (sessions[i].chapterId === chapterId) {
-        targetSession = sessions[i];
+    if (sessions.length === 0) return;
+
+    if (restoreAll) {
+      // Restore ALL chapters with in_progress sessions
+      for (var si = 0; si < sessions.length; si++) {
+        await _restoreOneSession(sessions[si]);
+      }
+    } else {
+      // Restore only current chapter's session
+      var as = getActiveSet();
+      var ch = getCh();
+      var chapterId = as ? (as.setId || (ch ? ch.id : null)) : (ch ? ch.id : null);
+      if (!chapterId) return;
+      for (var i = 0; i < sessions.length; i++) {
+        if (sessions[i].chapterId === chapterId) {
+          await _restoreOneSession(sessions[i]);
+          break;
+        }
+      }
+    }
+  } catch(e) { console.warn('restoreQuizFromServer failed:', e); }
+}
+
+async function _restoreOneSession(sessionMeta) {
+  var dRes = await fetchWithAuth('/quiz/session/' + sessionMeta.id);
+  if (!dRes || !dRes.ok) return;
+  var dData = await dRes.json();
+  var srv = dData.session;
+  if (!srv || !srv.userAnswers || !Array.isArray(srv.userAnswers)) return;
+  var srvQs = srv.questions || [];
+  if (srvQs.length === 0) return;
+
+  var ch = state.chapters[sessionMeta.chapterId];
+  if (!ch) return;
+  if (!ch.quizSets) ch.quizSets = [];
+
+  // Find matching quizSet by question count and first-question content
+  var matchingSet = null;
+  for (var si = ch.quizSets.length - 1; si >= 0; si--) {
+    var qs = ch.quizSets[si];
+    if (qs.questions.length === srvQs.length) {
+      if (qs.questions[0] && srvQs[0] && qs.questions[0].question === srvQs[0].question) {
+        matchingSet = qs;
         break;
       }
     }
-    if (!targetSession) return;
-    var dRes = await fetchWithAuth('/quiz/session/' + targetSession.id);
-    if (!dRes || !dRes.ok) return;
-    var dData = await dRes.json();
-    var srv = dData.session;
-    if (!srv || !srv.userAnswers || !Array.isArray(srv.userAnswers)) return;
-    var srvQs = srv.questions || [];
+  }
 
-    // If local has no questions, repopulate from server (cross-device restore)
-    if (!as || !as.questions || !as.questions.length) {
-      if (srvQs.length > 0 && ch) {
-        // Create a quizSet from server questions
-        if (!ch.quizSets) ch.quizSets = [];
-        // Check if a matching set already exists (same question count)
-        var existingSet = ch.quizSets.length > 0 ? ch.quizSets[ch.quizSets.length - 1] : null;
-        // Create new set or reuse last one
-        var cleanAnswers = srv.userAnswers.map(function(a) { return a === null ? undefined : a; });
-        var set = { questions: srvQs.slice(), userAnswers: cleanAnswers, currentIdx: 0, createdAt: Date.now() };
-        ch.quizSets.push(set);
-        ch.currentQuizSetIdx = ch.quizSets.length - 1;
-        // Sync to ch.questions for backward compat
-        if (!ch.questions) ch.questions = [];
-        ch.questions = srvQs.slice();
-        if (!ch.userAnswers) ch.userAnswers = [];
-        ch.userAnswers = cleanAnswers;
-        saveState();
-        console.log('restoreQuizFromServer: repopulated quizSet from server (' + srvQs.length + ' questions, ' + targetSession.answeredCount + ' answered)');
-        return;
-      }
-      return;
-    }
-
-    // Validate server questions match local questions by text, avoiding cross-round merge
-    if (srvQs.length !== as.questions.length) {
-      console.warn('restoreQuizFromServer: question count mismatch, skipping merge (server=' + srvQs.length + ', local=' + as.questions.length + ')');
-      return;
-    }
-    var contentMismatch = false;
-    for (var qi = 0; qi < as.questions.length; qi++) {
-      if ((srvQs[qi] && srvQs[qi].question) !== (as.questions[qi] && as.questions[qi].question)) {
-        contentMismatch = true;
-        break;
-      }
-    }
-    if (contentMismatch) {
-      console.warn('restoreQuizFromServer: question content mismatch, skipping merge');
-      return;
-    }
+  if (matchingSet) {
+    // Merge answers from server into local quizSet
+    var as = matchingSet;
     for (var j = 0; j < as.userAnswers.length && j < srv.userAnswers.length; j++) {
       var srvAns = srv.userAnswers[j];
-      // Skip -1 (finalize marker) and null/undefined
       if (srvAns !== -1 && srvAns !== null && srvAns !== undefined) {
         var localAns = as.userAnswers[j];
         if (localAns === undefined || localAns === -1 || localAns === null) {
           as.userAnswers[j] = srvAns;
         }
       }
-      // Normalize any null values to undefined (JSON null from server)
       if (as.userAnswers[j] === null) as.userAnswers[j] = undefined;
     }
-    saveState();
-  } catch(e) { console.warn('restoreQuizFromServer failed:', e); }
+    // Update currentIdx if needed
+    if (ch.currentQuizSetIdx !== ch.quizSets.indexOf(matchingSet)) {
+      ch.currentQuizSetIdx = ch.quizSets.indexOf(matchingSet);
+    }
+    console.log('restoreQuizFromServer: merged answers for chapter ' + (ch.name || sessionMeta.chapterId) + ' (' + srvQs.length + ' questions)');
+  } else if (srvQs.length > 0) {
+    // No matching local set — create one from server data (cross-device restore)
+    var cleanAnswers = srv.userAnswers.map(function(a) { return a === null ? undefined : a; });
+    var newSet = { questions: srvQs.slice(), userAnswers: cleanAnswers, currentIdx: 0, createdAt: Date.now() };
+    ch.quizSets.push(newSet);
+    ch.currentQuizSetIdx = ch.quizSets.length - 1;
+    if (!ch.questions) ch.questions = [];
+    ch.questions = srvQs.slice();
+    if (!ch.userAnswers) ch.userAnswers = [];
+    ch.userAnswers = cleanAnswers;
+    console.log('restoreQuizFromServer: created quizSet for chapter ' + (ch.name || sessionMeta.chapterId) + ' (' + srvQs.length + ' questions)');
+  }
+  saveState();
 }
 
 // --- Server answer sync (throttled) ---
@@ -208,24 +213,52 @@ function resetQuiz() { const as=getActiveSet(); if (!as) return; if (as._isSet) 
 function autoUpdateChapterWeakTags(ch) {
   ch = ch || getCh();
   if (!ch) return;
-  const s = getChStrategy(ch.id);
+  var s = getChStrategy(ch.id);
   if (!s) return;
-  const tagResults = {};
-  const quizSets = ch.quizSets || [];
-  quizSets.forEach(set => {
-    (set.questions || []).forEach((q, qi) => {
-      if (!q.tag || !isObjType(q.type) || set.userAnswers[qi] === undefined) return;
-      if (!tagResults[q.tag]) tagResults[q.tag] = { correct: 0, total: 0 };
-      tagResults[q.tag].total++;
-      if (getCi(q, set.userAnswers[qi]) === true) tagResults[q.tag].correct++;
-    });
-  });
-  for (const tag in tagResults) {
-    const r = tagResults[tag];
-    if (r.correct === r.total) s.weakTags = s.weakTags.filter(t => t.name !== tag);
-    else if (!s.weakTags.some(t => t.name === tag)) s.weakTags.push({ name: tag, active: true });
+  // Get the current/active quiz set for incremental update
+  var as = getActiveSet ? (typeof getActiveSet === 'function' ? getActiveSet() : null) : null;
+  if (!as || !as.questions) {
+    // Fallback: find the last quiz set in this chapter
+    var sets = ch.quizSets || [];
+    as = sets.length > 0 ? sets[sets.length - 1] : null;
   }
-  saveState(); renderChapterTags(); updateChapterPromptTemplate();
+  if (!as) return;
+  // Count this round's per-tag totals
+  var roundStats = {};
+  (as.questions || []).forEach(function(q, qi) {
+    if (!q.tag) return;
+    var ans = as.userAnswers && as.userAnswers[qi];
+    if (ans === undefined || ans === -1 || ans === null) return;
+    if (!roundStats[q.tag]) roundStats[q.tag] = { correct: 0, total: 0 };
+    roundStats[q.tag].total++;
+    if (isObjType(q.type) && getCi(q, ans) === true) roundStats[q.tag].correct++;
+    else if (!isObjType(q.type) && ans && ans.length > 0) roundStats[q.tag].correct++;
+  });
+  // Incremental update of tagMeta
+  if (!s.tagMeta) s.tagMeta = {};
+  Object.keys(roundStats).forEach(function(tag) {
+    var rs = roundStats[tag];
+    if (!s.tagMeta[tag]) s.tagMeta[tag] = { totalQ: 0, correct: 0 };
+    s.tagMeta[tag].totalQ += rs.total;
+    s.tagMeta[tag].correct += rs.correct;
+    s.tagMeta[tag].lastAnswer = Date.now();
+  });
+  // Reclassify all tags based on updated tagMeta
+  var allTracked = {};
+  Object.keys(s.tagMeta).forEach(function(tag) {
+    var m = s.tagMeta[tag];
+    if (m.totalQ === 0) { allTracked[tag] = 'new'; }
+    else if (m.correct < m.totalQ) { allTracked[tag] = 'error'; }
+    else { allTracked[tag] = 'review'; }
+  });
+  // Build new category arrays (preserve manual overrides for tags not touched this round)
+  s.errorTags = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'error'; });
+  s.reviewTags = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'review'; });
+  // newTopicTags: keep existing ones not yet tracked in tagMeta
+  var existingNew = (s.newTopicTags || []).filter(function(t) { return !allTracked[t]; });
+  var newFromMeta = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'new'; });
+  s.newTopicTags = existingNew.concat(newFromMeta.filter(function(t) { return existingNew.indexOf(t) < 0; }));
+  saveState(); renderTagColumns(); updateChapterPromptTemplate();
 }
 function calcStats(as) { if (!as||!as.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=as.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; as.questions.forEach((q,i)=>{ var ans = as.userAnswers && as.userAnswers[i]; if(ans !== undefined && ans !== -1) answered++; if(isObjType(q.type)){objTotal++;if(ans !== undefined && ans !== -1){const ci=getCi(q,ans);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;}} else {if(ans !== undefined && ans !== -1)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
 

@@ -301,6 +301,26 @@
 .tag-add-input input { flex: 1; padding: 5px 8px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); font-size: var(--fs-xs); }
 .tag-add-input input:focus { outline: none; border-color: var(--border-focus); }
 
+/* ===== Tag Management Panel v2 (Three-Column Layout) ===== */
+.tags-manager-v2 { display: flex; gap: 8px; margin: var(--space-sm) 0; }
+.tag-column { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border-default); border-radius: var(--radius-md); overflow: hidden; }
+.tag-col-header { padding: 6px 8px; font-size: var(--fs-xs); font-weight: 600; text-align: center; border-bottom: 1px solid var(--border-default); background: var(--surface-secondary); }
+.tag-col-list { flex: 1; min-height: 48px; padding: 4px; display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; }
+.tag-col-list.drag-over { background: var(--color-primary-light); }
+.tag-chip-v2 { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: var(--radius-sm); font-size: 11px; cursor: grab; user-select: none; border: 1px solid var(--border-default); background: var(--surface-card); white-space: nowrap; }
+.tag-chip-v2:active { cursor: grabbing; }
+.tag-chip-v2.dragging { opacity: 0.4; }
+.tag-chip-v2.drag-target { border-color: var(--color-primary); background: var(--color-primary-light); box-shadow: 0 0 0 2px var(--color-primary); }
+.tag-chip-v2 .tag-name { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.tag-chip-v2 .tag-stat { font-size: 9px; color: var(--text-muted); }
+.tag-chip-v2 .tag-del { cursor: pointer; opacity: 0.3; font-size: 10px; margin-left: 1px; }
+.tag-chip-v2 .tag-del:hover { opacity: 1; color: var(--color-danger); }
+.tag-chip-v2.cat-error { background: #fde8e8; border-color: #f8b4b4; }
+.tag-chip-v2.cat-review { background: #fef3c7; border-color: #fcd34d; }
+.tag-chip-v2.cat-new { background: #d1fae5; border-color: #6ee7b7; }
+.tag-col-input { width: 100%; border: none; padding: 5px 8px; font-size: 11px; background: transparent; border-top: 1px solid var(--border-default); }
+.tag-col-input:focus { outline: none; }
+
 /* --- Toggle switch --- */
 .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }

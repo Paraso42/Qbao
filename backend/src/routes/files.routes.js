@@ -65,6 +65,21 @@ module.exports = function (app) {
       const fileSize = req.file.size;
       const mimeType = req.file.mimetype || '';
       const chapterId = req.body.chapterId || null;
+      const ext = originalName.split('.').pop().toLowerCase();
+
+      // Check for duplicate: same name, same size, same extension, not expired
+      var dupCheck = await pool.query(
+        'SELECT id FROM user_files WHERE user_id = $1 AND original_name = $2 AND file_size = $3 AND pool_expires_at > NOW() LIMIT 1',
+        [userId, originalName, fileSize]
+      );
+      if (dupCheck.rows.length > 0) {
+        // Delete the just-uploaded temp file
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+          try { fs.unlinkSync(req.file.path); } catch (_) {}
+        }
+        return res.status(409).json({ error: '文件 "' + originalName + '" 已存在于文件池中（名称、大小、格式完全一致），请勿重复上传' });
+      }
+
       // Relative path from uploads/ for portability
       const relPath = 'pool/' + userId + '/' + storedName;
 
