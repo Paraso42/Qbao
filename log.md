@@ -4,52 +4,13 @@
 
 ## 2026-06-05 — 答题进度持久化全面修复 v3.5.2（仅测试环境 8080）
 
-本次修复彻底解决了答题进度在刷新/重进/跨设备场景下丢失或被错误结算的问题。共 8 个文件、109 行增改。
+解决了答题进度在刷新/重进/跨设备场景下丢失或错误结算的问题。涉及 8 个文件。
 
-### Phase 1: 根因修复（3 项）
-
-**Bug #1: currentQuizSetIdx === 0 被 || 当作 falsy**
-- [修复] [js/state.js](js/state.js) — `getActiveSet()` 和 `getCurrentQuizSet()` 中用 `typeof === 'number' && >= 0` 替代 `||` 回退逻辑
-
-**Bug #2: restoreQuizFromServer 无条件覆盖本地答案**
-- [修复] [js/quiz-engine.js](js/quiz-engine.js) — 合并循环仅当本地为 undefined/-1/null 时才从服务端填充，优先保留本地 `saveState()` 写入的最新答案
-
-**Bug #3: 缺少页面生命周期处理器**
-- [新增] [js/quiz-engine.js](js/quiz-engine.js) — `beforeunload` 和 `visibilitychange` 事件触发 `_flushSyncBeforeUnload()` 绕过节流立即同步
-
-### Phase 2: null/-1 标记清理（7 项）
-
-**Bug #4: JSON null 被当作"已答"**
-- [根因] 服务端 JSONB 将 JS `undefined` 存为 JSON `null`，前端 `JSON.parse` 后变回 JS `null`。`null !== undefined` 为 true，导致 `hasAns`/`selectOption`/`submitAnswer` 等判断失误。客观题因 `getCi(q, null) === false` 显示为错题，主观题因 `getCi(q, str) === true` 显示为正确
-- [修复] [js/quiz-engine.js](js/quiz-engine.js) — `renderQuestion()` hasAns 增加 `!== null`；`selectOption()`/`submitAnswer()` 拒绝 null 值重选；`syncAnswerToServer()` 发送前 `null→undefined`；`restoreQuizFromServer()` 合并后归一化 `null→undefined`；导航点排除 null
-- [修复] [js/strategy.js](js/strategy.js) — `updateQuickActions()` 已答计数排除 -1 和 null
-- [修复] [js/app.js](js/app.js) — `closeQuizModal()` 已答计数排除 -1
-- [修复] [js/state.js](js/state.js) — `startQuizSession()` 部分进度时将 -1 和 null 转为 undefined
-
-### Phase 3: 跨设备恢复（3 项）
-
-**Bug #5: 新设备无法从服务端恢复答题进度**
-- [修复] [js/quiz-engine.js](js/quiz-engine.js) — `restoreQuizFromServer()` 本地无题目时从服务端 session 的 `srv.questions` + `srv.userAnswers` 重建 quizSet（null→undefined 转换后），不依赖云端状态同步
-- [修复] [js/users.js](js/users.js) — `doLogin()` 在 `DataStoreInit()` 后调用 `restoreQuizFromServer()` 静默恢复
-- [修复] [js/subjects.js](js/subjects.js) — `switchChapter()` 中添加 `restoreQuizFromServer()` 调用
-- [修改] [js/users.js](js/users.js) — `init()` 和 `doLogin()` 移除 confirm 弹窗，改为静默恢复；仅保留 `saved==='quiz'` 时自动打开答题弹窗
-
-### Phase 4: 其他修复（3 项）
-
-**Bug #6: "我会了"按钮将题目误判为错题**
-- [修复] [js/ai-workflow.js](js/ai-workflow.js) — `ignoreCurrentQuestion()` 为客观题设置 `userAnswers[i] = q.answer`，主观题设置为 `'(已掌握)'`，避免 `finalizeUnansweredQuestions()` 将其标记为 -1 后在统计/历史/报告/SRS 中全部误判
-
-**Bug #7: 文件池重新分配后流式出题不读取池文件**
-- [修复] [js/ai-workflow.js](js/ai-workflow.js) — `_aiStreamGenerate()` 请求体增加 `chapterId: task.chapterId`，使后端能查询 `user_files WHERE chapter_id = ` 并读取磁盘文件合并到 prompt。非流式路径早有此字段，仅流式路径缺失
-
-**Bug #8: 科目页切到章节页时 card-bottom-bar 错位**
-- [修复] [js/subjects.js](js/subjects.js) — `switchChapter()` 将 `showScreen('start')` 移到 `loadChapterStrategyToUI()` 之前，确保屏幕可见后再定位 bar（否则 `getBoundingClientRect()` 返回全零）
-
-**Bug #9: 后端 completed 分支穿透**
-- [修复] [backend/src/routes/quiz.routes.js](backend/src/routes/quiz.routes.js) — 当 `status='completed'` 但无 `in_progress` 行时，显式 INSERT 一个 `status='completed'` 的行，而非回退到 Branch C 硬编码 `in_progress`
-
-**Bug #10: saveQuizHistory 缺少 name 属性**
-- [修复] [js/state.js](js/state.js) — `endQuizSession()` 两处 `saveQuizHistory()` 调用增加 `name: as.setName`，修复历史记录 chapterName 为 undefined 的问题
+- **根因修复**: [state.js] currentQuizSetIdx===0 被 || 当作 falsy → 用 typeof number 判定；[quiz-engine.js] restoreQuizFromServer 本地优先合并 + beforeunload/visibilitychange 强行同步
+- **null/-1 清理**: [quiz-engine.js] hasAns/selectOption/submitAnswer/sync/nav 全部排除 null（JSONB 将 undefined 存为 null）；[strategy.js] updateQuickActions 排除 -1/null；[state.js] startQuizSession 清除 -1/null；[app.js] closeQuizModal 排除 -1
+- **跨设备恢复**: [quiz-engine.js] 本地无题目时从服务端 session 重建 quizSet；[users.js] doLogin() 静默恢复；[subjects.js] switchChapter() 恢复
+- **其他**: [ai-workflow.js] ignoreCurrentQuestion 设正确答案 + _aiStreamGenerate 补 chapterId；[subjects.js] switchChapter 先 showScreen 再定位 card-bottom-bar；[quiz.routes.js] completed 分支穿透修复；[state.js] saveQuizHistory 补 name 属性
+- **UX**: init/doLogin 取消弹窗，静默恢复，按钮可见性体现进度
 
 ---
 
