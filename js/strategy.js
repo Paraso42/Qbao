@@ -18,7 +18,7 @@ function loadChapterStrategyToUI() {
   document.getElementById('s-err').value = s.errPct || 0;
   document.getElementById('s-review').value = (s.errPct || 0) + (s.reviewPct || 0);
   updateChapterDualSliderUI(s.errPct || 0, s.reviewPct || 0, s.newPct || 0);
-  renderChapterTags(); updateChapterPromptTemplate(); applyAiModeUi();
+  renderTagColumns(); updateChapterPromptTemplate(); applyAiModeUi();
 }
 function onChapterStrategyChange() { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return; s.typeCounts.single = parseInt(document.getElementById('tc-single').value) || 0; s.typeCounts.judge = parseInt(document.getElementById('tc-judge').value) || 0; s.typeCounts.term = parseInt(document.getElementById('tc-term').value) || 0; s.typeCounts.short = parseInt(document.getElementById('tc-short').value) || 0; saveState(); updateChapterPromptTemplate(); updateGenerateButtonState(); }
 function onChapterDualSlider() {
@@ -30,28 +30,239 @@ function onChapterDualSlider() {
 }
 function updateChapterDualSliderUI(err, rev, newP) { ['dv-err','sn-err'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = err; }); ['dv-review','sn-review'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = rev; }); ['dv-new','sn-new'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = newP; }); const fe = document.getElementById('fill-err'); if (fe) fe.style.width = err + '%'; const fr = document.getElementById('fill-review'); if (fr) { fr.style.width = rev + '%'; fr.style.left = err + '%'; } const fn = document.getElementById('fill-new'); if (fn) { fn.style.width = newP + '%'; fn.style.left = (err + rev) + '%'; }
 }
-function renderChapterTags() { const container = document.getElementById('tags-list-container'); if (!container) return; const ch = getCh(); if (!ch) { container.innerHTML = ''; return; } const s = getChStrategy(ch.id); const tags = s ? s.weakTags : []; if (!tags || tags.length === 0) { container.innerHTML = '<span style="color:#bbb;font-size:11px;">暂无标签。答题后错题标签自动添加。</span>'; return; } container.innerHTML = tags.map((t, i) => '<span class="' + (t.active ? 'tag-chip active' : 'tag-chip') + '" onclick="toggleChapterTag(' + i + ')">' + (t.active ? '✅ ' : '⬜ ') + escapeHtml(t.name) + '<span class="tag-remove" onclick="event.stopPropagation();removeChapterTag(' + i + ')">×</span></span>').join(''); }
-function toggleChapterTag(idx) { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s || !s.weakTags[idx]) return; s.weakTags[idx].active = !s.weakTags[idx].active; saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
-function removeChapterTag(idx) { const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s || !s.weakTags[idx]) return; s.weakTags.splice(idx, 1); saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
-function addManualTag() { const input = document.getElementById('tag-input'); const name = input.value.trim(); if (!name) return; const ch = getCh(); if (!ch) return; const s = getChStrategy(ch.id); if (!s) return; if (s.weakTags.some(t => t.name === name)) { input.value = ''; return; } s.weakTags.push({ name, active: true }); input.value = ''; saveState(); renderChapterTags(); updateChapterPromptTemplate(); }
-function syncTagsFromWrongAnswers() { const ch = getCh(); if (!ch || !ch.questions) { alert('当前章节无数据'); return; } const s = getChStrategy(ch.id); if (!s) return; const newTags = new Set(); ch.questions.forEach((q, i) => { if (isObjType(q.type) && ch.userAnswers[i] !== undefined && getCi(q, ch.userAnswers[i]) === false && q.tag) newTags.add(q.tag); }); if (newTags.size === 0) { alert('无客观题错题标签可同步'); return; } let added = 0; newTags.forEach(tag => { if (!s.weakTags.some(t => t.name === tag)) { s.weakTags.push({ name: tag, active: true }); added++; } }); saveState(); renderChapterTags(); updateChapterPromptTemplate(); alert('✅ 已添加 ' + added + ' 个标签'); }
-function generatePromptText(chId) {
-  const s = getChStrategy(chId); if (!s) return '';
-  const single = s.typeCounts.single || 0, judge = s.typeCounts.judge || 0, term = s.typeCounts.term || 0, short = s.typeCounts.short || 0;
-  const errPct = s.errPct || 0, reviewPct = s.reviewPct || 0, newPct = s.newPct || 0;
-  let parts = []; if (single > 0) parts.push(single + ' 道单选题'); if (judge > 0) parts.push(judge + ' 道判断题'); if (term > 0) parts.push(term + ' 道名词解释题'); if (short > 0) parts.push(short + ' 道简答题');
-  const qStr = parts.join('，') || '请自行决定题型与数量';
-  const activeTags = (s.weakTags || []).filter(t => t.active).map(t => t.name);
-  let tagLine7 = ''; if (errPct > 0 && activeTags.length > 0) tagLine7 = '\n7. 【薄弱点重点出题】请重点针对以下知识点标签出题：' + activeTags.join('、') + '。确保这些知识点在题目中得到充分覆盖。';
-  // 列出所有已有 tag，帮助 AI 做归类（传统模式和 AI 模式都受益）
-  var allTags = (s.weakTags || []).map(function(t) { return t.name; });
-  var existingTagLine = '';
-  if (allTags.length > 0) {
-    existingTagLine = '\n\n【已有知识点标签】' + allTags.join('、') + '\n如果题目知识点与以上已有标签相似，请优先使用已有标签名称；如果是全新知识点，再创建新标签。';
+// ===== Tag Management v2: Three-Column Layout =====
+var _dragTag = null, _dragCat = null;
+
+function _setupDragListeners() {
+  // Programmatic dragstart on all chips (more reliable than inline ondragstart)
+  document.querySelectorAll('.tag-chip-v2[draggable]').forEach(function(chip) {
+    if (chip._hasDrag) return;
+    chip._hasDrag = true;
+    chip.addEventListener('dragstart', function(e) {
+      _dragTag = chip.dataset.tag;
+      _dragCat = chip.dataset.cat;
+      chip.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', _dragTag);
+      console.log('dragStart: tag=' + _dragTag + ' cat=' + _dragCat);
+    });
+    chip.addEventListener('dragend', function(e) {
+      chip.classList.remove('dragging');
+      document.querySelectorAll('.tag-chip-v2.drag-target').forEach(function(el) { el.classList.remove('drag-target'); });
+      _dragTag = null; _dragCat = null;
+    });
+  });
+
+  // Set up drop zone on the panel (once)
+  var panel = document.getElementById('tags-manager-v2');
+  if (!panel || panel._dropReady) return;
+  panel._dropReady = true;
+
+  panel.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    var colList = e.target.closest('.tag-col-list');
+    document.querySelectorAll('.tag-col-list.drag-over').forEach(function(el) {
+      if (el !== colList) el.classList.remove('drag-over');
+    });
+    if (colList) colList.classList.add('drag-over');
+    var chip = e.target.closest('.tag-chip-v2');
+    document.querySelectorAll('.tag-chip-v2.drag-target').forEach(function(el) { el.classList.remove('drag-target'); });
+    if (chip && _dragTag && chip.dataset.cat === _dragCat && chip.dataset.tag !== _dragTag) {
+      chip.classList.add('drag-target');
+    }
+  });
+
+  panel.addEventListener('drop', function(e) {
+    e.preventDefault();
+    document.querySelectorAll('.tag-col-list.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+    document.querySelectorAll('.tag-chip-v2.drag-target').forEach(function(el) { el.classList.remove('drag-target'); });
+
+    if (!_dragTag || !_dragCat) { console.log('drop: no _dragTag/_dragCat'); return; }
+    // Find target column by checking parent .tag-column
+    var colEl = e.target.closest('.tag-column');
+    if (!colEl) { console.log('drop: not on .tag-column, target:', e.target.tagName, e.target.className); return; }
+    var listEl = colEl.querySelector('.tag-col-list');
+    if (!listEl) return;
+    var toCat = listEl.id.replace('tag-col-', '');
+    if (['error','review','new'].indexOf(toCat) < 0) return;
+
+    console.log('drop: tag=' + _dragTag + ' from=' + _dragCat + ' to=' + toCat);
+
+    // Merge: dropped on another chip in SAME category
+    var targetChip = e.target.closest('.tag-chip-v2');
+    if (targetChip && targetChip.dataset.cat === _dragCat && targetChip.dataset.tag !== _dragTag) {
+      console.log('drop: merge ' + _dragTag + ' -> ' + targetChip.dataset.tag);
+      try { mergeTagInCategory(_dragTag, targetChip.dataset.tag, _dragCat); } catch(me) { console.error('merge error:', me); }
+      return;
+    }
+
+    // Move between categories
+    if (_dragCat !== toCat) {
+      console.log('drop: move to ' + toCat);
+      try { moveTagBetweenColumns(_dragTag, _dragCat, toCat); } catch(me2) { console.error('move error:', me2); }
+    }
+  });
+}
+
+function renderTagColumns() {
+  var cols = ['error','review','new'];
+  var emptyMsgs = { error: '暂无错题标签', review: '暂无复习标签', new: '暂无新题标签' };
+  var ch = getCh(); var s = ch ? getChStrategy(ch.id) : null;
+  cols.forEach(function(cat) {
+    var listEl = document.getElementById('tag-col-' + cat);
+    if (!listEl) return;
+    var tags = s ? (s[cat + 'Tags'] || []) : [];
+    if (tags.length === 0) {
+      listEl.innerHTML = '<span style="color:#bbb;font-size:11px;padding:4px;">' + emptyMsgs[cat] + '</span>';
+      return;
+    }
+    listEl.innerHTML = tags.map(function(t) {
+      var meta = (s.tagMeta && s.tagMeta[t]) || { totalQ: 0, correct: 0 };
+      var rate = meta.totalQ > 0 ? Math.round(meta.correct / meta.totalQ * 100) : 0;
+      var statStr = meta.totalQ > 0 ? ('<span class="tag-stat">' + meta.totalQ + '题 ' + rate + '%</span>') : '';
+      return '<span class="tag-chip-v2 cat-' + cat + '" draggable="true" data-tag="' + escapeHtml(t) + '" data-cat="' + cat + '" ondblclick="tagRenameStart(this,\'' + cat + '\')">' +
+        '<span class="tag-name">' + escapeHtml(t) + '</span>' + statStr +
+        '<span class="tag-del" onclick="event.stopPropagation();removeTagFromCategory(\'' + cat + '\',\'' + escapeHtml(t).replace(/'/g,"\\'") + '\')">×</span>' +
+        '</span>';
+    }).join('');
+  });
+  // Bind programmatic drag listeners to all chips (idempotent — _hasDrag flag)
+  _setupDragListeners();
+}
+
+var _dragTag = null, _dragCat = null;
+function addTagToCategory(cat, input) {
+  var name = input.value.trim(); if (!name) return;
+  var ch = getCh(); if (!ch) return;
+  var s = getChStrategy(ch.id); if (!s) return;
+  var allTags = (s.errorTags || []).concat(s.reviewTags || [], s.newTopicTags || []);
+  if (allTags.indexOf(name) >= 0) { input.value = ''; return; }
+  s[cat + 'Tags'].push(name);
+  if (!s.tagMeta[name]) s.tagMeta[name] = { totalQ: 0, correct: 0 };
+  input.value = ''; saveState(); renderTagColumns(); updateChapterPromptTemplate();
+}
+
+function removeTagFromCategory(cat, name) {
+  var ch = getCh(); if (!ch) return;
+  var s = getChStrategy(ch.id); if (!s) return;
+  var arr = s[cat + 'Tags']; if (!arr) return;
+  var idx = arr.indexOf(name);
+  if (idx >= 0) arr.splice(idx, 1);
+  saveState(); renderTagColumns(); updateChapterPromptTemplate();
+}
+
+function moveTagBetweenColumns(tagName, fromCat, toCat) {
+  var ch = getCh(); if (!ch) { console.log('moveTag: no chapter'); return; }
+  var s = getChStrategy(ch.id); if (!s) { console.log('moveTag: no strategy'); return; }
+  var fromArr = s[fromCat + 'Tags']; var toArr = s[toCat + 'Tags'];
+  if (!fromArr || !toArr) { console.log('moveTag: missing arrays for ' + fromCat + ' or ' + toCat); return; }
+  var idx = fromArr.indexOf(tagName);
+  console.log('moveTag: removing "' + tagName + '" from ' + fromCat + 'Tags (idx=' + idx + '), adding to ' + toCat + 'Tags');
+  if (idx >= 0) fromArr.splice(idx, 1);
+  if (toArr.indexOf(tagName) < 0) toArr.push(tagName);
+  saveState(); renderTagColumns(); updateChapterPromptTemplate();
+}
+
+function mergeTagInCategory(draggedTag, targetTag, cat) {
+  console.log('mergeTag: ' + draggedTag + ' -> ' + targetTag + ' in ' + cat);
+  if (!confirm('合并标签「' + draggedTag + '」到「' + targetTag + '」？\n被合并的标签将被移除，其关联的题目归入目标标签。')) { console.log('mergeTag: cancelled by user'); return; }
+  var ch = getCh(); if (!ch) { console.log('mergeTag: no chapter'); return; }
+  var s = getChStrategy(ch.id); if (!s) { console.log('mergeTag: no strategy'); return; }
+  var arr = s[cat + 'Tags'];
+  var idx = arr.indexOf(draggedTag);
+  if (idx >= 0) arr.splice(idx, 1);
+  // Merge tagMeta: add draggedTag's stats to targetTag
+  if (s.tagMeta[draggedTag] && s.tagMeta[targetTag]) {
+    s.tagMeta[targetTag].totalQ += s.tagMeta[draggedTag].totalQ;
+    s.tagMeta[targetTag].correct += s.tagMeta[draggedTag].correct;
   }
-  var tagLabelNum = tagLine7 ? '\n8.' : '\n7.';
+  delete s.tagMeta[draggedTag];
+  // Update all quizSets: rename tag on questions
+  (ch.quizSets || []).forEach(function(set) {
+    set.questions.forEach(function(q) { if (q.tag === draggedTag) q.tag = targetTag; });
+  });
+  saveState(); renderTagColumns(); updateChapterPromptTemplate();
+}
+
+function tagRenameStart(el, cat) {
+  var oldName = el.dataset.tag;
+  var newName = prompt('重命名标签：', oldName);
+  if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+  newName = newName.trim();
+  var ch = getCh(); if (!ch) return;
+  var s = getChStrategy(ch.id); if (!s) return;
+  var arr = s[cat + 'Tags']; var idx = arr.indexOf(oldName);
+  if (idx >= 0) arr[idx] = newName;
+  if (s.tagMeta[oldName]) { s.tagMeta[newName] = s.tagMeta[oldName]; delete s.tagMeta[oldName]; }
+  (ch.quizSets || []).forEach(function(set) {
+    set.questions.forEach(function(q) { if (q.tag === oldName) q.tag = newName; });
+  });
+  saveState(); renderTagColumns(); updateChapterPromptTemplate();
+}
+
+// Backward compat stubs
+function renderChapterTags() { renderTagColumns(); }
+function addManualTag() { var input = document.getElementById('tag-input'); if (input) addTagToCategory('error', input); }
+function toggleChapterTag(idx) {}
+function removeChapterTag(idx) {}
+
+// ===== Updated generatePromptText =====
+function generatePromptText(chId) {
+  var s = getChStrategy(chId); if (!s) return '';
+  var single = s.typeCounts.single || 0, judge = s.typeCounts.judge || 0, term = s.typeCounts.term || 0, short = s.typeCounts.short || 0;
+  var errPct = s.errPct || 0, reviewPct = s.reviewPct || 0, newPct = s.newPct || 0;
+  var parts = []; if (single > 0) parts.push(single + ' 道单选题'); if (judge > 0) parts.push(judge + ' 道判断题'); if (term > 0) parts.push(term + ' 道名词解释题'); if (short > 0) parts.push(short + ' 道简答题');
+  var qStr = parts.join('，') || '请自行决定题型与数量';
+  var totalQ = single + judge + term + short;
+  // Calculate exact per-category question counts
+  var errTarget = Math.round(totalQ * errPct / 100);
+  var reviewTarget = Math.round(totalQ * reviewPct / 100);
+  var newTarget = totalQ - errTarget - reviewTarget;
+
+  var ch = state.chapters[chId];
+  var hasNew = ch && ch._hasNewFilesSinceLastGen;
+  var errorTags = s.errorTags || [], reviewTags = s.reviewTags || [], newTopicTags = s.newTopicTags || [];
+  var meta = s.tagMeta || {};
+
+  function tagWithRate(t) {
+    var m = meta[t] || { totalQ: 0, correct: 0 };
+    var rate = m.totalQ > 0 ? Math.round(m.correct / m.totalQ * 100) : 0;
+    return t + '(共' + m.totalQ + '题 正确率' + rate + '%)';
+  }
+  var errStr = errorTags.length > 0 ? errorTags.map(tagWithRate).join('、') : '暂无';
+  var revStr = reviewTags.length > 0 ? reviewTags.map(tagWithRate).join('、') : '暂无';
+  var newStr = newTopicTags.length > 0 ? newTopicTags.join('、') : '暂无';
+
   var formatNote = '重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n';
-      return formatNote + '请基于我提供的学习资料，生成新一轮复习题目。\n要求：\n1. 题型与数量：' + qStr + '。\n2. 内容来源：必须严格基于提供的资料。\n3. 格式要求：只输出纯文本的 JSON 数组。不要包含 markdown 代码块标记（```）或其他任何非JSON文字。\n4. JSON 字段结构：\n- 所有题目必须包含：id, type（值为 "single", "judge", "term", "short"）, tag（知识点标签）, question, explanation（标准答案/解析）。\n- 单选题（single）：增加 options（数组）, answer（数字索引 0-3）。\n- 判断题（judge）：增加 options（固定为 ["正确", "错误"]）, answer（数字索引 0 或 1）。\n- 名词解释（term）和简答题（short）：不需要 options 和 answer 字段，explanation 字段存放标准参考答案。\n5. 出题策略：' + errPct + '% 针对错题，' + reviewPct + '% 滚动复习，' + newPct + '% 新考点。\n6. 请在 explanation 中标注来源。' + tagLine7 + tagLabelNum + ' 请为每道题标注其所属的知识点标签（tag 字段），标签名称应简洁、一致。例如："三角函数"、"牛顿定律"、"文艺复兴"等。' + existingTagLine;
+  var base = formatNote;
+
+  if (hasNew) {
+    base += '请基于我提供的学习资料生成题目。知识点标签已预先整理好（见下方标签分类），请优先使用已有标签为每道题标注 tag 字段。\n\n';
+  } else {
+    base += '请基于之前已分析过的学习资料，按照以下标签分类生成新一轮复习题目。\n\n';
+  }
+
+  base += '【当前标签分类】\n';
+  base += '- 错题标签：' + errStr + '\n';
+  base += '- 复习标签：' + revStr + '\n';
+  base += '- 新知识点标签：' + newStr + '\n';
+  base += '注意：复习标签和错题标签都可能包含正确率不为 100% 的标签。正确率仅作为出题侧重参考，不是分类依据。\n\n';
+
+  base += '【出题要求】\n';
+  base += '1. 题型与数量：' + qStr + '。\n';
+  base += '2. 内容来源：必须严格基于提供的资料。\n';
+  base += '3. 格式要求：只输出纯文本的 JSON 数组。\n';
+  base += '4. JSON 字段结构：所有题目必须包含 id, type("single"/"judge"/"term"/"short"), tag(知识点标签), question, explanation, strategy("error"/"review"/"new")。\n';
+  base += '   单选增加 options(数组), answer(索引 0-3)；判断增加 options(["正确","错误"]), answer(0或1)；名词解释和简答不需要 options 和 answer。\n';
+  base += '5. 出题策略分配 — 严格遵循：\n';
+  base += '   - 错题回顾 (error)：' + errTarget + ' 道 — 从错题标签范围出变式题\n';
+  base += '   - 滚动复习 (review)：' + reviewTarget + ' 道 — 从复习标签范围出巩固题\n';
+  base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从' + (hasNew ? '新提取的' : '新') + '知识点标签范围出题\n';
+  base += '   每道题的 strategy 字段必须恰好是 "error"、"review"、"new" 之一。\n';
+  base += '   如果某个区块写"暂无"，则该区块分配的数量归入新考点探索。\n';
+  base += '6. 请为每道题标注知识标签（tag 字段），如果知识点与已有标签相似请归入已有标签。\n';
+
+  return base;
 }
 function updateChapterPromptTemplate() {
   const ch = getCh(); if (!ch) return;

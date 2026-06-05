@@ -108,6 +108,11 @@
   .tag-chip { padding: 6px 12px; min-height: 30px; font-size: var(--fs-xs); }
   .tag-add-input input { padding: 8px; min-height: 36px; }
   .tags-list { padding: var(--space-sm); gap: 6px; }
+  .tags-manager-v2 { flex-direction: column; gap: 6px; }
+  .tag-col-header { font-size: 12px; padding: 8px; }
+  .tag-col-list { min-height: 40px; }
+  .tag-chip-v2 { font-size: 12px; padding: 3px 8px; }
+  .tag-col-input { padding: 7px 10px; font-size: 12px; }
 
   /* --- Settings --- */
   .settings-row { flex-wrap: wrap; gap: var(--space-sm); }
