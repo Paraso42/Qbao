@@ -2,7 +2,22 @@
 
 ---
 
-## 2026-06-05 — 新题标签管理范围修正 + 面板滚动 v3.6.7（仅测试环境 8080）
+## 2026-06-05 — 新题标签策略 + 面板滚动修复 v3.6.8（仅测试环境 8080）
+
+### 一、AI 出题新题策略修正
+- prompt 增加强制规则：`strategy="new"` 的题目 tag 必须是与错题/复习标签不同的全新知识点
+- 禁止 AI 在新题上复用已有标签，`newTarget > 0` 时追加【重要】强调
+- 移除"优先使用已有标签"措辞，改为分 strategy 指定 tag 来源
+- error/review 题使用对应标签，new 题必须创建新标签
+
+### 二、标签面板滚动修复
+- `.tag-column` 移除 `overflow: hidden`（阻止子元素滚动条显示）
+- `.tag-col-list` 改为 `flex: 1 1 auto; max-height: 140px`
+- 新增 webkit 滚动条样式（4px 宽，圆角）
+
+### 涉及文件
+- `js/strategy.js` — generatePromptText 新题策略
+- `css/components.css` — 标签列 overflow + 滚动条
 
 ### 一、newTopicTags 改为纯用户管理
 - 移除 `_aiExecuteTask()` 中出题后自动收集题目标签注入 newTopicTags 的逻辑
