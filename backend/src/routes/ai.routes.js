@@ -10,38 +10,71 @@ const POOL_BASE = path.join(__dirname, '../../../uploads'); // shared file pool 
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const upload = multer({ dest: uploadDir, limits: { fileSize: 20 * 1024 * 1024 } });
 
+// Pre-check document parsing dependencies
+var mammothAvailable = false;
+try { require('mammoth'); mammothAvailable = true; } catch(e) {
+  console.error('CRITICAL: mammoth package not installed. DOCX files will fail to extract.');
+}
+var pdfParseAvailable = false;
+try { require('pdf-parse'); pdfParseAvailable = true; } catch(e) {
+  console.error('CRITICAL: pdf-parse package not installed. PDF files will fail to extract.');
+}
+var unzipperAvailable = false;
+try { require('unzipper'); unzipperAvailable = true; } catch(e) {
+  console.error('CRITICAL: unzipper package not installed. PPTX files will fail to extract.');
+}
+
 async function extractText(filePath, ext) {
+  // Image files — return empty with diagnostic info
   if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
-    return { type: 'text', content: '' };
+    return { type: 'text', content: '', extracted: true, empty: true };
   }
+  // Plain text files
   if (['txt', 'md'].includes(ext)) {
-    return { type: 'text', content: fs.readFileSync(filePath, 'utf-8') };
+    var txtContent = fs.readFileSync(filePath, 'utf-8');
+    return { type: 'text', content: txtContent, extracted: true, empty: !txtContent.trim() };
   }
+  // PDF
   if (ext === 'pdf') {
+    if (!pdfParseAvailable) {
+      return { type: 'text', content: '', extracted: false, error: 'pdf-parse 包未安装' };
+    }
     try {
       const pdf = require('pdf-parse');
       const raw = fs.readFileSync(filePath);
       const data = await pdf(raw);
-      console.log('PDF parse: pages=' + data.numpages + ', textLen=' + (data.text ? data.text.length : 0));
       if (!data.text || data.text.trim().length === 0) {
-        console.log('PDF parse warning: extracted text is empty (scanned PDF), skipping');
-        return { type: 'text', content: '' };
+        return { type: 'text', content: '', extracted: true, empty: true, warning: '未提取到文字内容' };
       }
-      return { type: 'text', content: data.text };
+      return { type: 'text', content: data.text, extracted: true, empty: false };
     } catch (e) {
-      console.error('PDF parse error:', e.message);
-      throw new Error('PDF解析失败: ' + e.message + '。请尝试转换为文字PDF后重新上传。');
+      return { type: 'text', content: '', extracted: false, error: 'PDF解析失败: ' + e.message };
     }
   }
+  // DOCX
   if (['docx'].includes(ext)) {
-    const mammoth = require('mammoth');
-    const result = await mammoth.extractRawText({ path: filePath });
-    return { type: 'text', content: result.value };
+    if (!mammothAvailable) {
+      return { type: 'text', content: '', extracted: false, error: 'mammoth 包未安装' };
+    }
+    try {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ path: filePath });
+      var dEmpty = !result.value || !result.value.trim();
+      return { type: 'text', content: result.value || '', extracted: true, empty: dEmpty,
+        warning: dEmpty ? 'DOCX文件未提取到文字内容' : undefined };
+    } catch (e) {
+      return { type: 'text', content: '', extracted: false, error: 'DOCX解析失败: ' + e.message };
+    }
   }
+  // DOC (old format, not supported)
   if (ext === 'doc') {
-    return { type: 'text', content: '(旧版 .doc 格式不支持直接解析。请用 Word 另存为 .docx 格式后重新上传。)' };
+    return { type: 'text', content: '', extracted: false, error: '旧版.doc格式不支持，请转换为.docx后重新上传' };
   }
+  // PPTX
   if (['pptx'].includes(ext)) {
+    if (!unzipperAvailable) {
+      return { type: 'text', content: '', extracted: false, error: 'unzipper 包未安装' };
+    }
     try {
       const unzip = require('unzipper');
       const extracted = await unzip.Open.file(filePath);
@@ -55,14 +88,15 @@ async function extractText(filePath, ext) {
           }
         }
       }
-      console.log('PPTX parse: textLen=' + text.length);
-      return { type: 'text', content: text || '(PPTX文件中未提取到文字内容)' };
+      var pEmpty = !text.trim();
+      return { type: 'text', content: text || '', extracted: true, empty: pEmpty,
+        warning: pEmpty ? 'PPTX文件未提取到文字内容' : undefined };
     } catch (e) {
-      console.error('PPTX parse error:', e.message);
-      return { type: 'text', content: '(PPTX解析失败: ' + e.message + ')' };
+      return { type: 'text', content: '', extracted: false, error: 'PPTX解析失败: ' + e.message };
     }
   }
-  return { type: 'unknown' };
+  // Unknown type
+  return { type: 'unknown', extracted: false, error: '不支持的文件类型: .' + ext };
 }
 
 module.exports = function (app) {
@@ -131,6 +165,7 @@ module.exports = function (app) {
 
       // If chapterId provided, read assigned pool files from disk
       var poolTexts = [];
+      var poolFilesStatus = [];
       if (chapterId) {
         try {
           var fileResult = await pool.query(
@@ -139,22 +174,42 @@ module.exports = function (app) {
           );
           for (var fi = 0; fi < fileResult.rows.length; fi++) {
             var frow = fileResult.rows[fi];
+            var statusEntry = { name: frow.original_name, found: false, extracted: false, empty: false, error: null, warning: null };
             var absPath = path.join(POOL_BASE, frow.file_path);
             if (fs.existsSync(absPath)) {
+              statusEntry.found = true;
               try {
                 var ext = path.extname(frow.original_name).slice(1).toLowerCase();
                 var extracted = await extractText(absPath, ext);
-                if (extracted && extracted.type === 'text' && extracted.content) {
+                statusEntry.extracted = extracted.extracted;
+                statusEntry.empty = extracted.empty;
+                statusEntry.error = extracted.error || null;
+                statusEntry.warning = extracted.warning || null;
+                if (extracted && extracted.type === 'text' && extracted.content && extracted.content.trim()) {
                   poolTexts.push('--- 文件：' + frow.original_name + ' ---\n' + extracted.content);
+                  statusEntry.contentLength = extracted.content.length;
+                } else if (extracted.warning) {
+                  console.warn('Pool file extraction warning: ' + frow.original_name + ' — ' + extracted.warning);
                 }
               } catch (ex) {
+                statusEntry.extracted = false;
+                statusEntry.error = ex.message;
                 console.warn('Failed to extract pool file: ' + frow.original_name + ' — ' + ex.message);
               }
+            } else {
+              statusEntry.error = 'File not found on disk';
+              console.warn('Pool file not found: ' + frow.original_name + ' at ' + absPath);
             }
+            poolFilesStatus.push(statusEntry);
           }
           if (poolTexts.length > 0) {
             userText = poolTexts.join('\n\n') + (userText ? '\n\n' + userText : '');
             console.log('AI generate: merged ' + poolTexts.length + ' pool files, total textLen=' + userText.length);
+          } else if (poolFilesStatus.length > 0) {
+            var failReasons = poolFilesStatus.map(function(s) {
+              return s.name + ': ' + (s.error || (s.found ? 'empty content' : 'file missing'));
+            }).join('; ');
+            console.error('AI generate: ALL ' + poolFilesStatus.length + ' pool files failed extraction — ' + failReasons);
           }
         } catch (e2) {
           console.warn('Pool file reading failed:', e2.message);
@@ -200,9 +255,10 @@ module.exports = function (app) {
             options: { type: 'array', items: { type: 'string' } },
             answer: { type: 'integer' },
             tag: { type: 'string' },
+            strategy: { type: 'string', enum: ['error', 'review', 'new'] },
             explanation: { type: 'string' }
           },
-          required: ['type', 'question', 'explanation']
+          required: ['type', 'question', 'tag', 'strategy', 'explanation']
         }
       };
 
@@ -273,7 +329,7 @@ module.exports = function (app) {
 
         if (streamDone) {
           try {
-            res.write('data: ' + JSON.stringify({ done: true, questions: accumulatedQuestions.slice(0, totalQ), usage: {} }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ done: true, questions: accumulatedQuestions.slice(0, totalQ), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           } catch(e) { /* connection already closed */ }
           return;
@@ -289,18 +345,18 @@ module.exports = function (app) {
         try {
           var questions = JSON.parse(finalClean);
           if (!Array.isArray(questions)) questions = [questions];
-          res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {} }) + '\n\n');
+          res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
           res.end();
         } catch (e) {
           if (!finalClean.endsWith(']')) finalClean += ']';
           try {
             questions = JSON.parse(finalClean);
             if (Array.isArray(questions)) {
-              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {} }) + '\n\n');
+              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
               res.end();
             } else throw new Error();
           } catch (e2) {
-            res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           }
         }
@@ -328,7 +384,7 @@ module.exports = function (app) {
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
           [req.userId, model, 'ok']
         );
-        res.json({ questions: questions, usage: completion.usage });
+        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus });
       }
     } catch (e) {
       console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);

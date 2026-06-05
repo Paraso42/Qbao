@@ -230,7 +230,11 @@ function renderMarkdown(text) {
 function getChStrategy(cid) {
   const ch = state.chapters[cid];
   if (!ch) return null;
-  if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] };
+  if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {} };
+  if (!ch.strategy.errorTags) ch.strategy.errorTags = [];
+  if (!ch.strategy.reviewTags) ch.strategy.reviewTags = [];
+  if (!ch.strategy.newTopicTags) ch.strategy.newTopicTags = [];
+  if (!ch.strategy.tagMeta) ch.strategy.tagMeta = {};
   return ch.strategy;
 }
 function migrateState(s) {
@@ -239,8 +243,21 @@ function migrateState(s) {
   if (!s.chapters) s.chapters = {};
   for (const cid in s.chapters) {
     const ch = s.chapters[cid];
-    if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] };
+    if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {} };
     if (!ch.quizSets && ch.questions && ch.questions.length > 0) ch.quizSets = [{ questions: ch.questions.slice(), userAnswers: (ch.userAnswers||[]).slice(), currentIdx: 0, createdAt: Date.now() }];
+    // Ensure new tag fields exist
+    if (!ch.strategy.errorTags) ch.strategy.errorTags = [];
+    if (!ch.strategy.reviewTags) ch.strategy.reviewTags = [];
+    if (!ch.strategy.newTopicTags) ch.strategy.newTopicTags = [];
+    if (!ch.strategy.tagMeta) ch.strategy.tagMeta = {};
+    // Migrate old weakTags to errorTags
+    if (ch.strategy.weakTags && Array.isArray(ch.strategy.weakTags) && ch.strategy.errorTags.length === 0) {
+      ch.strategy.weakTags.forEach(function(t) {
+        var tName = typeof t === 'string' ? t : t.name;
+        if (tName && ch.strategy.errorTags.indexOf(tName) < 0) ch.strategy.errorTags.push(tName);
+      });
+      delete ch.strategy.weakTags;
+    }
     if (ch.weakTags && Array.isArray(ch.weakTags)) {
       if (typeof ch.weakTags[0] === 'string') ch.strategy.weakTags = ch.weakTags.map(t => ({ name: t, active: true }));
       else ch.strategy.weakTags = ch.weakTags;

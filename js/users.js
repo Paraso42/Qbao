@@ -24,8 +24,8 @@ async function doLogin() {
     closeAuthDialog();
     updateAuthUI();
     await DataStoreInit();
-    // Silently restore quiz progress from server (cross-device)
-    await restoreQuizFromServer();
+    // Silently restore quiz progress from server (cross-device, all chapters)
+    await restoreQuizFromServer(true);
     renderSubjectList();
     updateSyncStatus();
   } catch(e) { showAuthError('auth-login-error', e.message); }
@@ -107,7 +107,7 @@ async function init(){ try{
 		renderSubjectList();
 		const saved=state.lastScreen||'start';
 		// 静默恢复答题进度（不弹窗，保持"开始答题"入口可用）
-		await restoreQuizFromServer();
+		await restoreQuizFromServer(true);
 		if (saved === 'quiz') {
 			var as2 = getActiveSet();
 			if (as2 && as2.questions && as2.questions.length > 0) {
@@ -788,6 +788,18 @@ async function assignFileToChapter(fileId) {
       var err = await (res ? res.json().catch(function() { return {}; }) : {});
       alert('分配失败: ' + (err.error || '网络错误'));
       return;
+    }
+    // Sync chapterMaterials so AI generation can use this file
+    var fileData = await res.json().catch(function() { return {}; });
+    if (fileData && fileData.file) {
+      var f = fileData.file;
+      var materials = getChapterMaterials(ch.id);
+      if (!materials.some(function(m) { return m._poolFile && m.id === ('pool_' + fileId); })) {
+        materials.push({ name: f.originalName, size: f.fileSize, addedAt: Date.now(), id: 'pool_' + fileId, _poolFile: true });
+        saveChapterMaterials(ch.id, materials);
+      }
+      ch._hasNewFilesSinceLastGen = true;
+      saveState();
     }
     renderFilesPage();
   } catch (err) {
