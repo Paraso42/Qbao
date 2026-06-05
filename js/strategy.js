@@ -75,7 +75,7 @@ function updateQuickActions() {
   if (runningStreamTask) {
     var totalQ = Math.max(streamSc, (runningStreamTask.streamSetRef ? runningStreamTask.streamSetRef.questions.length : 0));
     var answered = runningStreamTask.streamSetRef
-      ? runningStreamTask.streamSetRef.userAnswers.filter(function(a) { return a !== undefined; }).length
+      ? runningStreamTask.streamSetRef.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length
       : 0;
     document.getElementById('chapter-quick-info').textContent = '共 ' + totalQ + ' 题，已答 ' + answered + ' 题 (注入中...)';
     if (streamSc >= threshold) {
@@ -91,7 +91,7 @@ function updateQuickActions() {
   if (sets.length > 0) {
     const qs = getCurrentQuizSet();
     var totalQ = qs ? qs.questions.length : 0;
-    var answered = qs ? qs.userAnswers.filter(function(a) { return a !== undefined; }).length : 0;
+    var answered = qs ? qs.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length : 0;
     document.getElementById('chapter-quick-info').textContent = '共 ' + totalQ + ' 题，已答 ' + answered + ' 题';
     if (answered >= totalQ) {
       document.getElementById('btn-continue-quiz').style.display = 'none';

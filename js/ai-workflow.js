@@ -252,6 +252,7 @@ async function _aiStreamGenerate(task, opts) {
         textContent: uploadData.text,
         typeCounts: task.strategySnapshot ? task.strategySnapshot.typeCounts : { single: 10, judge: 5, term: 2, short: 1 },
         prompt: (ac.systemPrompt ? ac.systemPrompt.trim() + '\n\n' : '') + retryPrompt,
+        chapterId: task.chapterId,
         chapterHistory: {
           totalQuestions: totalQuestions || 0, totalAnswered: totalAnswered || 0, totalWrong: totalWrong || 0,
           tagStats: tagStats || {}, topWrongTags: topWrongTags || []
@@ -524,5 +525,5 @@ function getQuestionId(chId,q) { return chId+':'+simpleHash((q.question||'')); }
 function isQuestionIgnored(chId,q) { return state.ignoredQuestions&&state.ignoredQuestions.includes(getQuestionId(chId,q)); }
 function isQuestionFavorite() { return false; }
 function toggleFavorite() {}
-function ignoreCurrentQuestion() { const as=getActiveSet(); if(!as)return; const q=as.questions[as.currentIdx]; if(!q)return; if(!state.ignoredQuestions)state.ignoredQuestions=[]; const qId=getQuestionId(as.setId,q); if(!state.ignoredQuestions.includes(qId)){state.ignoredQuestions.push(qId);} saveState(); if(as.currentIdx<as.questions.length-1){as.setCurrentIdx(as.currentIdx+1);} renderQuestion(); updateProgress(); }
+function ignoreCurrentQuestion() { const as=getActiveSet(); if(!as)return; const q=as.questions[as.currentIdx]; if(!q)return; if(!state.ignoredQuestions)state.ignoredQuestions=[]; const qId=getQuestionId(as.setId,q); if(!state.ignoredQuestions.includes(qId)){state.ignoredQuestions.push(qId);} if(q.type==='single'||q.type==='judge'){as.userAnswers[as.currentIdx]=q.answer;} else {as.userAnswers[as.currentIdx]='(已掌握)';} saveState(); if(as.currentIdx<as.questions.length-1){as.setCurrentIdx(as.currentIdx+1);} renderQuestion(); updateProgress(); }
 window.addEventListener('resize', function() { positionCardBottomBar(); });

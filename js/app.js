@@ -46,7 +46,7 @@ function openQuizModal(view) {
 function closeQuizModal() {
   var as = getActiveSet();
   if (as && as.userAnswers) {
-    var answered = as.userAnswers.filter(function(a) { return a !== undefined; }).length;
+    var answered = as.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length;
     if (answered > 0 && as.questions && answered < as.questions.length) {
       if (!confirm('你还有未完成的题目，确定要退出吗？已答题目将保留。')) return;
     }

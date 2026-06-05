@@ -24,6 +24,8 @@ async function doLogin() {
     closeAuthDialog();
     updateAuthUI();
     await DataStoreInit();
+    // Silently restore quiz progress from server (cross-device)
+    await restoreQuizFromServer();
     renderSubjectList();
     updateSyncStatus();
   } catch(e) { showAuthError('auth-login-error', e.message); }
@@ -104,41 +106,18 @@ async function init(){ try{
 		if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;
 		renderSubjectList();
 		const saved=state.lastScreen||'start';
-		// 恢复未完成的答题进度（从服务端 + 本地）
+		// 静默恢复答题进度（不弹窗，保持"开始答题"入口可用）
 		await restoreQuizFromServer();
-		var as = getActiveSet();
-		var hasPartialProgress = false;
-		if (as && as.questions && as.questions.length > 0 && as.userAnswers) {
-			var answered = 0;
-			for (var _i = 0; _i < as.userAnswers.length; _i++) {
-				if (as.userAnswers[_i] !== undefined && as.userAnswers[_i] !== -1) answered++;
-			}
-			hasPartialProgress = (answered > 0 && answered < as.questions.length);
-		}
-		if (saved === 'quiz' || hasPartialProgress) {
-			if (as && as.questions && as.questions.length > 0) {
-				if (hasPartialProgress) {
-					var _a = answered;
-					if (confirm("检测到未完成的答题进度（已答 " + _a + "/" + as.questions.length + " 题），是否继续？")) {
-						openQuizModal('quiz');
-						renderQuestion();
-						updateProgress();
-					} else {
-						showScreen(saved === 'quiz' ? 'start' : saved);
-					}
-				} else {
-					openQuizModal('quiz');
-					renderQuestion();
-					updateProgress();
-				}
+		if (saved === 'quiz') {
+			var as2 = getActiveSet();
+			if (as2 && as2.questions && as2.questions.length > 0) {
+				openQuizModal('quiz'); renderQuestion(); updateProgress();
 			} else {
-				showScreen(saved === 'quiz' ? 'start' : saved);
+				showScreen('start');
 			}
 		} else {
 			showScreen(saved);
 		}
-		const ch=getCh();
-		if(ch&&ch.questions&&ch.questions.length>0){renderQuestion();updateProgress();}
 		updateQuickActions();
 		loadChapterStrategyToUI();
 		checkAchievements();
