@@ -178,37 +178,6 @@ async function _aiExecuteTask(task) {
       if (questions.length === 0) { lastJson='题目内容为空'; if(attempt<maxAttempts) continue; else throw new Error('AI返回的题目全部为空'); }
     }
     }
-    // Collect distinct tags from generated questions into newTopicTags
-    var metaTags = [];
-    if (questions && questions.length > 0) {
-      var tagSet = {};
-      var noTagCount = 0;
-      questions.forEach(function(q) {
-        if (q && q.tag && typeof q.tag === 'string' && q.tag.trim()) {
-          var t = q.tag.trim();
-          if (!tagSet[t]) { tagSet[t] = true; metaTags.push(t); }
-        } else { noTagCount++; }
-      });
-      console.log('tagCollect: found ' + metaTags.length + ' distinct tags from ' + questions.length + ' questions (' + noTagCount + ' questions missing tag field)');
-      if (metaTags.length > 0) {
-        var ch2 = state.chapters[task.chapterId];
-        if (ch2) {
-          var s2 = getChStrategy(ch2.id);
-          if (s2) {
-            var addedCount = 0;
-            metaTags.forEach(function(t) {
-              if (s2.newTopicTags.indexOf(t) < 0 && s2.errorTags.indexOf(t) < 0 && s2.reviewTags.indexOf(t) < 0) {
-                s2.newTopicTags.push(t);
-                if (!s2.tagMeta[t]) s2.tagMeta[t] = { totalQ: 0, correct: 0 };
-                addedCount++;
-              }
-            });
-            console.log('tagCollect: added ' + addedCount + ' new tags to newTopicTags (total now: ' + s2.newTopicTags.length + ')');
-          }
-        }
-      }
-    }
-
     // Strategy compliance validation
     if (questions && questions.length > 0) {
       var sc = { error: 0, review: 0, new: 0, unlabeled: 0 };
