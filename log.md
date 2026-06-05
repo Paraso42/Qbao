@@ -2,6 +2,18 @@
 
 ---
 
+## 2026-06-05 — 移动端标签拖拽修复 v3.6.9（仅测试环境 8080）
+
+### 改动
+- `.tag-chip-v2` 和 `.tags-manager-v2` 添加 `touch-action: none`，阻止移动端触摸拖拽时触发页面滚动
+- `responsive.css` 同步添加 `touch-action: none`，确保移动端断点下不丢失
+
+### 涉及文件
+- `css/components.css` — touch-action on tag-chip-v2 + tags-manager-v2
+- `css/responsive.css` — touch-action on tag-chip-v2 mobile override
+
+---
+
 ## 2026-06-05 — 新题标签策略 + 面板滚动修复 v3.6.8（仅测试环境 8080）
 
 ### 一、AI 出题新题策略修正
