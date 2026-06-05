@@ -2,7 +2,20 @@
 
 ---
 
-## 2026-06-05 — prompt 统一化 v3.6.6（仅测试环境 8080）
+## 2026-06-05 — 新题标签管理范围修正 + 面板滚动 v3.6.7（仅测试环境 8080）
+
+### 一、newTopicTags 改为纯用户管理
+- 移除 `_aiExecuteTask()` 中出题后自动收集题目标签注入 newTopicTags 的逻辑
+- 移除 `autoUpdateChapterWeakTags()` 中从 tagMeta 自动追加 newTopicTags 的逻辑
+- newTopicTags 仅由用户手动添加/拖入/输入，未被作答的标签不再自动分类至此
+
+### 二、标签面板滚动
+- `.tag-col-list` 新增 `max-height: 160px; overflow-y: auto`，标签过多时列内滚动
+
+### 涉及文件
+- `js/ai-workflow.js` — 移除 tagCollect 块（~28 行）
+- `js/quiz-engine.js` — autoUpdateChapterWeakTags 移除 newTopicTags 自动注入
+- `css/components.css` — .tag-col-list 滚动
 
 ### 改动
 - `generatePromptText()` 移除 `hasNew` 分支 — 有无新文件统一使用同一套 prompt 措辞
