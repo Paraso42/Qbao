@@ -111,7 +111,7 @@
   .tags-manager-v2 { flex-direction: column; gap: 6px; }
   .tag-col-header { font-size: 12px; padding: 8px; }
   .tag-col-list { min-height: 40px; }
-  .tag-chip-v2 { font-size: 12px; padding: 3px 8px; }
+  .tag-chip-v2 { font-size: 12px; padding: 3px 8px; touch-action: none; }
   .tag-col-input { padding: 7px 10px; font-size: 12px; }
 
   /* --- Settings --- */
