@@ -251,13 +251,15 @@ function autoUpdateChapterWeakTags(ch) {
     else if (m.correct < m.totalQ) { allTracked[tag] = 'error'; }
     else { allTracked[tag] = 'review'; }
   });
-  // Build new category arrays (preserve manual overrides for tags not touched this round)
+  // Auto-classify errorTags and reviewTags from tagMeta
   s.errorTags = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'error'; });
   s.reviewTags = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'review'; });
-  // newTopicTags: keep existing ones not yet tracked in tagMeta
-  var existingNew = (s.newTopicTags || []).filter(function(t) { return !allTracked[t]; });
+  // newTopicTags: NEVER auto-remove — only add new entries from tagMeta (totalQ===0)
   var newFromMeta = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'new'; });
-  s.newTopicTags = existingNew.concat(newFromMeta.filter(function(t) { return existingNew.indexOf(t) < 0; }));
+  if (!s.newTopicTags) s.newTopicTags = [];
+  newFromMeta.forEach(function(t) {
+    if (s.newTopicTags.indexOf(t) < 0) s.newTopicTags.push(t);
+  });
   saveState(); renderTagColumns(); updateChapterPromptTemplate();
 }
 function calcStats(as) { if (!as||!as.questions) return {total:0,answered:0,objCorrect:0,objTotal:0,wrongCount:0,subjCount:0}; let total=as.questions.length,answered=0,objCorrect=0,objTotal=0,wrongCount=0,subjCount=0; as.questions.forEach((q,i)=>{ var ans = as.userAnswers && as.userAnswers[i]; if(ans !== undefined && ans !== -1) answered++; if(isObjType(q.type)){objTotal++;if(ans !== undefined && ans !== -1){const ci=getCi(q,ans);if(ci===true)objCorrect++;else if(ci===false)wrongCount++;}} else {if(ans !== undefined && ans !== -1)subjCount++;}}); return {total,answered,objCorrect,objTotal,wrongCount,subjCount}; }
