@@ -31,6 +31,7 @@ function onChapterDualSlider() {
 function updateChapterDualSliderUI(err, rev, newP) { ['dv-err','sn-err'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = err; }); ['dv-review','sn-review'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = rev; }); ['dv-new','sn-new'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = newP; }); const fe = document.getElementById('fill-err'); if (fe) fe.style.width = err + '%'; const fr = document.getElementById('fill-review'); if (fr) { fr.style.width = rev + '%'; fr.style.left = err + '%'; } const fn = document.getElementById('fill-new'); if (fn) { fn.style.width = newP + '%'; fn.style.left = (err + rev) + '%'; }
 }
 // ===== Tag Management v2: Three-Column Layout =====
+function _tagArr(s, cat) { return cat === 'new' ? (s.newTopicTags || []) : (s[cat + 'Tags'] || []); }
 var _dragTag = null, _dragCat = null;
 
 function _setupDragListeners() {
@@ -111,7 +112,7 @@ function renderTagColumns() {
   cols.forEach(function(cat) {
     var listEl = document.getElementById('tag-col-' + cat);
     if (!listEl) return;
-    var tags = s ? (s[cat + 'Tags'] || []) : [];
+    var tags = s ? _tagArr(s, cat) : [];
     if (tags.length === 0) {
       listEl.innerHTML = '<span style="color:#bbb;font-size:11px;padding:4px;">' + emptyMsgs[cat] + '</span>';
       return;
@@ -137,7 +138,7 @@ function addTagToCategory(cat, input) {
   var s = getChStrategy(ch.id); if (!s) return;
   var allTags = (s.errorTags || []).concat(s.reviewTags || [], s.newTopicTags || []);
   if (allTags.indexOf(name) >= 0) { input.value = ''; return; }
-  s[cat + 'Tags'].push(name);
+  var tagArr = _tagArr(s, cat); tagArr.push(name); if (cat === 'new') s.newTopicTags = tagArr; else s[cat + 'Tags'] = tagArr;
   if (!s.tagMeta[name]) s.tagMeta[name] = { totalQ: 0, correct: 0 };
   input.value = ''; saveState(); renderTagColumns(); updateChapterPromptTemplate();
 }
@@ -145,7 +146,7 @@ function addTagToCategory(cat, input) {
 function removeTagFromCategory(cat, name) {
   var ch = getCh(); if (!ch) return;
   var s = getChStrategy(ch.id); if (!s) return;
-  var arr = s[cat + 'Tags']; if (!arr) return;
+  var arr = _tagArr(s, cat); if (!arr || !arr.length) return;
   var idx = arr.indexOf(name);
   if (idx >= 0) arr.splice(idx, 1);
   saveState(); renderTagColumns(); updateChapterPromptTemplate();
@@ -154,7 +155,7 @@ function removeTagFromCategory(cat, name) {
 function moveTagBetweenColumns(tagName, fromCat, toCat) {
   var ch = getCh(); if (!ch) { console.log('moveTag: no chapter'); return; }
   var s = getChStrategy(ch.id); if (!s) { console.log('moveTag: no strategy'); return; }
-  var fromArr = s[fromCat + 'Tags']; var toArr = s[toCat + 'Tags'];
+  var fromArr = _tagArr(s, fromCat); var toArr = _tagArr(s, toCat);
   if (!fromArr || !toArr) { console.log('moveTag: missing arrays for ' + fromCat + ' or ' + toCat); return; }
   var idx = fromArr.indexOf(tagName);
   console.log('moveTag: removing "' + tagName + '" from ' + fromCat + 'Tags (idx=' + idx + '), adding to ' + toCat + 'Tags');
@@ -168,7 +169,7 @@ function mergeTagInCategory(draggedTag, targetTag, cat) {
   if (!confirm('合并标签「' + draggedTag + '」到「' + targetTag + '」？\n被合并的标签将被移除，其关联的题目归入目标标签。')) { console.log('mergeTag: cancelled by user'); return; }
   var ch = getCh(); if (!ch) { console.log('mergeTag: no chapter'); return; }
   var s = getChStrategy(ch.id); if (!s) { console.log('mergeTag: no strategy'); return; }
-  var arr = s[cat + 'Tags'];
+  var arr = _tagArr(s, cat);
   var idx = arr.indexOf(draggedTag);
   if (idx >= 0) arr.splice(idx, 1);
   // Merge tagMeta: add draggedTag's stats to targetTag
@@ -191,7 +192,7 @@ function tagRenameStart(el, cat) {
   newName = newName.trim();
   var ch = getCh(); if (!ch) return;
   var s = getChStrategy(ch.id); if (!s) return;
-  var arr = s[cat + 'Tags']; var idx = arr.indexOf(oldName);
+  var arr = _tagArr(s, cat); var idx = arr.indexOf(oldName);
   if (idx >= 0) arr[idx] = newName;
   if (s.tagMeta[oldName]) { s.tagMeta[newName] = s.tagMeta[oldName]; delete s.tagMeta[oldName]; }
   (ch.quizSets || []).forEach(function(set) {
@@ -231,7 +232,7 @@ function generatePromptText(chId) {
   }
   var errStr = errorTags.length > 0 ? errorTags.map(tagWithRate).join('、') : '暂无';
   var revStr = reviewTags.length > 0 ? reviewTags.map(tagWithRate).join('、') : '暂无';
-  var newStr = newTopicTags.length > 0 ? newTopicTags.join('、') : '暂无';
+  var newStr = newTopicTags.length > 0 ? newTopicTags.map(tagWithRate).join('、') : '暂无';
 
   var formatNote = '重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n';
   var base = formatNote;
