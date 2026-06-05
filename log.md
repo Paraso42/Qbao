@@ -2,7 +2,24 @@
 
 ---
 
-## 2026-06-05 — 标签系统收敛 + 拖拽全面重写 v3.6.4（仅测试环境 8080）
+## 2026-06-05 — 三列标签修复 + 新题标签保护 v3.6.5（仅测试环境 8080）
+
+### 一、newTopicTags 属性名 bug 修复
+- **根因**: 三列标签管理使用 `s[cat + 'Tags']` 模式，`cat='new'` 时解析为 `s.newTags` 但实际属性是 `s.newTopicTags` → 新题标签渲染/添加/删除/拖拽全部失效
+- **修复**: 新增 `_tagArr(s, cat)` 辅助函数，`cat==='new'` 时返回 `s.newTopicTags`，其余返回 `s[cat+'Tags']`
+- 涉及函数: `renderTagColumns()`, `addTagToCategory()`, `removeTagFromCategory()`, `moveTagBetweenColumns()`, `mergeTagInCategory()`, `tagRenameStart()`
+
+### 二、autoUpdateChapterWeakTags 保护 newTopicTags
+- **修改前**: 答题后强制重建 newTopicTags（只保留未答过的标签）→ 出题后收集的标签一旦被答就被清空
+- **修改后**: newTopicTags 永不自动删除，仅从 tagMeta 中 `totalQ===0` 的标签追加。用户可手动拖拽移除
+
+### 三、prompt 简化
+- `generatePromptText()` hasNew 分支移除"知识点标签已预先整理好"的误导措辞
+- `newTopicTags` 现在也附带正确率统计（与 errorTags/reviewTags 一致）
+
+### 涉及文件
+- `js/strategy.js` — _tagArr 辅助 + prompt 优化
+- `js/quiz-engine.js` — autoUpdateChapterWeakTags 保护 newTopicTags
 
 ### 一、移除独立 AI 标签提取（性能优化）
 - 移除 `POST /ai/extract-tags` 端点及前端 `_aiExtractTags()` 调用
