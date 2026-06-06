@@ -176,6 +176,54 @@ async function syncAnswerToServerFinal() {
   } catch(e) { console.warn('syncAnswerToServerFinal failed:', e); }
 }
 
+
+// Keyboard shortcuts for quiz
+var _quizKeyHandler = null;
+function setupQuizKeyboard() {
+  if (_quizKeyHandler) document.removeEventListener('keydown', _quizKeyHandler);
+  _quizKeyHandler = function(e) {
+    var quizModal = document.getElementById('quiz-modal');
+    if (!quizModal || !quizModal.classList.contains('active')) return;
+    // Don't intercept when typing in textarea
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    var as = getActiveSet();
+    if (!as) return;
+    var q = as.questions[as.currentIdx];
+    if (!q) return;
+    var hasAns = as.userAnswers[as.currentIdx] !== undefined && as.userAnswers[as.currentIdx] !== -1 && as.userAnswers[as.currentIdx] !== null;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (hasAns && as.currentIdx < as.questions.length - 1) nextQuestion();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (as.currentIdx > 0) goToQuestion(as.currentIdx - 1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!hasAns) submitAnswer();
+      else if (as.currentIdx >= as.questions.length - 1) endExam();
+      else nextQuestion();
+    }
+    // Number keys 1-4 for option selection
+    if (!hasAns && (q.type === 'single' || q.type === 'judge')) {
+      var numKeys = { '1': 0, '2': 1, '3': 2, '4': 3 };
+      if (e.key in numKeys && numKeys[e.key] < (q.options ? q.options.length : 0)) {
+        e.preventDefault();
+        selectOption(numKeys[e.key]);
+      }
+      // A-D keys for options too
+      var letterKeys = { 'a': 0, 'b': 1, 'c': 2, 'd': 3 };
+      if (e.key.toLowerCase() in letterKeys && letterKeys[e.key.toLowerCase()] < (q.options ? q.options.length : 0)) {
+        e.preventDefault();
+        selectOption(letterKeys[e.key.toLowerCase()]);
+      }
+    }
+  };
+  document.addEventListener('keydown', _quizKeyHandler);
+}
+// Initialize keyboard shortcuts
+setupQuizKeyboard();
+
 function renderQuestion() {
   const as = getActiveSet(); const area = document.getElementById('question-area'); const tagEl = document.getElementById('quiz-tag'), typeEl = document.getElementById('quiz-type'); const navEl = document.getElementById('quiz-nav'), sb = document.getElementById('btn-submit'), nx = document.getElementById('btn-next');
   if (!as||!as.questions||!as.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; return; }
@@ -194,8 +242,9 @@ function renderQuestion() {
   if (hasAns&&q.explanation) html += '<div class="explanation-box"><h4>📖 参考答案</h4><p>'+renderMarkdown(q.explanation)+'</p></div>';
   if (area) area.innerHTML = html;
   if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined&&as.userAnswers[idx]!==null) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
-  if (sb) sb.style.display = hasAns?'none':'inline-block'; const ig=document.getElementById('btn-ignore'); if(ig)ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block';
+  if (sb) sb.style.display = hasAns?'none':'inline-block'; var ig=document.getElementById('btn-ignore'); if(ig){ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block';ig.textContent='👍 我会了';}
   if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
+
   applyQuizFontSize();
 }
 function selectOption(idx) { const as=getActiveSet(); if (!as||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); syncAnswerToServer(); }

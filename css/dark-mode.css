@@ -290,3 +290,10 @@ body.dark-mode .avatar-crop-close-btn { color: #707078; }
 body.dark-mode .avatar-crop-close-btn:hover { color: #e4e4e8; }
 body.dark-mode .avatar-crop-controls span { color: #909098; }
 body.dark-mode .avatar-crop-controls input[type="range"] { background: #3a3a44; }
+
+/* P1-5: Empty state guide */
+body.dark-mode #start-empty-guide { color: #707078; }
+body.dark-mode #start-empty-guide h3 { color: #a0a0a8; }
+body.dark-mode .dialog-overlay .dialog-box { background: #1e1e22; color: #e4e4e8; }
+body.dark-mode .dialog-overlay .dialog-box input[type="text"] { background: #28282e; border-color: #383840; color: #e4e4e8; }
+body.dark-mode #topbar-user-btn .tb-icon { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }

@@ -7,6 +7,8 @@ function loadChapterStrategyToUI() {
   var bar = document.getElementById('chapter-card-bottom-bar');
   if (!ch) { card.style.display = 'none'; if (bar) bar.style.display = 'none'; document.getElementById('main').style.paddingBottom = ''; return; }
   card.style.display = 'block';
+  var guide2 = document.getElementById('start-empty-guide');
+  if (guide2) guide2.style.display = 'none';
   if (bar && bar.style.display !== 'none') { positionCardBottomBar(); document.getElementById('main').style.paddingBottom = '52px'; }
   document.getElementById('ch-strategy-name').textContent = escapeHtml(ch.name);
   const s = getChStrategy(ch.id); if (!s) return;
@@ -272,6 +274,9 @@ function updateQuickActions() {
   const ch = getCh(); const container = document.getElementById('chapter-quick-actions');
   if (!container) return;
   if (!ch) { container.style.display = 'none'; return; }
+  // Hide empty state guide when chapter exists
+  var guide = document.getElementById('start-empty-guide');
+  if (guide) guide.style.display = 'none';
   document.getElementById('chapter-quick-title').textContent = '📖 当前：' + escapeHtml(ch.name);
   // 检测当前章节是否有正在运行的流式任务
   var runningStreamTask = (state.aiTaskQueue || []).find(function(t) {

@@ -16,6 +16,17 @@ function loadState() {
   state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
 
+function sanitizeState() {
+  if (state.srsData) {
+    var validIds = {};
+    Object.keys(state.chapters || {}).forEach(function(cid) { validIds[cid] = true; });
+    Object.keys(state.srsData).forEach(function(qId) {
+      var cid = qId.split(":")[0];
+      if (!validIds[cid]) delete state.srsData[qId];
+    });
+  }
+}
+
 async function DataStoreInit() {
   if (!isOnlineMode || !getToken()) return;
   const cloudKey = CLOUD_STORAGE_PREFIX + getUser()?.id;
@@ -56,7 +67,7 @@ async function DataStoreInit() {
   }
 }
 
-function saveState() { try { const qs=state.quizSession; state.quizSession=null; if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t._ssr=t.streamSetRef; delete t.streamSetRef;}); if(state.chapterMaterials){ Object.keys(state.chapterMaterials).forEach(function(cid){ state.chapterMaterials[cid].forEach(function(m){ delete m.data; }); }); } localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); var user=getUser(); if(user&&user.id) localStorage.setItem(CLOUD_STORAGE_PREFIX+user.id, JSON.stringify(state)); if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t.streamSetRef=t._ssr; delete t._ssr;}); state.quizSession=qs; scheduleCloudSync(); } catch(e) {} }
+function saveState() { try { const qs=state.quizSession; state.quizSession=null; if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t._ssr=t.streamSetRef; delete t.streamSetRef;}); var origCm=state.chapterMaterials; if(origCm){ var cleanCm={}; Object.keys(origCm).forEach(function(cid){ cleanCm[cid]=origCm[cid].map(function(m){ var copy={}; for(var k in m){ if(k!=='data') copy[k]=m[k]; } return copy; }); }); state.chapterMaterials=cleanCm; } localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); var user=getUser(); if(user&&user.id) localStorage.setItem(CLOUD_STORAGE_PREFIX+user.id, JSON.stringify(state)); if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t.streamSetRef=t._ssr; delete t._ssr;}); state.quizSession=qs; state.chapterMaterials=origCm; scheduleCloudSync(); } catch(e) {} }
 
 function scheduleCloudSync() {
   if (!isOnlineMode || !getToken()) return;

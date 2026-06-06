@@ -123,7 +123,8 @@
 .subj-tab-content { display: none; }
 .subj-tab-content.active { display: block; }
 
-.subj-dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-md); margin: var(--space-md) 0; }
+.subj-dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-md); margin: var(--space-md) 0; }
+@media (max-width: 600px) { .subj-dash-grid { grid-template-columns: repeat(2, 1fr); } }
 .subj-dash-card { text-align: center; padding: var(--space-lg) var(--space-md); background: var(--surface-hover); border-radius: var(--radius-md); }
 .subj-dash-card .num { font-size: var(--fs-xl); font-weight: 700; }
 .subj-dash-card .label { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
