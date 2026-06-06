@@ -1,0 +1,20 @@
+node_modules/
+Backup/
+compact/
+dumb/
+.DS_Store
+*.log
+*.pem
+backend/node_modules/
+backend/uploads/
+
+# 敏感/非主体文件 — 不上传 GitHub
+log.md
+my_data/
+wechat_pic.jpg
+.claude/
+split-js.js
+Version/
+ai_qbao_key01.pem
+dumb/
+*.lnk
