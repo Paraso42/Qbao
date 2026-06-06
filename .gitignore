@@ -1,9 +1,0 @@
-node_modules/
-Backup/
-compact/
-dumb/
-.DS_Store
-*.log
-*.pem
-backend/node_modules/
-backend/uploads/
