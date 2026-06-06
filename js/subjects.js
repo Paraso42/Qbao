@@ -1,12 +1,39 @@
+
+function showInlinePrompt(title, defaultValue, callback) {
+  var overlay = document.createElement('div');
+  overlay.className = 'dialog-overlay active';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:2000;';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = '<div class="dialog-box" style="max-width:380px;" onclick="event.stopPropagation()">'
+    + '<h3 style="margin-bottom:10px;">' + title + '</h3>'
+    + '<input type="text" id="inline-prompt-input" style="width:100%;padding:10px;border:1px solid #dee2e6;border-radius:6px;font-size:15px;">'
+    + '<div class="dialog-actions" style="margin-top:14px;">'
+    + '<button class="btn btn-secondary btn-small" id="inline-prompt-cancel">取消</button>'
+    + '<button class="btn btn-primary btn-small" id="inline-prompt-ok">确定</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+  var input = document.getElementById('inline-prompt-input');
+  input.value = defaultValue || '';
+  input.focus(); input.select();
+  input.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('inline-prompt-ok').click(); });
+  document.getElementById('inline-prompt-cancel').onclick = function() { overlay.remove(); };
+  document.getElementById('inline-prompt-ok').onclick = function() {
+    var val = input.value.trim();
+    overlay.remove();
+    if (val) callback(val);
+  };
+}
+
 function createSubject() {
-  const name = prompt('科目名称：', '科目 ' + (Object.keys(state.subjects).length + 1));
-  if (!name || !name.trim()) return;
+  var defaultName = '科目 ' + (Object.keys(state.subjects).length + 1);
+  showInlinePrompt('新建科目', defaultName, function(name) {
   const id = 'subj_' + Date.now().toString(36);
   state.subjects[id] = { id, name: name.trim(), chapterIds: [] };
   if (!state.currentSubjectId) state.currentSubjectId = id;
   saveState(); renderSubjectList(); checkAchievements();
+  });
 }
-function renameSubject(id) { const s = state.subjects[id]; if (!s) return; const n = prompt('新名称：', s.name); if (n && n.trim()) { s.name = n.trim(); saveState(); renderSubjectList(); } }
+function renameSubject(id) { var s = state.subjects[id]; if (!s) return; showInlinePrompt('重命名科目', s.name, function(n) { s.name = n; saveState(); renderSubjectList(); }); }
 function deleteSubject(id) {
   const s = state.subjects[id]; if (!s) return;
   if (!confirm('删除科目「' + s.name + '」及其所有章节？')) return;
@@ -26,12 +53,21 @@ function switchSubject(id) {
 }
 // ===== 章节管理 =====
 function createChapter(subjId, name) {
-  const s = state.subjects[subjId]; if (!s) return null;
-  const id = 'ch_' + Date.now().toString(36) + Math.random().toString(36).slice(2,4);
-  state.chapters[id] = { id, name: name || ('章节 ' + (s.chapterIds.length + 1)), questions: [], userAnswers: [], currentIdx: 0, createdAt: Date.now(), strategy: { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] } };
+  var s = state.subjects[subjId]; if (!s) return null;
+  if (name) {
+    _doCreateChapter(subjId, name);
+  } else {
+    var defaultName = '章节 ' + (s.chapterIds.length + 1);
+    showInlinePrompt('新建章节', defaultName, function(n) { _doCreateChapter(subjId, n); });
+  }
+  return null;
+}
+function _doCreateChapter(subjId, name) {
+  var s = state.subjects[subjId]; if (!s) return;
+  var id = 'ch_' + Date.now().toString(36) + Math.random().toString(36).slice(2,4);
+  state.chapters[id] = { id: id, name: name, questions: [], userAnswers: [], currentIdx: 0, createdAt: Date.now(), strategy: { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] } };
   s.chapterIds.push(id); state.currentChapterId = id;
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); checkAchievements();
-  return state.chapters[id];
 }
 function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; break; } } saveState(); renderSubjectList(); updateQuickActions(); showScreen('start'); restoreQuizFromServer(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); }
 function renameChapter(chId, newName) { const ch = state.chapters[chId]; if (!ch || !newName || !newName.trim()) return; ch.name = newName.trim(); saveState(); renderSubjectList(); }
@@ -42,7 +78,7 @@ function deleteChapter(chId) {
   if (state.currentChapterId === chId) { const s = getSubj(); state.currentChapterId = (s && s.chapterIds.length > 0) ? s.chapterIds[0] : null; }
   saveState(); renderSubjectList(); updateQuickActions(); showScreen('start');
 }
-function renameChapterPrompt(chId) { const ch = state.chapters[chId]; if (!ch) return; const n = prompt('新名称：', ch.name); if (n && n.trim()) renameChapter(chId, n.trim()); }
+function renameChapterPrompt(chId) { var ch = state.chapters[chId]; if (!ch) return; showInlinePrompt('重命名章节', ch.name, function(n) { renameChapter(chId, n); }); }
 // ===== 侧边栏渲染 =====
 function renderSubjectList() {
   const container = document.getElementById('subject-list');
@@ -54,7 +90,7 @@ function renderSubjectList() {
     const s = state.subjects[sid]; const active = sid === state.currentSubjectId ? 'active' : '';
     html += '<div class="subject-group"><div class="subject-header ' + active + '" onclick="switchSubject(\'' + sid + '\')">';
     html += '<span class="subj-name">📂 ' + escapeHtml(s.name) + '</span><span class="subj-count">' + s.chapterIds.length + '</span>';
-    html += '<span class="subj-actions"><button class="subj-btn" onclick="event.stopPropagation();renameSubject(\'' + sid + '\')">✏️</button><button class="subj-btn sb-del" onclick="event.stopPropagation();deleteSubject(\'' + sid + '\')">🗑️</button></span></div>';
+    html += '<span class="subj-actions"><button class="subj-btn" title="重命名" onclick="event.stopPropagation();renameSubject(\'' + sid + '\')">✏️</button><button class="subj-btn sb-del" title="删除" onclick="event.stopPropagation();deleteSubject(\'' + sid + '\')">🗑️</button></span></div>';
     html += '<div class="chapter-list-in-subj">';
     if (s.chapterIds.length > 0) {
       s.chapterIds.forEach(cid => {
@@ -67,8 +103,8 @@ function renderSubjectList() {
             totalAnswered += set.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length;
           }
         });
-        html += '<div class="chapter-item ' + ca + '" onclick="closeSidebarIfMobile();switchChapter(\'' + cid + '\')"><div class="chapter-info"><span class="chapter-name">' + escapeHtml(ch.name) + '</span><span class="chapter-count">' + totalAnswered + ' 题已答</span></div>';
-        html += '<div class="ch-actions"><button class="ch-btn ch-hist" onclick="event.stopPropagation();showChapterHistory(\'' + cid + '\')">📜</button><button class="ch-btn" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
+        html += '<div class="chapter-item ' + ca + '" ondblclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')" onclick="closeSidebarIfMobile();switchChapter(\'' + cid + '\')"><div class="chapter-info"><span class="chapter-name">' + escapeHtml(ch.name) + '</span><span class="chapter-count">' + totalAnswered + ' 题已答</span></div>';
+        html += '<div class="ch-actions"><button class="ch-btn ch-hist" title="答题历史" onclick="event.stopPropagation();showChapterHistory(\'' + cid + '\')">📜</button><button class="ch-btn" title="重命名" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" title="删除" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
       });
     }
     html += '<button class="btn-add-chapter" onclick="event.stopPropagation();createChapter(\'' + sid + '\')">＋ 新建章节</button></div></div>';
