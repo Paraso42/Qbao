@@ -37,7 +37,12 @@ async function doRegister() {
   const password = document.getElementById('auth-reg-password').value;
   const password2 = document.getElementById('auth-reg-password2').value;
   if (!username || username.length < 3) return showAuthError('auth-reg-error', '用户名至少3个字符');
+  if (username.length > 30) return showAuthError('auth-reg-error', '用户名不能超过30个字符');
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return showAuthError('auth-reg-error', '用户名只能包含字母、数字和下划线');
+  if (displayName && displayName.length > 50) return showAuthError('auth-reg-error', '显示名称不能超过50个字符');
   if (!password || password.length < 6) return showAuthError('auth-reg-error', '密码至少6个字符');
+  if (password.length > 128) return showAuthError('auth-reg-error', '密码不能超过128个字符');
+  if (/[^\x00-\x7F]/.test(password) && password.length < 8) return showAuthError('auth-reg-error', '包含非ASCII字符的密码至少需要8个字符');
   if (password !== password2) return showAuthError('auth-reg-error', '两次密码不一致');
   try {
     await apiRegister(username, displayName, password);
@@ -46,7 +51,14 @@ async function doRegister() {
     await DataStoreInit();
     renderSubjectList();
     updateSyncStatus();
-  } catch(e) { showAuthError('auth-reg-error', e.message); }
+  } catch(e) {
+    showAuthError('auth-reg-error', e.message);
+    // Preserve form values (except passwords)
+    try {
+      document.getElementById('auth-reg-username').value = username;
+      document.getElementById('auth-reg-displayname').value = displayName;
+    } catch(pe) {}
+  }
 }
 
 function enterOfflineMode() {
@@ -77,7 +89,14 @@ function updateAuthUI() {
   const ta = document.getElementById('topbar-auth-area');
   if (ta) {
     if (isOnlineMode && authUser) {
-      ta.innerHTML = '<button class="tb-item" id="topbar-user-btn" onclick="openUserCenterModal()"><span class="tb-icon">👤</span> ' + escapeHtml(authUser.displayName || authUser.username) + '</button>';
+      var avatarHtml = '';
+  if (authUser.avatarUrl || authUser.avatar) {
+    avatarHtml = '<span class="tb-icon" style="display:inline-block;width:22px;height:22px;border-radius:50%;overflow:hidden;vertical-align:middle;"><img src="' + (authUser.avatarUrl || authUser.avatar) + '" style="width:100%;height:100%;object-fit:cover;"></span>';
+  } else {
+    var initial = (authUser.displayName || authUser.username || '?').charAt(0).toUpperCase();
+    avatarHtml = '<span class="tb-icon" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#4facfe,#00f2fe);color:#fff;text-align:center;line-height:22px;font-size:12px;font-weight:700;">' + initial + '</span>';
+  }
+  ta.innerHTML = '<button class="tb-item" id="topbar-user-btn" onclick="openUserCenterModal()">' + avatarHtml + ' ' + escapeHtml(authUser.displayName || authUser.username) + '</button>';
     } else {
       ta.innerHTML = '<button class="tb-item" onclick="openAuthDialog()"><span class="tb-icon">☁️</span> 登录/注册</button>';
     }

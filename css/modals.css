@@ -317,13 +317,13 @@
 /* Report bottom bar — sticky inside quiz modal */
 .report-bottom-bar {
   position: sticky;
-  bottom: 0;
+  bottom: -1px;
   z-index: 5;
   display: flex;
   gap: 10px;
   justify-content: center;
-  padding: 10px 0 4px;
-  margin-top: 12px;
+  padding: 10px 0 6px;
+  margin-top: auto;
   background: var(--surface-card);
   border-top: 1px solid var(--border-light);
 }

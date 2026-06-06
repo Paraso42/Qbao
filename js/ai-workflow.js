@@ -1,8 +1,8 @@
 function getChapterMaterials(cid) { if(!state.chapterMaterials)state.chapterMaterials={}; return state.chapterMaterials[cid]||[]; }
 function saveChapterMaterials(cid, materials) { if(!state.chapterMaterials)state.chapterMaterials={}; state.chapterMaterials[cid]=materials; saveState(); }
 function onAiGlobalToggle() { const enabled=document.getElementById('ai-global-toggle').checked; state.aiEnabled=enabled; saveState(); applyAiModeUi(); updateTopbarAiIndicator(); if(enabled) showAiModeTooltip(); }
-function showAiModeTooltip() { const t=document.getElementById('ai-mode-tooltip'); if(t){t.style.display='block'; if(state._aiTooltipTimer) clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=setTimeout(function(){closeAiModeTooltip();},5000);} }
-function closeAiModeTooltip() { const t=document.getElementById('ai-mode-tooltip'); if(t)t.style.display='none'; if(state._aiTooltipTimer){clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=null;} }
+function showAiModeTooltip() { var t=document.getElementById('ai-mode-tooltip'); if(t){t.style.display='block';t.style.opacity='0';t.style.transform='translateY(4px)';setTimeout(function(){t.style.opacity='1';t.style.transform='translateY(0)';},10); if(state._aiTooltipTimer) clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=setTimeout(function(){closeAiModeTooltip();},6000);} }
+function closeAiModeTooltip() { var t=document.getElementById('ai-mode-tooltip'); if(t){t.style.opacity='0';t.style.transform='translateY(4px)';setTimeout(function(){t.style.display='none';},200);} if(state._aiTooltipTimer){clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=null;} }
 function cancelAiGenerate() {
   if(aiTimer){clearInterval(aiTimer);aiTimer=null;}
   aiGenerating=false;
@@ -438,7 +438,7 @@ async function aiTaskRunnerLoop() {
     if (!pendingTask) { aiTaskRunnerActive = false; updateAiTaskStatusBar(); renderAiTaskQueueDialog(); updateGenerateButtonState(); return; }
     await _aiExecuteTask(pendingTask);
     if (!aiTaskRunnerActive) { updateAiTaskStatusBar(); renderAiTaskQueueDialog(); updateGenerateButtonState(); return; }
-	    await new Promise(function(r){setTimeout(r, (state.aiConfig&&state.aiConfig.taskInterval?state.aiConfig.taskInterval:30)*1000);});
+	    await new Promise(function(r){setTimeout(r, 100);});
   }
 }
 function aiEnqueueGenerate(chapterId) {
@@ -464,7 +464,7 @@ function aiEnqueueGenerate(chapterId) {
   }
   var totalQ = tcSingle + tcJudge + tcTerm + tcShort;
   if (totalQ === 0) { alert('请至少设置一道题目的数量'); return; }
-  var task = { id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2), chapterId: chapterId, chapterName: ch.name, status: 'pending', promptText: generatePromptText(chapterId), materialNames: materials.map(function(m){return m.name;}), strategySnapshot: strategy ? JSON.parse(JSON.stringify(strategy)) : null, createdAt: Date.now(), completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, streamSetRef: null };
+  var task = { id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2), chapterId: chapterId, chapterName: ch.name, status: 'pending', promptText: generatePromptText(chapterId), materialNames: materials.map(function(m){return m.name;}), strategySnapshot: strategy ? JSON.parse(JSON.stringify(strategy)) : null, createdAt: Date.now(), completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, streamSetRef: null, _expectedTotal: totalQ };
   state.aiTaskQueue.push(task);
   saveState();
   if (!aiTaskRunnerActive) { aiTaskRunnerActive = true; aiTaskRunnerLoop(); }
@@ -516,7 +516,7 @@ async function openFilePoolForChapter() {
     document.body.appendChild(overlay);
   } catch(e) { alert('获取文件池失败: ' + e.message); }
 }
-async function assignFilePoolToChapter(fileId, fileName) {
+async function assignFilePoolToChapter(fileId, fileName, fileSize) {
   var ch = getCh();
   if (!ch) return;
   try {
@@ -536,8 +536,8 @@ async function assignFilePoolToChapter(fileId, fileName) {
     }
     // Add pool reference to chapter materials so button enables
     var materials = getChapterMaterials(ch.id);
-    if (!materials.some(function(m) { return m._poolFile && m.name === fileName; })) {
-      materials.push({ name: fileName, size: 0, addedAt: Date.now(), id: 'pool_' + fileId, _poolFile: true });
+    if (!materials.some(function(m) { return m.name === fileName; })) {
+      materials.push({ name: fileName, size: fileSize || 0, addedAt: Date.now(), id: 'pool_' + fileId, _poolFile: true });
       saveChapterMaterials(ch.id, materials);
     }
     ch._hasNewFilesSinceLastGen = true; saveState();
@@ -548,7 +548,7 @@ async function assignFilePoolToChapter(fileId, fileName) {
   } catch(e) { alert('分配失败: ' + e.message); }
 }
 function renderChapterMaterialsDialog() { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); const container=document.getElementById('cm-dialog-list'); if(!materials.length){container.innerHTML='<div class="empty-state">暂无复习资料</div>';return;} let html=''; materials.forEach((m,i)=>{ var icon = '<span style="margin-right:4px;">'+getExtIcon(m.name)+'</span>'; html+='<div class="ai-material-file"><span class="am-name">'+icon+escapeHtml(m.name)+'</span><span class="am-size">'+formatFileSize(m.size)+'</span><button class="am-del" onclick="removeChapterMaterial('+i+');renderChapterMaterialsDialog();">✕</button></div>'; }); container.innerHTML=html; }
-function removeChapterMaterial(idx) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); }
+function removeChapterMaterial(idx) { var ch=getCh(); if(!ch)return; var materials=getChapterMaterials(ch.id); var removed=materials.splice(idx,1); if(removed.length) idbDeleteMaterial(removed[0].id); saveChapterMaterials(ch.id, materials); renderAiMaterialList(); updateAiMaterialCount(); updateGenerateButtonState(); }
 function handleCmFileSelect(e) { const files=e.target.files; if(!files.length)return; handleCmFiles(files); e.target.value=''; }
 function handleCmFiles(files) { const ch=getCh(); if(!ch)return; const materials=getChapterMaterials(ch.id); var allowedExts=['pdf','doc','docx','pptx','txt','md']; for(let i=0;i<files.length;i++){ const f=files[i]; var ext=f.name.split('.').pop().toLowerCase(); if(allowedExts.indexOf(ext)===-1){alert(f.name+' 类型不支持，已跳过');continue;} if(f.size>20*1024*1024){alert(f.name+' 超过20MB');continue;} if(materials.find(function(m){return m.name===f.name&&m.size===f.size;})){alert(f.name+' 已存在，已跳过');continue;} const reader=new FileReader(); (function(file, mat){ reader.onload=async function(ev){ var mid=generateMaterialId(); mat.push({name:file.name,size:file.size,addedAt:Date.now(),id:mid}); saveChapterMaterials(ch.id, mat); try{ await idbStoreMaterial(mid, ev.target.result); }catch(e){ alert('保存资料失败：'+file.name); var idx=mat.length-1; mat.splice(idx,1); saveChapterMaterials(ch.id, mat); } try { var upFd2 = new FormData(); var dec3 = atob(ev.target.result.split(',')[1]); var bin3 = new Uint8Array(dec3.length); for(var k=0;k<dec3.length;k++) bin3[k]=dec3.charCodeAt(k); upFd2.append('file', new Blob([bin3]), file.name); upFd2.append('chapterId', ch.id); fetchWithAuth('/files/upload', { method: 'POST', body: upFd2 }).then(function(r){ if(r.status===409){ r.json().then(function(d){ alert(d.error||'文件重复'); }).catch(function(){}); } }).catch(function(){}); } catch(e) {} renderChapterMaterialsDialog(); renderAiMaterialList(); updateAiMaterialCount(); updateGenerateButtonState(); }; })(f, materials); reader.readAsDataURL(f); } }
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}

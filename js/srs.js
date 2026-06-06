@@ -1,3 +1,14 @@
+
+function showToast(msg, type) {
+  var colors = { success: '#2ed573', warning: '#f59e0b', info: '#4facfe', error: '#e94560' };
+  var toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:8px;z-index:9999;font-size:14px;max-width:320px;background:'+(colors[type]||colors.info)+';color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.15);transition:opacity 0.5s,transform 0.3s;transform:translateY(20px);opacity:0;';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(function(){ toast.style.opacity='1'; toast.style.transform='translateY(0)'; },10);
+  setTimeout(function(){ toast.style.opacity='0'; setTimeout(function(){ toast.remove(); },500); },3000);
+}
+
 function populateSRSFromHistory() {
   if (!state.srsData) state.srsData = {};
   let added = 0;
@@ -32,9 +43,18 @@ function getSrsDueQuestions() { const now=Date.now(); return Object.keys(state.s
 function getOverdueCount() { return getSrsDueQuestions().length; }
 function updateSrsCard() { /* SRS card moved to subject dashboard, home card removed */ }
 function updateSRSAfterExam(as) { if (!state.srsData) state.srsData={}; const now=Date.now(); as.questions.forEach((q,i)=>{ if (!isObjType(q.type)||as.userAnswers[i]===undefined) return; const qId=getQuestionId(as.setId,q); const ci=getCi(q,as.userAnswers[i]); const srs=getSRSData(qId); if (ci===true) { if (srs.repetitions===0) srs.interval=1; else if (srs.repetitions===1) srs.interval=3; else srs.interval=Math.round(srs.interval*srs.easeFactor); srs.repetitions++; } else { srs.interval=1; srs.repetitions=0; srs.easeFactor=Math.max(1.3,srs.easeFactor-0.2); } const days=srs.interval*86400000; srs.nextReview=now+days; }); saveState(); }
-function startSrsReview() { const due=getSrsDueQuestions(); if (!due.length) { alert('暂无待复习题目'); return; } const questions=[]; due.forEach(qId=>{ for (const cid in state.chapters) { const ch=state.chapters[cid]; if (!ch||!ch.questions) continue; for (const q of ch.questions) { if (getQuestionId(cid,q)===qId) { questions.push({...q,_srsChapterId:cid}); break; } } if (questions.length>0) break; } }); if (!questions.length) { alert('未找到对应题目数据'); return; } const sid=state.currentSubjectId||Object.keys(state.subjects)[0]; const eid='srs_'+Date.now().toString(36); const genExam={id:eid,name:'📅 间隔复习 '+new Date().toLocaleDateString('zh-CN'),type:'srs',subjectId:sid,questions,userAnswers:new Array(questions.length).fill(undefined),currentIdx:0,createdAt:Date.now()}; state.generatedExams[eid]=genExam; state.currentExamId=eid; saveState(); startExamQuiz(eid); }
+function startSrsReview() { const due=getSrsDueQuestions(); if (!due.length) { showToast('暂无待复习题目', 'info'); return; } const questions=[]; due.forEach(qId=>{ for (const cid in state.chapters) { const ch=state.chapters[cid]; if (!ch||!ch.questions) continue; for (const q of ch.questions) { if (getQuestionId(cid,q)===qId) { questions.push({...q,_srsChapterId:cid}); break; } } if (questions.length>0) break; } }); if (!questions.length) { showToast('未找到对应题目数据', 'warning'); return; } const sid=state.currentSubjectId||Object.keys(state.subjects)[0]; const eid='srs_'+Date.now().toString(36); const genExam={id:eid,name:'📅 间隔复习 '+new Date().toLocaleDateString('zh-CN'),type:'srs',subjectId:sid,questions,userAnswers:new Array(questions.length).fill(undefined),currentIdx:0,createdAt:Date.now()}; state.generatedExams[eid]=genExam; state.currentExamId=eid; saveState(); startExamQuiz(eid); }
 function startExamQuiz(eid) { const ex=state.generatedExams[eid]; if (!ex) return; state.currentExamId=eid; saveState(); showScreen('quiz'); renderQuestion(); updateProgress(); }
-function endExamGenerated(as) { updateSRSAfterExam(as); autoBackup(); checkAchievements(); syncAnswerToServerFinal(); state.currentExamId=null; saveState(); renderExamReport(as); }
+function endExamGenerated(as) { updateSRSAfterExam(as); autoBackup(); checkAchievements(); syncAnswerToServerFinal(); state.currentExamId=null; saveState();
+  // Update chapter tags (issue #7)
+  if (as.questions && as.questions.length > 0) {
+    var taggedChapterId = null;
+    as.questions.forEach(function(q) { if (q._srsChapterId && !taggedChapterId) taggedChapterId = q._srsChapterId; });
+    if (taggedChapterId && state.chapters[taggedChapterId]) {
+      autoUpdateChapterWeakTags(state.chapters[taggedChapterId]);
+    }
+  }
+  renderExamReport(as); }
 function renderExamReport(as) { const stats=calcStats(as); const c=document.getElementById('report-content'); if (!c) return; const correctTotal=stats.objCorrect+stats.subjCount; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0; let html='<div class="report-grid"><div class="report-stat correct"><div class="num">'+correctTotal+'</div><div class="label">✅ 总正确</div></div><div class="report-stat wrong"><div class="num">'+stats.wrongCount+'</div><div class="label">❌ 错误</div></div><div class="report-stat rate"><div class="num">'+rate+'%</div><div class="label">📊 正确率</div></div><div class="report-stat"><div class="num">'+stats.answered+'/'+stats.total+'</div><div class="label">📝 进度</div></div></div>'; const wrongTags=new Set(); as.questions.forEach((q,i)=>{if(isObjType(q.type)&&as.userAnswers&&as.userAnswers[i]!==undefined&&getCi(q,as.userAnswers[i])===false&&q.tag) wrongTags.add(q.tag);}); if(wrongTags.size>0){html+='<hr style="margin:10px 0;"><div style="padding:8px;background:#fff8f0;border-radius:6px;"><h4 style="color:#c2410c;font-size:14px;margin-bottom:4px;">🏷️ 错题标签</h4><div style="display:flex;flex-wrap:wrap;gap:3px;">';wrongTags.forEach(t=>{html+='<span style="background:#fed7aa;padding:1px 8px;border-radius:12px;font-size:12px;color:#9a3412;">'+escapeHtml(t)+'</span>';});html+='</div></div>';} html+='<hr style="margin:10px 0;"><h4 style="margin-bottom:8px;font-size:15px;">📋 逐题回顾</h4>'; as.questions.forEach((q,i)=>{const ua=as.userAnswers?as.userAnswers[i]:undefined;const ci=ua!==undefined?getCi(q,ua):null;const tm={single:'单选',judge:'判断',term:'名词解释',short:'简答'};let icon='⏳';if(ua!==undefined)icon=ci===true?'✅':(ci===false?'❌':'✅（主观题）');html+='<div class="history-q-item '+(ci===false?'wrong':ci===true?'correct':'')+'"><p class="q-text">'+icon+' ['+(tm[q.type]||q.type)+'] '+(q.tag?escapeHtml(q.tag):'')+' 第'+(i+1)+'题：'+escapeHtml(q.question)+'</p>';if(ua!==undefined){if(q.type==='single'||q.type==='judge'){html+='<p class="q-detail">📝 你答：'+escapeHtml(String(q.options[ua]??''))+' ｜ ✅：'+escapeHtml(String(q.options[q.answer]??''))+'</p>';}else{html+='<p class="q-detail">📝 你的答案：'+escapeHtml(String(ua))+'</p>';}}if(q.explanation)html+='<p class="q-detail">📖 '+escapeHtml(q.explanation)+'</p></div>';}); c.innerHTML=html; showScreen('report'); }
 function renderSubjSrsReview(s) {
   const container = document.getElementById('subj-tab-srs-review'); if (!container) return;
@@ -92,7 +112,7 @@ function renderGeneratedExamList(subjId, typeFilter) {
 function composeSrsCustom(subjId) {
   const s = state.subjects[subjId]; if (!s) return;
   const checkedCids = []; document.querySelectorAll('#srs-chapter-select input[type="checkbox"]:checked').forEach(cb => checkedCids.push(cb.value));
-  if (!checkedCids.length) { alert('请至少选择一个章节'); return; }
+  if (!checkedCids.length) { showToast('请至少选择一个章节', 'warning'); return; }
   const ts = parseInt(document.getElementById('srs-tc-single').value) || 0; const tj = parseInt(document.getElementById('srs-tc-judge').value) || 0;
   if (ts + tj === 0) { alert('请设置至少 1 道题'); return; }
   const selected = [];
@@ -103,12 +123,12 @@ function composeSrsCustom(subjId) {
     const sh = [...singlePool]; for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } selected.push(...sh.slice(0, ts));
     const sh2 = [...judgePool]; for (let i = sh2.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh2[i], sh2[j]] = [sh2[j], sh2[i]]; } selected.push(...sh2.slice(0, tj));
   });
-  if (!selected.length) { alert('未能抽取题目'); return; }
+  if (!selected.length) { showToast('所选章节没有可用题目', 'warning'); return; }
   const eid = 'srs_' + Date.now().toString(36);
   const genExam = { id: eid, name: '📅 自定义复习 ' + new Date().toLocaleDateString('zh-CN'), type: 'srs', subjectId: subjId, questions: selected, userAnswers: new Array(selected.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
   state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
   startExamQuiz(eid); renderSubjSrsReview(s);
-  alert('✅ 复习试卷已生成：共 ' + selected.length + ' 题');
+  showToast('复习试卷已生成：共 ' + selected.length + ' 题', 'success');
 }
 function startSrsReviewForSubj(subjId) {
   const s = state.subjects[subjId]; if (!s) return;
@@ -117,7 +137,7 @@ function startSrsReviewForSubj(subjId) {
   const due = getSrsDueQuestions().filter(qId => {
     return subjChapterIds.some(cid => qId.startsWith(cid + ':'));
   });
-  if (!due.length) { alert('本科目暂无待复习题目'); return; }
+  if (!due.length) { showToast('本科目暂无待复习题目', 'info'); return; }
   const questions = [];
   due.forEach(qId => {
     for (const cid of subjChapterIds) {
@@ -126,7 +146,7 @@ function startSrsReviewForSubj(subjId) {
       if (questions.length > 0) break;
     }
   });
-  if (!questions.length) { alert('未找到对应题目数据'); return; }
+  if (!questions.length) { showToast('未找到对应题目数据', 'warning'); return; }
   const eid = 'srs_' + Date.now().toString(36);
   const genExam = { id: eid, name: '📅 间隔复习 ' + new Date().toLocaleDateString('zh-CN'), type: 'srs', subjectId: subjId, questions, userAnswers: new Array(questions.length).fill(undefined), currentIdx: 0, createdAt: Date.now() };
   state.generatedExams[eid] = genExam; state.currentExamId = eid; saveState();
