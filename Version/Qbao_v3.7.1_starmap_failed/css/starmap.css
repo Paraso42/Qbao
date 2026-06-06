@@ -1,0 +1,487 @@
+/* ===== Knowledge Star Map ===== */
+
+/* Full-area star map screen — fills #main edge-to-edge (JS overrides #main styles) */
+.screen-starmap {
+  width: 100%;
+  height: calc(100vh - var(--topbar-height));
+  overflow: hidden !important;
+}
+
+/* Canvas container fills the screen */
+#starmap-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  overflow: hidden;
+  background: #0d0d1f;
+  border-radius: 0;
+}
+
+#starmap-container canvas {
+  display: block;
+}
+
+/* ---- Legend (top-right) ---- */
+.starmap-legend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.starmap-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.starmap-legend .legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.starmap-legend .legend-dot.chapter { background: #ffffff; box-shadow: 0 0 4px #ffffff; }
+.starmap-legend .legend-dot.tag { background: #ccddff; }
+.starmap-legend .legend-dot.correct { background: #2ed573; box-shadow: 0 0 4px #2ed573; }
+.starmap-legend .legend-dot.wrong { background: #e5534b; box-shadow: 0 0 4px #e5534b; }
+
+/* ---- Heatmap legend bar ---- */
+.starmap-heatmap-legend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  z-index: 10;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+}
+.starmap-heatmap-legend.visible { display: flex; }
+.starmap-heatmap-legend .gradient-bar {
+  width: 12px;
+  height: 80px;
+  border-radius: 6px;
+  background: linear-gradient(to bottom, #2ecc71, #8bc34a, #ff9800, #e74c3c);
+}
+.starmap-heatmap-legend .gradient-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 80px;
+  font-size: 10px;
+}
+
+/* ---- Right detail panel ---- */
+.starmap-detail-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 100%;
+  background: var(--surface-card);
+  border-left: 1px solid var(--border-light);
+  z-index: 20;
+  transform: translateX(100%);
+  transition: transform var(--transition-slow);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+.starmap-detail-panel.visible { transform: translateX(0); }
+
+.starmap-detail-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.starmap-detail-panel .panel-header .close-btn {
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background var(--transition-fast);
+}
+.starmap-detail-panel .panel-header .close-btn:hover { background: var(--surface-hover); }
+
+.starmap-detail-panel .panel-body { padding: 16px; flex: 1; overflow-y: auto; }
+.starmap-detail-panel .panel-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.starmap-detail-panel .panel-stat {
+  text-align: center;
+  padding: 10px 8px;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+}
+.starmap-detail-panel .panel-stat .stat-num {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.starmap-detail-panel .panel-stat .stat-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.starmap-detail-panel .panel-tags { margin-bottom: 16px; }
+.starmap-detail-panel .panel-tags h5 {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.starmap-detail-panel .tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.starmap-detail-panel .tag-chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  transition: all var(--transition-fast);
+}
+.starmap-detail-panel .tag-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.starmap-detail-panel .tag-chip.cat-error { background: var(--color-danger-light); border-color: var(--color-danger); color: var(--color-danger); }
+.starmap-detail-panel .tag-chip.cat-review { background: var(--color-warning-light); border-color: var(--color-warning); color: var(--color-warning); }
+.starmap-detail-panel .tag-chip.cat-new { background: var(--color-success-light); border-color: var(--color-success); color: var(--color-success); }
+
+.starmap-detail-panel .panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.starmap-detail-panel .panel-actions .btn {
+  width: 100%;
+  text-align: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+.starmap-detail-panel .panel-actions .btn:hover { background: var(--surface-hover); }
+.starmap-detail-panel .panel-actions .btn.primary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.starmap-detail-panel .panel-actions .btn.primary:hover { background: var(--color-primary-hover); }
+
+/* Question list in tag detail */
+.starmap-detail-panel .question-mini-list { margin-top: 12px; }
+.starmap-detail-panel .question-mini {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  margin-bottom: 4px;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.starmap-detail-panel .question-mini.correct { background: var(--color-success-light); color: var(--color-success); }
+.starmap-detail-panel .question-mini.wrong { background: var(--color-danger-light); color: var(--color-danger); }
+.starmap-detail-panel .question-mini.unanswered { background: var(--surface-hover); color: var(--text-muted); }
+.starmap-detail-panel .question-mini .q-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.starmap-detail-panel .question-mini.correct .q-dot { background: #2ed573; }
+.starmap-detail-panel .question-mini.wrong .q-dot { background: #e5534b; }
+
+/* Mini bar chart for tag accuracy */
+.starmap-detail-panel .tag-accuracy-bar {
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0;
+  display: flex;
+}
+.starmap-detail-panel .tag-accuracy-bar .correct-seg {
+  background: #2ed573;
+  transition: width 0.3s ease;
+}
+.starmap-detail-panel .tag-accuracy-bar .wrong-seg {
+  background: #e5534b;
+  transition: width 0.3s ease;
+}
+
+/* ---- Bottom control bar ---- */
+.starmap-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface-card);
+  border-top: 1px solid var(--border-light);
+  z-index: 15;
+  transition: height var(--transition-normal);
+  box-shadow: var(--shadow-sm);
+}
+.starmap-bottom-bar.state-default { height: 44px; }
+.starmap-bottom-bar.state-timeline { height: 72px; }
+.starmap-bottom-bar.state-operation { height: 100px; }
+
+.starmap-bottom-bar .bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  height: 44px;
+}
+.starmap-bottom-bar .bar-btn {
+  padding: 5px 10px;
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+.starmap-bottom-bar .bar-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.starmap-bottom-bar .bar-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.starmap-bottom-bar .bar-btn.icon-only { padding: 5px 8px; }
+.starmap-bottom-bar .bar-spacer { flex: 1; }
+.starmap-bottom-bar .bar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-light);
+}
+.starmap-bottom-bar .bar-info {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Timeline row */
+.starmap-bottom-bar .timeline-row {
+  padding: 0 12px 6px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+.starmap-bottom-bar.state-timeline .timeline-row { display: flex; }
+.starmap-bottom-bar .timeline-slider {
+  flex: 1;
+  accent-color: var(--color-primary);
+  height: 4px;
+}
+.starmap-bottom-bar .timeline-date {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: right;
+}
+.starmap-bottom-bar .timeline-play {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.starmap-bottom-bar .mini-chart {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 18px;
+  flex: 1;
+  padding: 0 4px;
+}
+.starmap-bottom-bar .mini-bar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 1px;
+  background: var(--border-default);
+  transition: height 0.3s ease;
+}
+
+/* Operation panel row */
+.starmap-bottom-bar .operation-row {
+  padding: 8px 12px;
+  display: none;
+  border-top: 1px solid var(--border-light);
+  background: var(--surface-hover);
+}
+.starmap-bottom-bar.state-operation .operation-row { display: block; }
+.starmap-bottom-bar .op-chapter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.starmap-bottom-bar .op-chapter-chip {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+.starmap-bottom-bar .op-chapter-chip.selected {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.starmap-bottom-bar .op-config-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.starmap-bottom-bar .op-generate-btn {
+  margin-left: auto;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+/* ---- Tooltip for hover ring (positioned by JS) ---- */
+.starmap-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 25;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.starmap-tooltip.visible { opacity: 1; }
+
+/* ---- Hover ring (cross-layout 4-button action ring) ---- */
+.starmap-hover-ring {
+  position: absolute;
+  pointer-events: none;
+  z-index: 25;
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.starmap-hover-ring.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+.starmap-hover-ring .ring-btn {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transform: translate(-50%, -50%);
+}
+.starmap-hover-ring .ring-btn:hover {
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(91,143,212,0.55);
+  transform: translate(-50%, -50%) scale(1.18);
+}
+/* Primary action (up button) highlighted */
+.starmap-hover-ring .ring-btn.up {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(91,143,212,0.4);
+}
+.starmap-hover-ring .ring-btn.up:hover {
+  background: var(--color-primary-hover, #4a7fc4);
+  box-shadow: 0 0 24px rgba(91,143,212,0.65);
+}
+.starmap-hover-ring .ring-btn .ring-label {
+  position: absolute;
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: color 0.15s ease;
+}
+/* Position labels outside each button */
+.starmap-hover-ring .ring-btn.up    .ring-label { bottom: -16px; left: 50%; transform: translateX(-50%); }
+.starmap-hover-ring .ring-btn.right .ring-label { top: 50%;   left: 44px;  transform: translateY(-50%); }
+.starmap-hover-ring .ring-btn.down  .ring-label { top: -16px;  left: 50%; transform: translateX(-50%); }
+.starmap-hover-ring .ring-btn.left  .ring-label { top: 50%;  right: 44px;  transform: translateY(-50%); }
+
+/* ---- Loading overlay ---- */
+.starmap-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-muted);
+  font-size: var(--fs-base);
+  z-index: 5;
+  pointer-events: none;
+}

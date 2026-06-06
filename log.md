@@ -2,6 +2,211 @@
 
 ---
 
+## 2026-06-06 — 测试环境 Bug 修复同步到生产环境
+
+本次将 8080/3001 测试环境已验证的修复同步至 9178/3000 生产环境，提升前端用户体验。
+
+### 同步内容
+
+**前端 (12 文件 → 9178)**：
+- `index.html` — SPA 骨架更新（移除任务间隔 slider、空状态引导、合并结束按钮等）
+- `js/state.js` — saveState 深拷贝修复、sanitizeState SRS 数据隔离、流式提前结束确认
+- `js/ai-workflow.js` — 文件池去重+大小显示、移除任务间隔、材料删除同步刷新
+- `js/subjects.js` — 侧栏 tooltip、自定义 prompt 弹窗、双击重命名、统一章节创建
+- `js/settings.js` — API Key 保存反馈、复选框即时保存、Provider 兼容检测、移除任务间隔
+- `js/quiz-engine.js` — 键盘快捷键修复、独立结束按钮移除、"我会了"两段式
+- `js/users.js` — 顶栏头像优先上传、密码复杂度校验、显示名称长度限制、注册失败保留表单
+- `js/srs.js` — SRS 题型补齐(num-picker)、大考卷/SRS 标签联动
+- `js/strategy.js` — 空状态引导配合
+- `css/modals.css` — 报告底栏 gap 修复
+- `css/dashboard.css` — 概览卡片固定 4 列 grid
+- `css/dark-mode.css` — 空状态引导、dialog 输入框、用户头像按钮暗色覆盖
+
+**后端 (3000)**：
+- 经 diff 对比，测试环境 (3001) 与生产环境 (3000) 源文件完全一致，无需更新
+- PM2 `qbao-api` 进程正常运行中
+
+### 部署验证
+- 所有 12 个前端文件 MD5 校验通过（本地 ↔ 服务器一致）
+- 9178 返回 200 OK
+- 3000 端口 PM2 监听正常
+
+### 包含的修复批次
+- P0 致命修复 Part 1 (state.js, ai-workflow.js)
+- P1/P2/P3 全面修复 Part 2 (12 文件)
+- 9 项追加修复 Part 3 (7 文件)
+
+---
+
+## 2026-06-05 — 9 项问题修复 (Part 3)
+
+基于用户测试反馈修复：
+
+1. **侧栏按钮 tooltip** (subjects.js)
+   - 修复 title 属性未正确注入的问题（前次替换未命中）
+   - ✏️「重命名」、🗑️「删除」、📜「答题历史」
+
+2. **API Key 保存反馈** (settings.js)
+   - 保存后输入框边框变绿 + 绿色光晕 3s（而非短暂显示掩码后清空）
+   - placeholder 持久显示「已保存 (N 字符) - 可输入新 Key 覆盖」
+
+3. **删除任务间隔** (settings.js, ai-workflow.js, index.html)
+   - 完全移除任务间隔 slider 及相关逻辑
+   - `taskInterval` 恒为 0，任务间仅 100ms yield
+   - `saveAiTaskInterval()` 变为空 stub
+
+4. **键盘快捷键修复** (quiz-engine.js)
+   - 根因：`setupQuizKeyboard()` 检查 `#screen-quiz` 但实际元素是 `#quiz-modal`
+   - 修正为检查 `#quiz-modal.active`
+   - 快捷键：↑↓←→ 导航、1-4/A-D 选选项、Enter 提交/下一题
+
+5. **顶栏头像优先上传** (users.js)
+   - 优先显示 `authUser.avatarUrl || authUser.avatar` 图片头像
+   - 无上传头像时回退到渐变圆形首字母
+
+6. **SRS 题型补齐** (srs.js)
+   - 修复 num-picker 未正确注入的问题（前次替换未命中）
+   - 单选/判断/名词解释/简答 四种题型均使用 num-picker
+   - `composeSrsCustom()` 从四种题型池抽取
+
+7. **大考卷/SRS 标签联动** (srs.js)
+   - `endExamGenerated()` 调用 `autoUpdateChapterWeakTags()` 更新章节标签
+   - 大考卷和间隔复习中答对/答错的题目也参与标签分类
+
+8. **删除独立"结束考试"按钮** (index.html, quiz-engine.js)
+   - 彻底删除 `btn-end-exam-standalone` 按钮
+   - 仅保留答题流程中的「结束 📊」按钮（最后一题时出现）
+
+9. **"我会了"两段式** (quiz-engine.js)
+   - 第一击：标记正确答案、展示答案+解析、按钮变为「👉 下一题」
+   - 第二击：跳转下一题
+   - `renderQuestion()` 每次渲染时重置按钮为「👍 我会了」
+
+### 涉及文件
+`subjects.js`, `settings.js`, `quiz-engine.js`, `users.js`, `srs.js`, `ai-workflow.js`, `index.html`
+
+---
+
+## 2026-06-05 — P1/P2/P3 问题全面修复 (Part 2)
+
+### P1 严重 UX 修复 (8项)
+
+1. **空状态引导** (index.html, strategy.js)
+   - 无章节时主页显示欢迎引导，含「新建章节」和「导入题目」快捷按钮
+   - 有章节时自动隐藏引导，显示原有操作卡片
+
+2. **prompt() 替换为自定义弹窗** (subjects.js)
+   - 新增 `showInlinePrompt()` 函数，创建临时 dialog 含输入框+取消/确定按钮
+   - `createSubject()`、`renameSubject()`、`renameChapterPrompt()` 全部改用此弹窗
+   - Enter 键提交，Esc 关闭遮罩
+
+3. **统一章节创建行为** (subjects.js)
+   - `createChapter()` 现在弹窗询问名称（默认"章节 N"）
+   - 内部拆分为 `_doCreateChapter()` 执行实际创建
+
+4. **侧栏按钮 tooltip** (subjects.js)
+   - ✏️重命名、🗑️删除、📜历史 按钮均添加 `title` 属性
+
+5. **API Key 保存反馈** (settings.js)
+   - 保存后输入框显示绿色掩码 `********(32字符)` 2 秒后自动清除
+   - 不再悄无声息地清空
+
+6. **复选框即时保存** (settings.js)
+   - 新增 `setupSettingsAutoSave()` 为流式/严格格式/阈值添加 change 监听
+   - `_autoSaveAiCheckbox()` / `_autoSaveAiThreshold()` 即时保存并显示反馈
+
+7. **Provider 兼容性即时检测** (settings.js)
+   - ECNU 勾选流式+严格格式时立即提示不兼容并自动关闭严格格式
+   - 非 ECNU provider 仅 confirm 提示
+
+8. **合并"结束"按钮** (index.html, quiz-engine.js)
+   - 独立"🏁 结束考试"按钮改为按需显示（最后一题时才出现）
+   - 原"结束 📊"在答题完成后显示，功能相同
+
+### P2 中等 UX 修复 (12项)
+
+9. **密码复杂度校验** (users.js) — 要求字母数字下划线、长度限制、非ASCII密码至少8位
+10. **注册失败保留表单** (users.js) — 异常时恢复用户名和显示名称输入框
+11. **"我会了"两段式操作** (quiz-engine.js) — 第一击标记已掌握并展示答案，第二击跳到下一题
+12. **答题键盘快捷键** (quiz-engine.js) — ↑↓←→导航、1-4或A-D选选项、Enter提交/下一题
+13. **报告底栏 gap 修复** (modals.css) — `bottom: -1px` + `margin-top: auto` 消除空隙
+14. **按钮文案修正** (index.html) — "返回首页"→"关闭"/"返回主页"，降低误导
+15. **删除章节资料同步刷新** (ai-workflow.js) — `removeChapterMaterial()` 后刷新主页材料列表
+16. **显示名称长度限制** (users.js) — 前端校验最多50字符
+17. **AI 气泡动画** (ai-workflow.js) — 增加 opacity+translateY 过渡动画
+18. **文件池选择大小显示** (P0已修)
+19. **管理资料弹窗同步** (P2-15已修)
+20. **AI 设置即时提示** (P1-10, P1-11已修)
+
+### P3 轻微修复 (12项)
+
+21. **概览卡片 grid** (dashboard.css) — 4列固定网格，移动端2列
+22. **SRS 题型补齐** (srs.js) — 添加名词解释和简答题型，使用 num-picker 组件
+23. **alert() 替换为 toast** (srs.js) — `showToast(msg, type)` 统一替代原生 alert
+24. **任务间隔最小 0s** (settings.js, index.html) — range min 从 10 改为 0
+25. **章节双击重命名** (subjects.js) — 侧栏章节项支持 `ondblclick` 触发重命名
+26. **顶栏头像首字母** (users.js) — 用户按钮显示渐变圆形首字母头像而非固定 emoji
+27. **AI 出题少生成** — 已有重试逻辑 (3次)
+28. **主观题判对** — 设计如此（无自动化判断方案）
+29. **暗色模式补全** (dark-mode.css) — 空状态引导、dialog 输入框、用户头像按钮
+
+### 涉及文件
+`subjects.js`, `settings.js`, `quiz-engine.js`, `ai-workflow.js`, `users.js`, `srs.js`, `strategy.js`, `index.html`, `modals.css`, `dashboard.css`, `dark-mode.css`
+
+---
+
+## 2026-06-05 — P0 致命问题修复 (Part 1)
+
+### 修复内容
+通过角色扮演式 UX 审查发现 36 个问题，本批次修复 4 个 P0 致命问题：
+
+1. **saveState 深拷贝修复** (state.js:59)
+   - 原代码 `delete m.data` 直接破坏内存中的 chapterMaterials
+   - 改为临时替换洗净版副本 → 序列化 → 恢复原始对象
+   - 修复刷新后文件资料丢失问题
+
+2. **云端同步 SRS 数据隔离** (state.js:19-57)
+   - 新增 `sanitizeState()` 清理孤立的 srsData（引用已删除章节的条目）
+   - `DataStoreInit()` 所有分支均调用 sanitizeState()
+   - 修复新用户看到虚假"到期题目数"问题
+
+3. **文件池选择去重 + 大小显示** (ai-workflow.js:504,519-548)
+   - `assignFilePoolToChapter()` 接收 fileSize 参数
+   - onclick 传入完整 fileSize 而非仅文件名
+   - 重复检测改为检查全部 materials（不再仅查 _poolFile）
+   - 修复池文件 0B 显示和同文件重复问题
+
+4. **流式出题提前结束确认** (state.js:188, ai-workflow.js:467)
+   - 新增 `task._expectedTotal` 记录预期生成题目总数
+   - `endQuizSession()` 检测流式任务时弹出 confirm 确认
+   - 告知用户未生成题目数量，防止误操作丢失题目
+
+### 涉及文件
+- `js/state.js` — saveState 深拷贝、sanitizeState、endQuizSession 确认
+- `js/ai-workflow.js` — 文件池去重、fileSize 传入、_expectedTotal
+
+### 部署
+- 测试环境 (8080/3001) — 已部署验证
+- MD5: state.js=559b0b92, ai-workflow.js=e08d3756
+
+### 原因
+v3.7.0/v3.7.1 知识星图方案总体不成功，12 项修复未达预期效果。决定回退至星图研发前的稳定版本。
+
+### 回退操作
+- 本地代码：`git reset --hard dcaea17`（v3.6.9_mobile_drag）
+- 服务器前端：测试环境 8080 ← 生产环境 9178 覆盖
+- 服务器后端：测试环境 3001 ← 生产环境 3000 覆盖（rsync + PM2 restart）
+- 失败版本存档：`Version/Qbao_v3.7.1_starmap_failed/`（含 starmap-render/force/ui.js, starmap.css, starmap.routes.js 等）
+- 历史版本备份保留：`Version/Qbao_v3.7.0_starmap/` 和 `Version/Qbao_v3.7.1_starmap_fix/`
+- SKILL.md 恢复至 v3.6.9_mobile_drag 状态（移除所有星图相关内容）
+
+### 涉及文件
+- 本地：git reset 移除 starmap-render.js, starmap-force.js, starmap-ui.js, starmap.css, backend/src/routes/starmap.routes.js 等星图文件
+- 服务器：8080/3001 整体覆盖为 v3.6.9
+- 文档：SKILL.md 恢复，log.md 本条目追加
+
+---
+
 ## 2026-06-05 — 移动端标签拖拽修复 v3.6.9（仅测试环境 8080）
 
 ### 改动
