@@ -181,7 +181,6 @@ function chatFilterRooms() {
 async function chatOpenRoom(roomId) {
   chatOpenRoomId = roomId;
   chatIsMobileShowingRoom = true;
-  _lastRenderedHtml = '';
   // Mobile: hide sidebar, show chat area
   document.getElementById('chat-placeholder').style.display = 'none';
   document.getElementById('chat-active').style.display = 'flex';
@@ -207,8 +206,6 @@ async function chatOpenRoom(roomId) {
   } catch(e) {}
 }
 
-// Hash skip removed in v3.10.4 — always render for reliability
-var _lastRenderedHtml = '';
 
 async function chatLoadMessages(roomId, isPollingRefresh) {
   var container = document.getElementById('chat-messages');
@@ -216,7 +213,7 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
   var prevScrollTop = container.scrollTop;
   var wasAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 50;
 
-  // Update header
+  // Update header (same for both modes)
   var room = chatRoomsCache.find(function(r) { return r.id === roomId; });
   if (room) {
     document.getElementById('chat-header-name').textContent = chatGetRoomName(room);
@@ -232,7 +229,6 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
         document.getElementById('chat-header-status').textContent = '';
       }
     }
-    // Header actions: group management
     if (room.type === 'group') {
       document.getElementById('chat-header-actions').innerHTML =
         '<button class="chat-friend-action-btn" onclick="chatShowAddMembers(' + roomId + ')">+ 邀请</button>' +
@@ -242,7 +238,6 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     }
   }
 
-  // Show/hide quiz share button (only for direct chats)
   var quizBtn = document.getElementById('chat-tool-share-quiz');
   if (quizBtn) {
     quizBtn.style.display = (room && room.type === 'direct') ? '' : 'none';
@@ -253,16 +248,47 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     if (!res || !res.ok) return;
     var data = await res.json();
     var messages = data.messages || [];
-    // Always render — hash skip removed (v3.10.4) as it caused too many race conditions.
-    // Re-rendering 50 messages is fast (<10ms DOM) and scroll position is preserved below.
-    var allHtml = '';
-    messages.forEach(function(msg) { allHtml += chatRenderMessage(msg); });
-    // Skip DOM update if HTML unchanged — prevents flickering from overlapping refreshes
-    if (allHtml !== _lastRenderedHtml) {
+
+    if (isPollingRefresh) {
+      // INCREMENTAL mode: only append NEW messages, update quiz cards in-place.
+      // This means ZERO DOM changes when nothing new arrives — no flicker.
+      var existingIds = {};
+      var msgEls = container.querySelectorAll('[data-msg-id]');
+      for (var ei = 0; ei < msgEls.length; ei++) {
+        existingIds[msgEls[ei].getAttribute('data-msg-id')] = true;
+      }
+      var hasNew = false;
+      for (var mi = 0; mi < messages.length; mi++) {
+        var m = messages[mi];
+        if (!existingIds[m.id]) {
+          // New message — append to bottom
+          container.insertAdjacentHTML('beforeend', chatRenderMessage(m));
+          hasNew = true;
+        } else if (m.quiz_data && m.quiz_data._result && m.quiz_data._result.answered) {
+          // Quiz card was answered — re-render this specific card in-place
+          var oldEl = container.querySelector('[data-msg-id="' + m.id + '"]');
+          if (oldEl) {
+            var newHtml = chatRenderMessage(m);
+            var temp = document.createElement('div');
+            temp.innerHTML = newHtml;
+            var newEl = temp.firstElementChild;
+            if (newEl) {
+              oldEl.parentNode.replaceChild(newEl, oldEl);
+            }
+          }
+        }
+      }
+      if (hasNew && wasAtBottom) { chatScrollToBottom(); }
+      else if (!hasNew) { container.scrollTop = prevScrollTop; }
+    } else {
+      // FULL rebuild: open room, or after sending a message
+      var allHtml = '';
+      for (var fi = 0; fi < messages.length; fi++) {
+        allHtml += chatRenderMessage(messages[fi]);
+      }
       container.innerHTML = allHtml;
-      _lastRenderedHtml = allHtml;
+      if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
     }
-    if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
   } catch(e) {
     console.error('[chatLoadMessages] error:', e.message || e, e.stack || '');
   }
@@ -273,14 +299,14 @@ function chatRenderMessage(msg) {
   var html = '';
 
   if (msg.is_revoked) {
-    html += '<div class="chat-msg chat-msg-system"><div class="chat-msg-bubble revoked">' +
+    html += '<div class="chat-msg chat-msg-system" data-msg-id="' + msg.id + '"><div class="chat-msg-bubble revoked">' +
       (isMine ? '你撤回了一条消息' : (escapeHtml(msg.sender_name || '') + ' 撤回了一条消息')) +
       '</div></div>';
     return html;
   }
 
   var wrapperClass = isMine ? 'chat-msg-mine' : 'chat-msg-other';
-  html += '<div class="chat-msg ' + wrapperClass + '">';
+  html += '<div class="chat-msg ' + wrapperClass + '" data-msg-id="' + msg.id + '">';
 
   // Sender name for others in group
   if (!isMine && msg.sender_name) {
