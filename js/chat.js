@@ -56,8 +56,6 @@ function closeChatModal() {
 function chatBackToList() {
   chatOpenRoomId = null;
   chatIsMobileShowingRoom = false;
-  _chatLastMsgCount = 0;
-  _chatLastMsgHash = '';
   document.getElementById('chat-active').style.display = 'none';
   document.getElementById('chat-placeholder').style.display = 'flex';
   document.getElementById('chat-back-btn').style.display = 'none';
@@ -183,8 +181,6 @@ function chatFilterRooms() {
 async function chatOpenRoom(roomId) {
   chatOpenRoomId = roomId;
   chatIsMobileShowingRoom = true;
-  _chatLastMsgCount = 0;
-  _chatLastMsgHash = '';
   // Mobile: hide sidebar, show chat area
   document.getElementById('chat-placeholder').style.display = 'none';
   document.getElementById('chat-active').style.display = 'flex';
@@ -192,7 +188,7 @@ async function chatOpenRoom(roomId) {
   document.getElementById('chat-modal').querySelector('.chat-modal-body').classList.add('chat-showing-room');
 
   await chatLoadMessages(roomId, false);
-  // Now poll (after initial render, so _chatLastMsgCount/Hash are set correctly)
+  // Now poll (after initial render completes)
   chatPoll();
   chatRenderRoomList();
   setTimeout(function() { chatScrollToBottom(); }, 300); // update active state
@@ -210,8 +206,7 @@ async function chatOpenRoom(roomId) {
   } catch(e) {}
 }
 
-var _chatLastMsgCount = 0;
-var _chatLastMsgHash = '';
+// Hash skip removed in v3.10.4 — always render for reliability
 
 async function chatLoadMessages(roomId, isPollingRefresh) {
   var container = document.getElementById('chat-messages');
@@ -256,24 +251,8 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     if (!res || !res.ok) return;
     var data = await res.json();
     var messages = data.messages || [];
-    // Compute a quick hash of last message to detect content changes (e.g. quiz_data update)
-    // Compute hash across ALL messages with quiz_data so batch quiz answers are detected
-    var contentHash = '';
-    for (var hi = 0; hi < messages.length; hi++) {
-      var hm = messages[hi];
-      if (hm.quiz_data || hm.is_revoked) {
-        contentHash += hm.id + ':' + (hm.is_revoked ? '1' : '0') + ':' + (hm.quiz_data ? JSON.stringify(hm.quiz_data) : '') + '|';
-      }
-    }
-    if (!contentHash && messages.length > 0) {
-      contentHash = messages.length + ':' + messages[messages.length - 1].id;
-    }
-    if (isPollingRefresh && messages.length === _chatLastMsgCount && contentHash === _chatLastMsgHash) {
-      container.scrollTop = prevScrollTop;
-      return;
-    }
-    _chatLastMsgCount = messages.length;
-    _chatLastMsgHash = contentHash;
+    // Always render — hash skip removed (v3.10.4) as it caused too many race conditions.
+    // Re-rendering 50 messages is fast (<10ms DOM) and scroll position is preserved below.
     container.innerHTML = '';
     messages.forEach(function(msg) { chatRenderMessage(msg); });
     if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
@@ -1710,7 +1689,7 @@ function chatStartPolling() {
   chatStopPolling();
   chatPoll();
   _chatPollBackoff = 0;
-  chatPollTimer = setInterval(chatPoll, 5000);
+  chatPollTimer = setInterval(chatPoll, 2000);
 }
 
 function chatStopPolling() {
