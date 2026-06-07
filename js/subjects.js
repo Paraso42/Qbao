@@ -104,7 +104,7 @@ function renderSubjectList() {
           }
         });
         html += '<div class="chapter-item ' + ca + '" ondblclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')" onclick="closeSidebarIfMobile();switchChapter(\'' + cid + '\')"><div class="chapter-info"><span class="chapter-name">' + escapeHtml(ch.name) + '</span><span class="chapter-count">' + totalAnswered + ' 题已答</span></div>';
-        html += '<div class="ch-actions"><button class="ch-btn ch-hist" title="答题历史" onclick="event.stopPropagation();showChapterHistory(\'' + cid + '\')">📜</button><button class="ch-btn" title="重命名" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" title="删除" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
+        html += '<div class="ch-actions"><button class="ch-btn" title="重命名" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" title="删除" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
       });
     }
     html += '<button class="btn-add-chapter" onclick="event.stopPropagation();createChapter(\'' + sid + '\')">＋ 新建章节</button></div></div>';

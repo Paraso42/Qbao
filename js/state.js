@@ -250,6 +250,8 @@ function getChStrategy(cid) {
 }
 function migrateState(s) {
   if (!s.history) s.history = [];
+  // Prevent chat modal from auto-opening on page load (v3.9)
+  if (s.lastScreen === "chat") s.lastScreen = "start";
   if (!s.subjects) s.subjects = {};
   if (!s.chapters) s.chapters = {};
   for (const cid in s.chapters) {
