@@ -24,7 +24,7 @@ async function doLogin() {
     closeAuthDialog();
     updateAuthUI();
     await DataStoreInit();
-    fbStartPolling();
+    fbStartPolling(); if (isOnlineMode && getToken()) chatStartPolling();
     // Silently restore quiz progress from server (cross-device, all chapters)
     await restoreQuizFromServer(true);
     renderSubjectList();
@@ -99,6 +99,7 @@ function updateAuthUI() {
     avatarHtml = '<span class="tb-icon" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#4facfe,#00f2fe);color:#fff;text-align:center;line-height:22px;font-size:12px;font-weight:700;">' + initial + '</span>';
   }
   ta.innerHTML = '<button class="tb-item" id="topbar-user-btn" onclick="openUserCenterModal()">' + avatarHtml + ' ' + escapeHtml(authUser.displayName || authUser.username) + '</button>';
+	  var chatBtn = document.getElementById('topbar-chat-btn'); if (chatBtn) chatBtn.style.display = 'flex';
     } else {
       ta.innerHTML = '<button class="tb-item" onclick="openAuthDialog()"><span class="tb-icon">☁️</span> 登录/注册</button>';
     }
