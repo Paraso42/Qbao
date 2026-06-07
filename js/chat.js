@@ -48,6 +48,7 @@ function openChatModal() {
 function closeChatModal() {
   chatOpenRoomId = null;
   chatIsMobileShowingRoom = false;
+  chatStopPolling();
   var modal = document.getElementById('chat-modal');
   if (modal) modal.classList.remove('active');
 }
@@ -335,7 +336,7 @@ function chatRenderMessage(msg) {
     var quizResult = quizData._result; // { answered: bool, correct: bool, chosenAnswer: string, answeredBy: string }
 
     html += '<div class="chat-msg-bubble" style="background:none;border:none;padding:0;color:var(--text-primary);">';
-    html += '<div class="chat-msg-quiz-share" id="quiz-share-' + msg.id + '">';
+    html += '<div class="chat-msg-quiz-share" id="quiz-share-' + msg.id + '" data-quiz-data=\'' + JSON.stringify(quizData).replace(/'/g, '&#39;') + '\'>';
 
     if (question) {
       var typeMap = { single: '单选题', judge: '判断题', term: '名词解释', short: '简答题' };
@@ -1697,24 +1698,40 @@ function chatShareCurrentQuizSet() {
 //  Polling
 // =============================================================================
 
+var _chatPollBackoff = 0;
+
 function chatStartPolling() {
   chatStopPolling();
   chatPoll();
+  _chatPollBackoff = 0;
   chatPollTimer = setInterval(chatPoll, 5000);
 }
 
 function chatStopPolling() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  _chatPollBackoff = 0;
 }
 
 async function chatPoll() {
   if (!isOnlineMode || !getToken()) return;
   try {
     var res = await fetchWithAuth('/chat/updates');
-    if (!res || !res.ok) return;
-    var data = await res.json();
-    chatHandlePollResult(data);
-  } catch(e) {}
+    if (res && res.status === 429) {
+      // Rate limited — back off exponentially
+      _chatPollBackoff = Math.min((_chatPollBackoff || 5000) * 2, 60000);
+      chatStopPolling();
+      chatPollTimer = setInterval(chatPoll, 5000 + _chatPollBackoff);
+      console.warn('[chatPoll] 429 rate limited, backing off to ' + (5000 + _chatPollBackoff) + 'ms');
+      return;
+    }
+    if (res && res.ok) {
+      _chatPollBackoff = Math.max(0, _chatPollBackoff - 1000);
+      var data = await res.json();
+      chatHandlePollResult(data);
+    }
+  } catch(e) {
+    console.error('[chatPoll] error:', e.message || e);
+  }
 }
 
 function chatHandlePollResult(data) {
@@ -1771,27 +1788,20 @@ async function chatAnswerSharedQuiz(msgId, optionIndex) {
     btns.forEach(function(b) { b.disabled = true; b.style.opacity = '0.5'; });
   }
 
-  // Determine correct answer based on question type
-  var question = null;
-  // Find the message data (we need to look through the rendered DOM or cached data)
-  // We'll get it from the server
-  try {
-    var res = await fetchWithAuth('/chat/rooms/' + chatOpenRoomId + '/messages?limit=50');
-    if (!res || !res.ok) return;
-    var data = await res.json();
-    var messages = data.messages || [];
-    var msg = null;
-    for (var i = 0; i < messages.length; i++) {
-      if (messages[i].id === msgId) { msg = messages[i]; break; }
-    }
-    if (!msg || !msg.quiz_data) return;
-    var quizData = msg.quiz_data;
-    var questions = quizData.questions || [];
-    question = questions[0];
-    if (!question) return;
+  // Get quiz data from rendered DOM (instant, no server round-trip)
+  var quizEl = document.getElementById('quiz-share-' + msgId);
+  if (!quizEl) return;
+  var quizData = null;
+  try { quizData = JSON.parse(quizEl.getAttribute('data-quiz-data')); } catch(e) { return; }
+  if (!quizData || !quizData.questions) return;
+  var questions = quizData.questions || [];
+  var question = questions[0];
+  if (!question) return;
 
-    var chosenAnswer = '';
-    var correct = false;
+  var chosenAnswer = '';
+  var correct = false;
+
+  try {
 
     if (question.type === 'single') {
       var labels = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -1864,20 +1874,21 @@ async function chatAnswerSharedQuizText(msgId) {
   var submitBtn = input.nextElementSibling;
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '提交中...'; }
 
+  // Get quiz data from rendered DOM (instant, no server round-trip)
   try {
-    var res = await fetchWithAuth('/chat/rooms/' + chatOpenRoomId + '/messages?limit=50');
-    if (!res || !res.ok) { input.disabled = false; if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '提交'; } return; }
-    var data = await res.json();
-    var messages = data.messages || [];
-    var msg = null;
-    for (var i = 0; i < messages.length; i++) {
-      if (messages[i].id === msgId) { msg = messages[i]; break; }
-    }
-    if (!msg || !msg.quiz_data) { input.disabled = false; if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '提交'; } return; }
-
-    var quizData = msg.quiz_data;
+    var quizEl = document.getElementById('quiz-share-' + msgId);
+    if (!quizEl) throw new Error('element not found');
+    var quizData = JSON.parse(quizEl.getAttribute('data-quiz-data'));
+    if (!quizData || !quizData.questions) throw new Error('no quiz_data');
     var question = quizData.questions[0];
-    if (!question) { input.disabled = false; if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '提交'; } return; }
+    if (!question) throw new Error('no question');
+  } catch(e) {
+    input.disabled = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '提交'; }
+    return;
+  }
+
+  try {
 
     quizData._result = {
       answered: true,
