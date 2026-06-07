@@ -168,11 +168,17 @@ function _qbankToggleCheckEl(key, question, el) {
 
 function _qbankClearSelection() {
   _qbankSelected = {};
-  document.getElementById('qbank-select-mode').checked = false;
+  var selectModeEl = document.getElementById('qbank-select-mode');
+  if (selectModeEl) selectModeEl.checked = false;
   _qbankSelectMode = false;
-  document.getElementById('qbank-share-bar').style.display = 'none';
-  // Remove selection classes
+  var shareBar = document.getElementById('qbank-share-bar');
+  if (shareBar) shareBar.style.display = 'none';
+  // Remove old selection classes
   document.querySelectorAll('.qbank-question.qbank-selected').forEach(function(el) { el.classList.remove('qbank-selected'); });
+  // Also clear new cart system
+  _qbankCart = {};
+  _qbankRenderCart();
+  document.querySelectorAll('.qbank-check').forEach(function(cb) { cb.checked = false; });
   var container = document.getElementById('qbank-content');
   if (container) container.classList.remove('qbank-selecting');
   renderSubjQuestionBankContent();
