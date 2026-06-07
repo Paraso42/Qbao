@@ -4,6 +4,7 @@ function showScreen(name){
   if (name === 'quiz')      { openQuizModal('quiz'); return; }
   if (name === 'report')    { openQuizModal('report'); return; }
   if (name === 'settings')  { openSettingsModal(); return; }
+	if (name === 'chat')      { openChatModal(); return; }
   if (name === 'achievements') { openUserCenterModal('achievements'); return; }
   if (name.startsWith('uc-'))  { openUserCenterModal(name.replace('uc-','')); return; }
   // 全屏页面
@@ -17,6 +18,8 @@ function showScreen(name){
 
 function closeAllModals() {
   document.querySelectorAll('.dialog-overlay.active').forEach(function(el){ el.classList.remove('active'); });
+  var qd = document.getElementById('qdetail-dialog');
+  if (qd) qd.classList.remove('active');
 }
 
 function openQuizModal(view) {

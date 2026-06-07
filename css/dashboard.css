@@ -58,6 +58,10 @@
 .qbank-question.unanswered { background: var(--surface-hover); }
 .qbank-question .q-text { font-weight: 500; }
 .qbank-question .q-detail { color: var(--text-muted); font-size: var(--fs-xs); margin-top: 1px; }
+/* Select mode */
+.qbank-selecting .qbank-question { cursor: pointer; border: 2px solid transparent; border-radius: 6px; padding: 4px; }
+.qbank-selecting .qbank-question:hover { border-color: var(--color-primary); }
+.qbank-question.qbank-selected { border-color: var(--color-primary) !important; background: var(--color-primary-light) !important; box-shadow: 0 0 0 1px var(--color-primary); }
 
 /* Report review items */
 .history-q-item {
@@ -94,6 +98,8 @@
   margin-right: 8px;
 }
 .history-q-item .q-answer.your-answer { background: #fee2e2; color: #991b1b; }
+.history-q-item .q-answer.your-answer.correct { background: #dcfce7; color: #166534; }
+.history-q-item .q-answer.your-answer.wrong { background: #fee2e2; color: #991b1b; }
 .history-q-item .q-answer.correct-answer { background: #dcfce7; color: #166534; }
 .history-q-item .q-explanation {
   margin-top: 8px;

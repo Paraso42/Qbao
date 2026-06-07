@@ -260,3 +260,16 @@
 	  }
 	  .storage-points-value { font-size: 22px; }
 	}
+
+/* ===== Chat Modal — Mobile (v3.9) ===== */
+@media (max-width: 768px) {
+  .chat-modal-box { width: 100vw; height: 100vh; max-width: 100vw; border-radius: 0; }
+  .chat-sidebar { width: 100%; min-width: 100%; }
+  .chat-main { display: none; }
+  .chat-modal-body.chat-showing-room .chat-sidebar { display: none; }
+  .chat-modal-body.chat-showing-room .chat-main { display: flex; }
+  .chat-back-btn { display: flex !important; }
+  .chat-msg { max-width: 85%; }
+  .chat-msg-image { max-width: 180px; max-height: 180px; }
+  .chat-sub-dialog-box { max-width: 95vw; }
+}
