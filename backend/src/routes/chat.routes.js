@@ -709,6 +709,20 @@ module.exports = function (app) {
         return res.status(422).json({ error: '题目分享需要包含题目数据' });
       }
 
+      // Normalize quiz_data question answers to numeric index (handle A/B/C letter format)
+      if (quiz_data && quiz_data.questions) {
+        quiz_data.questions.forEach(function(q) {
+          if (q.answer !== undefined && q.answer !== null && q.answer !== '') {
+            if (typeof q.answer === 'string' && !/^\d+$/.test(q.answer)) {
+              var idx = q.answer.toUpperCase().charCodeAt(0) - 65;
+              if (idx >= 0) q.answer = idx;
+            } else if (typeof q.answer === 'string') {
+              q.answer = Number(q.answer);
+            }
+          }
+        });
+      }
+
       var result = await pool.query(
         `INSERT INTO chat_messages (room_id, user_id, content, msg_type, images, file_info, quiz_data, reply_to)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
@@ -799,7 +813,7 @@ module.exports = function (app) {
       }
 
       await pool.query(
-        'UPDATE chat_messages SET is_revoked = true, content = $1 WHERE id = $2',
+        'UPDATE chat_messages SET is_revoked = true, content = $1, updated_at = NOW() WHERE id = $2',
         ['消息已撤回', msgId]
       );
 

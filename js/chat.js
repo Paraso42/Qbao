@@ -1990,3 +1990,10 @@ function chatFormatTime(isoStr) {
     return (d.getMonth() + 1) + '/' + d.getDate();
   } catch(e) { return ''; }
 }
+
+// Self-start polling on script load (if already logged in via persisted token)
+(function() {
+  if (typeof isOnlineMode !== 'undefined' && isOnlineMode && typeof getToken === 'function' && getToken()) {
+    if (!chatPollTimer) chatStartPolling();
+  }
+})();
