@@ -181,6 +181,7 @@ function chatFilterRooms() {
 async function chatOpenRoom(roomId) {
   chatOpenRoomId = roomId;
   chatIsMobileShowingRoom = true;
+  _lastRenderedHtml = '';
   // Mobile: hide sidebar, show chat area
   document.getElementById('chat-placeholder').style.display = 'none';
   document.getElementById('chat-active').style.display = 'flex';
@@ -207,6 +208,7 @@ async function chatOpenRoom(roomId) {
 }
 
 // Hash skip removed in v3.10.4 — always render for reliability
+var _lastRenderedHtml = '';
 
 async function chatLoadMessages(roomId, isPollingRefresh) {
   var container = document.getElementById('chat-messages');
@@ -255,7 +257,11 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     // Re-rendering 50 messages is fast (<10ms DOM) and scroll position is preserved below.
     var allHtml = '';
     messages.forEach(function(msg) { allHtml += chatRenderMessage(msg); });
-    container.innerHTML = allHtml;
+    // Skip DOM update if HTML unchanged — prevents flickering from overlapping refreshes
+    if (allHtml !== _lastRenderedHtml) {
+      container.innerHTML = allHtml;
+      _lastRenderedHtml = allHtml;
+    }
     if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
   } catch(e) {
     console.error('[chatLoadMessages] error:', e.message || e, e.stack || '');
