@@ -39,5 +39,6 @@ require('./src/routes/notices.routes')(app);
 require('./src/routes/users.routes')(app);
 require('./src/routes/quiz.routes')(app);
 require('./src/routes/files.routes')(app);
+require('./src/routes/issues.routes')(app);
 
 app.listen(PORT, () => console.log(`Qbao API running on port ${PORT}`));

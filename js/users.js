@@ -24,6 +24,7 @@ async function doLogin() {
     closeAuthDialog();
     updateAuthUI();
     await DataStoreInit();
+    fbStartPolling();
     // Silently restore quiz progress from server (cross-device, all chapters)
     await restoreQuizFromServer(true);
     renderSubjectList();
@@ -49,6 +50,7 @@ async function doRegister() {
     closeAuthDialog();
     updateAuthUI();
     await DataStoreInit();
+    fbStartPolling();
     renderSubjectList();
     updateSyncStatus();
   } catch(e) {
@@ -165,13 +167,17 @@ function edgeBubbleHover(isHovered) {
   var card = document.getElementById('edge-bubble-card');
   var trigger = document.getElementById('edge-bubble-trigger');
   if (isHovered) {
+    if (!card.classList.contains('edge-bubble-card--visible')) {
+      fbRenderBubbleCard();
+    }
     bubble.classList.add('edge-bubble--expanded');
     card.classList.add('edge-bubble-card--visible');
   } else {
     edgeBubbleDebounce = setTimeout(function() {
+      if (fbBubbleCardKeepOpen) return;
       bubble.classList.remove('edge-bubble--expanded');
       card.classList.remove('edge-bubble-card--visible');
-    }, 100);
+    }, 200);
   }
 }
 

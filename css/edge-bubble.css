@@ -26,6 +26,7 @@
   box-shadow: none;
   cursor: pointer;
   pointer-events: auto;
+  position: relative;
 }
 
 .edge-bubble--expanded {
@@ -42,6 +43,9 @@
 }
 
 .edge-bubble-card {
+  width: 340px;
+  max-height: 480px;
+  overflow: hidden;
   margin-bottom: var(--space-sm);
   opacity: 0;
   transform: translateY(12px);
@@ -49,11 +53,9 @@
   pointer-events: none;
   flex-shrink: 0;
   border-radius: var(--radius-lg);
-  overflow: hidden;
   box-shadow: var(--shadow-lg);
   background: var(--surface-card);
   border: 1px solid var(--border-light);
-  cursor: pointer;
 }
 
 .edge-bubble-card--visible {
