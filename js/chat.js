@@ -253,8 +253,9 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     var messages = data.messages || [];
     // Always render — hash skip removed (v3.10.4) as it caused too many race conditions.
     // Re-rendering 50 messages is fast (<10ms DOM) and scroll position is preserved below.
-    container.innerHTML = '';
-    messages.forEach(function(msg) { chatRenderMessage(msg); });
+    var allHtml = '';
+    messages.forEach(function(msg) { allHtml += chatRenderMessage(msg); });
+    container.innerHTML = allHtml;
     if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
   } catch(e) {
     console.error('[chatLoadMessages] error:', e.message || e, e.stack || '');
@@ -262,9 +263,6 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
 }
 
 function chatRenderMessage(msg) {
-  var container = document.getElementById('chat-messages');
-  if (!container) return;
-
   var isMine = msg.user_id === authUser.id;
   var html = '';
 
@@ -272,8 +270,7 @@ function chatRenderMessage(msg) {
     html += '<div class="chat-msg chat-msg-system"><div class="chat-msg-bubble revoked">' +
       (isMine ? '你撤回了一条消息' : (escapeHtml(msg.sender_name || '') + ' 撤回了一条消息')) +
       '</div></div>';
-    container.insertAdjacentHTML('beforeend', html);
-    return;
+    return html;
   }
 
   var wrapperClass = isMine ? 'chat-msg-mine' : 'chat-msg-other';
@@ -445,7 +442,7 @@ function chatRenderMessage(msg) {
   }
 
   html += '</div>';
-  container.insertAdjacentHTML('beforeend', html);
+  return html;
 }
 
 function chatScrollToBottom() {
@@ -1701,7 +1698,7 @@ function chatStartSlowPolling() {
   chatStopPolling();
   chatPoll();
   _chatPollBackoff = 0;
-  chatPollTimer = setInterval(chatPoll, 20000);
+  chatPollTimer = setInterval(chatPoll, 5000);
 }
 
 async function chatPoll() {
