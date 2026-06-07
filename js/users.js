@@ -25,6 +25,8 @@ async function doLogin() {
     updateAuthUI();
     await DataStoreInit();
     fbStartPolling(); if (isOnlineMode && getToken()) chatStartPolling();
+    // Safety net: ensure chat polling starts even if above call was skipped by timing
+    setTimeout(function() { if (isOnlineMode && getToken() && !chatPollTimer) chatStartPolling(); }, 2000);
     // Silently restore quiz progress from server (cross-device, all chapters)
     await restoreQuizFromServer(true);
     renderSubjectList();
