@@ -264,17 +264,25 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
           // New message — append to bottom
           container.insertAdjacentHTML('beforeend', chatRenderMessage(m));
           hasNew = true;
+        } else if (m.is_revoked) {
+          // Message was revoked — replace with revoked version
+          var oldEl2 = container.querySelector('[data-msg-id="' + m.id + '"]');
+          if (oldEl2 && !oldEl2.classList.contains('chat-msg-system')) {
+            var newHtml2 = chatRenderMessage(m);
+            var temp2 = document.createElement('div');
+            temp2.innerHTML = newHtml2;
+            var newEl2 = temp2.firstElementChild;
+            if (newEl2) { oldEl2.parentNode.replaceChild(newEl2, oldEl2); }
+          }
         } else if (m.quiz_data && m.quiz_data._result && m.quiz_data._result.answered) {
-          // Quiz card was answered — re-render this specific card in-place
+          // Quiz card was answered — re-render in-place (only once, guarded by data-quiz-done)
           var oldEl = container.querySelector('[data-msg-id="' + m.id + '"]');
-          if (oldEl) {
+          if (oldEl && oldEl.getAttribute('data-quiz-done') !== '1') {
             var newHtml = chatRenderMessage(m);
             var temp = document.createElement('div');
             temp.innerHTML = newHtml;
             var newEl = temp.firstElementChild;
-            if (newEl) {
-              oldEl.parentNode.replaceChild(newEl, oldEl);
-            }
+            if (newEl) { oldEl.parentNode.replaceChild(newEl, oldEl); }
           }
         }
       }
@@ -306,7 +314,11 @@ function chatRenderMessage(msg) {
   }
 
   var wrapperClass = isMine ? 'chat-msg-mine' : 'chat-msg-other';
-  html += '<div class="chat-msg ' + wrapperClass + '" data-msg-id="' + msg.id + '">';
+  var msgAttrs = 'data-msg-id="' + msg.id + '"';
+  if (msg.quiz_data && msg.quiz_data._result && msg.quiz_data._result.answered) {
+    msgAttrs += ' data-quiz-done="1"';
+  }
+  html += '<div class="chat-msg ' + wrapperClass + '" ' + msgAttrs + '>';
 
   // Sender name for others in group
   if (!isMine && msg.sender_name) {
@@ -1829,8 +1841,16 @@ async function chatAnswerSharedQuiz(msgId, optionIndex) {
     if (question.type === 'single') {
       var labels = ['A', 'B', 'C', 'D', 'E', 'F'];
       chosenAnswer = labels[optionIndex] || String(optionIndex);
-      // question.answer is a numeric index (0,1,2...) matching optionIndex
-      var correctIdx = (question.answer !== undefined && question.answer !== null && question.answer !== '') ? Number(question.answer) : -1;
+      // question.answer may be numeric index (0,1,2) or letter (A,B,C)
+      var rawAnswer = question.answer;
+      var correctIdx = -1;
+      if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
+        if (typeof rawAnswer === 'number' || /^\d+$/.test(String(rawAnswer))) {
+          correctIdx = Number(rawAnswer);
+        } else {
+          correctIdx = labels.indexOf(String(rawAnswer).toUpperCase());
+        }
+      }
       correct = (optionIndex === correctIdx);
     } else if (question.type === 'judge') {
       // question.answer is 0 (正确) or 1 (错误) — numeric index
@@ -1840,9 +1860,16 @@ async function chatAnswerSharedQuiz(msgId, optionIndex) {
     }
 
     // Save result to the message's quiz_data
-    var correctAnswerIdx = (question.type === 'single') ?
-      ((question.answer !== undefined && question.answer !== null && question.answer !== '') ? Number(question.answer) : -1) :
-      ((question.answer !== undefined && question.answer !== null && question.answer !== '') ? Number(question.answer) : -1);
+    var rawAns = question.answer;
+    var correctAnswerIdx = -1;
+    if (rawAns !== undefined && rawAns !== null && rawAns !== '') {
+      if (typeof rawAns === 'number' || /^\d+$/.test(String(rawAns))) {
+        correctAnswerIdx = Number(rawAns);
+      } else {
+        var labelsAns = ['A','B','C','D','E','F'];
+        correctAnswerIdx = labelsAns.indexOf(String(rawAns).toUpperCase());
+      }
+    }
     var correctAnswerText = question.options && correctAnswerIdx >= 0 ? question.options[correctAnswerIdx] :
       (question.type === 'judge' ? (correctAnswerIdx === 0 ? '正确' : '错误') : String(question.answer || ''));
     var chosenAnswerIdx = optionIndex;
