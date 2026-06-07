@@ -297,3 +297,48 @@ body.dark-mode #start-empty-guide h3 { color: #a0a0a8; }
 body.dark-mode .dialog-overlay .dialog-box { background: #1e1e22; color: #e4e4e8; }
 body.dark-mode .dialog-overlay .dialog-box input[type="text"] { background: #28282e; border-color: #383840; color: #e4e4e8; }
 body.dark-mode #topbar-user-btn .tb-icon { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+
+/* ===== Feedback / Issue System ===== */
+body.dark-mode .fb-card-header { color: #e4e4e8; border-color: #2a2a30; }
+body.dark-mode .fb-issue-item { border-color: #2a2a30; }
+body.dark-mode .fb-issue-item:hover { background: #28282e; }
+body.dark-mode .fb-issue-list-empty { color: #707078; }
+body.dark-mode .fb-input-area { border-color: #2a2a30; }
+body.dark-mode .fb-input-textarea { background: #28282e; border-color: #383840; color: #e4e4e8; }
+body.dark-mode .fb-input-textarea:focus { border-color: #6b9fd4; }
+body.dark-mode .fb-issue-item-actions button { background: #28282e; border-color: #383840; color: #909098; }
+
+body.dark-mode #issue-modal .modal-box { background: #1e1e22; border-color: #2a2a30; }
+body.dark-mode .issue-header-bar { border-color: #2a2a30; }
+body.dark-mode .issue-header-meta { color: #707078; }
+body.dark-mode .issue-chat-area { background: #18181c; }
+body.dark-mode .issue-message-other .issue-message-bubble { background: #2a2a30; color: #e4e4e8; }
+body.dark-mode .issue-message-system .issue-message-bubble { color: #707078; }
+body.dark-mode .issue-chat-input-area { border-color: #2a2a30; background: #1e1e22; }
+body.dark-mode .issue-chat-input { background: #28282e; border-color: #383840; color: #e4e4e8; }
+body.dark-mode .issue-chat-input:focus { border-color: #6b9fd4; }
+body.dark-mode .issue-action-bar { border-color: #2a2a30; background: #1e1e22; }
+body.dark-mode .issue-action-btn { background: #28282e; border-color: #383840; color: #909098; }
+body.dark-mode .issue-action-btn:hover { border-color: #7aade0; color: #7aade0; }
+body.dark-mode .fb-toast { background: #e4e4e8; color: #1e1e22; }
+
+body.dark-mode .fb-admin-issue-list { border-color: #2a2a30; }
+body.dark-mode .fb-admin-issue-header { background: #28282e; color: #707078; border-color: #2a2a30; }
+body.dark-mode .fb-admin-issue-row { border-color: #2a2a30; color: #e4e4e8; }
+body.dark-mode .fb-admin-issue-row:hover { background: #28282e; }
+body.dark-mode .fb-admin-issue-row span:nth-child(2) { color: #909098; }
+body.dark-mode .fb-admin-issue-row span:nth-child(5) { color: #707078; }
+body.dark-mode .fb-admin-filters .fb-admin-filter-btn { background: #28282e; border-color: #383840; color: #909098; }
+body.dark-mode .fb-admin-filters .fb-admin-filter-btn.active { background: #4facfe; color: #fff; border-color: #4facfe; }
+
+body.dark-mode .issue-status-unread { background: #302818; color: #f5a623; }
+body.dark-mode .issue-status-read { background: #1a2840; color: #7aade0; }
+body.dark-mode .issue-status-resolved { background: #1a2e1a; color: #2ed573; }
+body.dark-mode .issue-status-closed { background: #28282e; color: #707078; }
+
+body.dark-mode .fb-issue-item-new { background: #302818; }
+body.dark-mode .fb-collapse-header { color: #707078; }
+body.dark-mode .fb-collapse-header:hover { background: #28282e; }
+body.dark-mode .fb-collapse-section { border-color: #2a2a30; }
+body.dark-mode .fb-collapse-body { border-color: #2a2a30; }
+body.dark-mode .issue-img-deleted { background: #28282e; color: #707078; }
