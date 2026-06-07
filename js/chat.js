@@ -185,9 +185,6 @@ async function chatOpenRoom(roomId) {
   chatIsMobileShowingRoom = true;
   _chatLastMsgCount = 0;
   _chatLastMsgHash = '';
-  // Poll immediately for new messages
-  chatPoll();
-
   // Mobile: hide sidebar, show chat area
   document.getElementById('chat-placeholder').style.display = 'none';
   document.getElementById('chat-active').style.display = 'flex';
@@ -195,6 +192,8 @@ async function chatOpenRoom(roomId) {
   document.getElementById('chat-modal').querySelector('.chat-modal-body').classList.add('chat-showing-room');
 
   await chatLoadMessages(roomId, false);
+  // Now poll (after initial render, so _chatLastMsgCount/Hash are set correctly)
+  chatPoll();
   chatRenderRoomList();
   setTimeout(function() { chatScrollToBottom(); }, 300); // update active state
 
@@ -278,7 +277,9 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     container.innerHTML = '';
     messages.forEach(function(msg) { chatRenderMessage(msg); });
     if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
-  } catch(e) {}
+  } catch(e) {
+    console.error('[chatLoadMessages] error:', e.message || e, e.stack || '');
+  }
 }
 
 function chatRenderMessage(msg) {
@@ -530,7 +531,8 @@ async function chatSendMessage() {
       if (typeof showToast === 'function') showToast(e.error || '发送失败');
       return;
     }
-    await chatLoadMessages(chatOpenRoomId, true);
+    // Force refresh (false = always render, skip hash check) to avoid race with polling
+    await chatLoadMessages(chatOpenRoomId, false);
     chatLoadRooms(); // refresh room list
     // Clear badge for current room since user acknowledged by replying
     try { await fetchWithAuth("/chat/rooms/" + chatOpenRoomId + "/read", { method: "POST" }); } catch(e) {}
@@ -1739,9 +1741,11 @@ async function chatPoll() {
       _chatPollBackoff = Math.max(0, _chatPollBackoff - 1000);
       var data = await res.json();
       chatHandlePollResult(data);
+    } else if (res && !res.ok) {
+      console.warn('[chatPoll] non-ok response:', res.status, res.statusText || '');
     }
   } catch(e) {
-    console.error('[chatPoll] error:', e.message || e);
+    console.error('[chatPoll] error:', e.message || e, e.stack || '');
   }
 }
 
