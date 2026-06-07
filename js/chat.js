@@ -48,7 +48,7 @@ function openChatModal() {
 function closeChatModal() {
   chatOpenRoomId = null;
   chatIsMobileShowingRoom = false;
-  chatStopPolling();
+  chatStartSlowPolling();
   var modal = document.getElementById('chat-modal');
   if (modal) modal.classList.remove('active');
 }
@@ -258,19 +258,23 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
     var data = await res.json();
     var messages = data.messages || [];
     // Compute a quick hash of last message to detect content changes (e.g. quiz_data update)
-    var lastHash = '';
-    if (messages.length > 0) {
-      var last = messages[messages.length - 1];
-      var lastQuiz = last.quiz_data ? JSON.stringify(last.quiz_data) : '';
-      var lastRev = last.is_revoked ? '1' : '0';
-      lastHash = last.id + ':' + lastRev + ':' + lastQuiz + ':' + (last.content || '').substring(0, 50);
+    // Compute hash across ALL messages with quiz_data so batch quiz answers are detected
+    var contentHash = '';
+    for (var hi = 0; hi < messages.length; hi++) {
+      var hm = messages[hi];
+      if (hm.quiz_data || hm.is_revoked) {
+        contentHash += hm.id + ':' + (hm.is_revoked ? '1' : '0') + ':' + (hm.quiz_data ? JSON.stringify(hm.quiz_data) : '') + '|';
+      }
     }
-    if (isPollingRefresh && messages.length === _chatLastMsgCount && lastHash === _chatLastMsgHash) {
+    if (!contentHash && messages.length > 0) {
+      contentHash = messages.length + ':' + messages[messages.length - 1].id;
+    }
+    if (isPollingRefresh && messages.length === _chatLastMsgCount && contentHash === _chatLastMsgHash) {
       container.scrollTop = prevScrollTop;
       return;
     }
     _chatLastMsgCount = messages.length;
-    _chatLastMsgHash = lastHash;
+    _chatLastMsgHash = contentHash;
     container.innerHTML = '';
     messages.forEach(function(msg) { chatRenderMessage(msg); });
     if (wasAtBottom || !isPollingRefresh) { chatScrollToBottom(); } else { container.scrollTop = prevScrollTop; }
@@ -1710,6 +1714,13 @@ function chatStartPolling() {
 function chatStopPolling() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
   _chatPollBackoff = 0;
+}
+
+function chatStartSlowPolling() {
+  chatStopPolling();
+  chatPoll();
+  _chatPollBackoff = 0;
+  chatPollTimer = setInterval(chatPoll, 20000);
 }
 
 async function chatPoll() {
