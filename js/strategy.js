@@ -293,7 +293,7 @@ function updateQuickActions() {
       : 0;
     document.getElementById('chapter-quick-info').textContent = '共 ' + totalQ + ' 题，已答 ' + answered + ' 题 (注入中...)';
     if (streamSc >= threshold) {
-      document.getElementById('btn-continue-quiz').style.display = 'none';
+      document.getElementById('btn-continue-quiz').style.display = '';
     } else {
       document.getElementById('btn-continue-quiz').style.display = 'none';
     }
@@ -310,7 +310,7 @@ function updateQuickActions() {
     if (answered >= totalQ) {
       document.getElementById('btn-continue-quiz').style.display = 'none';
     } else {
-      document.getElementById('btn-continue-quiz').style.display = 'none';
+      document.getElementById('btn-continue-quiz').style.display = '';
     }
     container.style.display = 'block';
   } else {
