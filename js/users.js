@@ -119,6 +119,7 @@ async function init(){ try{
 			if (authUser) {
 				isOnlineMode = true;
 				await DataStoreInit();
+				try { chatStartPolling(); } catch(e) {}
 			} else {
 				clearAuth();
 			}
