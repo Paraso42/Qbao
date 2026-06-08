@@ -145,10 +145,10 @@ function startQuizSession() {
   if (ch.quizSets && ch.quizSets.length > 0) {
     const qs = getCurrentQuizSet();
     if (qs && qs.questions.length > 0) {
-      // 检查是否已全部答完，如果答完则不允许再进入
+      // 如果全部答完，自动结算并显示报告
       var answered = qs.userAnswers ? qs.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length : 0;
-      if (answered >= qs.questions.length) {
-        alert('当前这组题目已全部答完，请导入新题目或 AI 出题');
+      if (answered >= qs.questions.length && qs.questions.length > 0) {
+        endExam();
         return;
       }
       // 如果没有真实作答（全是 -1 旧标记或 undefined），清除旧标记开始新答题

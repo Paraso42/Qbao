@@ -293,10 +293,12 @@ function updateQuickActions() {
       ? runningStreamTask.streamSetRef.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length
       : 0;
     document.getElementById('chapter-quick-info').textContent = '共 ' + totalQ + ' 题，已答 ' + answered + ' 题 (注入中...)';
+    var btn2 = document.getElementById('btn-continue-quiz');
     if (streamSc >= threshold) {
-      document.getElementById('btn-continue-quiz').style.display = '';
+      btn2.style.display = '';
+      btn2.textContent = (answered >= totalQ && totalQ > 0) ? '📊 查看报告' : '▶️ 继续答题';
     } else {
-      document.getElementById('btn-continue-quiz').style.display = 'none';
+      btn2.style.display = 'none';
     }
     container.style.display = 'block';
     return;
@@ -308,10 +310,16 @@ function updateQuickActions() {
     var totalQ = qs ? qs.questions.length : 0;
     var answered = qs ? qs.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length : 0;
     document.getElementById('chapter-quick-info').textContent = '共 ' + totalQ + ' 题，已答 ' + answered + ' 题';
-    if (answered >= totalQ) {
-      document.getElementById('btn-continue-quiz').style.display = 'none';
+    var btn = document.getElementById('btn-continue-quiz');
+    if (totalQ > 0) {
+      btn.style.display = '';
+      if (answered >= totalQ) {
+        btn.textContent = '📊 查看报告';
+      } else {
+        btn.textContent = '▶️ 继续答题';
+      }
     } else {
-      document.getElementById('btn-continue-quiz').style.display = '';
+      btn.style.display = 'none';
     }
     container.style.display = 'block';
   } else {

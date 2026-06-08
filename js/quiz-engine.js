@@ -115,6 +115,9 @@ function syncAnswerToServer() {
   var stats = calcStats(as);
   // Filter out -1 markers from synced answers
   var syncAnswers = as.userAnswers.map(function(a) { return (a === -1 || a === null) ? undefined : a; });
+  // Auto-complete if all questions answered (prevents stale in_progress sessions)
+  var answered = syncAnswers.filter(function(a) { return a !== undefined; }).length;
+  var syncStatus = (answered >= as.questions.length) ? 'completed' : 'in_progress';
   fetchWithAuth('/quiz/session', {
     method: 'POST',
     body: JSON.stringify({
@@ -125,7 +128,7 @@ function syncAnswerToServer() {
       questions: as.questions,
       userAnswers: syncAnswers,
       stats: stats,
-      status: 'in_progress'
+      status: syncStatus
     })
   }).catch(function(e) { console.warn('syncAnswerToServer failed:', e); });
 }
