@@ -18,8 +18,15 @@ module.exports = function (app) {
       let expiresAt = null;
       if (expiresDays) expiresAt = new Date(Date.now() + expiresDays * 86400000);
       const code = genCode();
-      await pool.query('INSERT INTO shared_banks (share_code, owner_id, name, questions, password, expires_at) VALUES ($1,$2,$3,$4,$5,$6)', [code, req.userId, name, questions, pwHash, expiresAt]);
+      await pool.query('INSERT INTO shared_banks (share_code, owner_id, name, questions, password, expires_at) VALUES ($1,$2,$3,$4,$5,$6)', [code, req.userId, name, JSON.stringify(questions), pwHash, expiresAt]);
       res.json({ shareCode: code, url: `/api/v1/share/${code}` });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.get('/api/v1/share/my', requireAuth, async (req, res) => {
+    try {
+      const r = await pool.query('SELECT share_code, name, created_at, download_count, expires_at FROM shared_banks WHERE owner_id = $1 ORDER BY created_at DESC', [req.userId]);
+      res.json(r.rows);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -36,13 +43,6 @@ module.exports = function (app) {
       }
       await pool.query('UPDATE shared_banks SET download_count = download_count + 1 WHERE id = $1', [s.id]);
       res.json({ name: s.name, questions: s.questions, createdAt: s.created_at });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  app.get('/api/v1/share/my', requireAuth, async (req, res) => {
-    try {
-      const r = await pool.query('SELECT share_code, name, created_at, download_count, expires_at FROM shared_banks WHERE owner_id = $1 ORDER BY created_at DESC', [req.userId]);
-      res.json(r.rows);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
