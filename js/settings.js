@@ -1,38 +1,7 @@
 
 function setupSettingsAutoSave() {
-  var sf = document.getElementById('ai-strict-format');
-  var sm = document.getElementById('ai-stream-mode');
   var st = document.getElementById('ai-stream-threshold');
-  if (sf && !sf._autoSaveBound) { sf._autoSaveBound = true; sf.addEventListener('change', function() { _autoSaveAiCheckbox(); }); }
-  if (sm && !sm._autoSaveBound) { sm._autoSaveBound = true; sm.addEventListener('change', function() { _autoSaveAiCheckbox(); }); }
   if (st && !st._autoSaveBound) { st._autoSaveBound = true; st.addEventListener('change', function() { _autoSaveAiThreshold(); }); }
-}
-function _autoSaveAiCheckbox() {
-  if (!state.aiConfig) state.aiConfig = {};
-  var sf = document.getElementById('ai-strict-format');
-  var sm = document.getElementById('ai-stream-mode');
-  var streamMode = sm ? sm.checked : false;
-  // P1-11: Instant conflict detection
-  if (streamMode && sf && sf.checked) {
-    var prov = (state.aiConfig && state.aiConfig.provider) || 'ecnu';
-    if (prov === 'ecnu') {
-      alert('实时注入与严格格式不兼容（尤其是 ECNU 模型）。\n\n已自动关闭严格格式。如需同时开启，请切换到 DeepSeek 或 OpenAI。');
-      sf.checked = false;
-    } else {
-      if (!confirm('实时注入与严格格式同时开启可能导致解析失败。\n\n建议关闭严格格式。是否继续？')) {
-        sm.checked = false;
-        state.aiConfig.streamMode = false;
-      } else {
-        sf.checked = false;
-        state.aiConfig.strictFormat = false;
-      }
-    }
-  }
-  state.aiConfig.streamMode = sm ? sm.checked : false;
-  state.aiConfig.strictFormat = sf ? sf.checked : true;
-  saveState();
-  var status = document.getElementById('ai-config-status');
-  if (status) { status.textContent = '✅ 已自动保存'; status.style.color = '#2ed573'; setTimeout(function() { status.textContent = state.aiConfig.apiKeySet ? '✅ 已配置 AI API' : '⚠️ 尚未配置 API 密钥'; }, 2000); }
 }
 function _autoSaveAiThreshold() {
   if (!state.aiConfig) state.aiConfig = {};
@@ -108,10 +77,6 @@ function loadAiConfig() {
     if (valEl) valEl.textContent = (ac.taskInterval || 30) + 's';
   }
 
-  var sf = document.getElementById('ai-strict-format');
-  if (sf) sf.checked = ac.strictFormat !== false;
-  var sm = document.getElementById('ai-stream-mode');
-  if (sm) sm.checked = ac.streamMode === true;
   var st = document.getElementById('ai-stream-threshold');
   if (st) st.value = ac.streamThreshold || 3;
 }
@@ -132,10 +97,10 @@ async function fetchProviders() {
   // Fallback defaults if fetch fails
   if (aiProviders.length === 0) {
     aiProviders = [
-      { id: 'ecnu', name: 'ECNU (华师大)', models: [{ id: 'ecnu-plus', name: 'ecnu-plus' }, { id: 'ecnu-turbo', name: 'ecnu-turbo' }, { id: 'ecnu-max', name: 'ecnu-max' }] },
-      { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-v4-flash', name: 'deepseek-v4-flash' }, { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro' }] },
-      { id: 'openai', name: 'OpenAI ChatGPT', models: [{ id: 'gpt-4o', name: 'gpt-4o' }, { id: 'gpt-4o-mini', name: 'gpt-4o-mini' }, { id: 'gpt-4.1', name: 'gpt-4.1' }] },
-      { id: 'gemini', name: 'Google Gemini', models: [{ id: 'gemini-2.5-flash', name: 'gemini-2.5-flash' }, { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' }] }
+      { id: 'ecnu', name: 'ECNU (华师大)', models: [{ id: 'ecnu-plus', name: 'ecnu-plus', streaming: true, jsonSchema: true }, { id: 'ecnu-max', name: 'ecnu-max', streaming: true, jsonSchema: false }] },
+      { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', streaming: true, jsonSchema: true }, { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', streaming: true, jsonSchema: true }] },
+      { id: 'openai', name: 'OpenAI ChatGPT', models: [{ id: 'gpt-4o', name: 'gpt-4o', streaming: true, jsonSchema: true }, { id: 'gpt-4o-mini', name: 'gpt-4o-mini', streaming: true, jsonSchema: true }, { id: 'gpt-4.1', name: 'gpt-4.1', streaming: true, jsonSchema: true }] },
+      { id: 'gemini', name: 'Google Gemini', models: [{ id: 'gemini-2.5-flash', name: 'gemini-2.5-flash', streaming: true, jsonSchema: false }, { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro', streaming: true, jsonSchema: false }] }
     ];
   }
   return aiProviders;
@@ -243,21 +208,6 @@ function saveAiConfig() {
     if (vi > 300) vi = 300;
     state.aiConfig.taskInterval = vi;
   }
-
-  var sf = document.getElementById('ai-strict-format');
-  var sm = document.getElementById('ai-stream-mode');
-  var streamMode = sm ? sm.checked : false;
-  if (streamMode && sf && sf.checked) {
-    if (!confirm('实时注入与严格格式不兼容，将自动关闭严格格式。是否继续？')) {
-      sm.checked = false;
-      state.aiConfig.streamMode = false;
-    } else {
-      sf.checked = false;
-      state.aiConfig.strictFormat = false;
-    }
-  }
-  state.aiConfig.strictFormat = sf ? sf.checked : true;
-  state.aiConfig.streamMode = sm ? sm.checked : false;
 
   var st = document.getElementById('ai-stream-threshold');
   state.aiConfig.streamThreshold = st ? parseInt(st.value) || 3 : 3;
