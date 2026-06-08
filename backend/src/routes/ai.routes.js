@@ -160,7 +160,7 @@ module.exports = function (app) {
       if ((safeTc.single || 0) + (safeTc.judge || 0) + (safeTc.term || 0) + (safeTc.short || 0) === 0) {
         safeTc.single = 1;
       }
-      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成题目。\n重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。';
+      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成题目。\n重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n输出顺序：单选题→判断题→名词解释→简答题。';
       let userText = textContent || '';
 
       // If chapterId provided, read assigned pool files from disk
@@ -238,6 +238,7 @@ module.exports = function (app) {
           progressLines.push('- 对于已有标签中出题少的（少于3题），请补充出题');
           progressLines.push('- 对于资料中未覆盖的新知识点，请创建新标签并出题');
           progressLines.push('- 为每道题标注 tag 时，如果知识点与已有标签相似，请归入已有标签；如果是全新知识点，请创建新标签');
+          progressLines.push('- 输出顺序必须严格按照：单选题(single) → 判断题(judge) → 名词解释(term) → 简答题(short)。同题型内部按知识点分组排列');
           userText += progressLines.join('\n');
         }
       }
@@ -250,7 +251,7 @@ module.exports = function (app) {
         items: {
           type: 'object',
           properties: {
-            type: { type: 'string' },
+            type: { type: 'string', enum: ['single', 'judge', 'term', 'short'] },
             question: { type: 'string' },
             options: { type: 'array', items: { type: 'string' } },
             answer: { type: 'integer' },
@@ -284,6 +285,10 @@ module.exports = function (app) {
               streamOpts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
             } else {
               streamOpts.response_format = { type: 'json_object' };
+              // DeepSeek requires "json" in prompt for json_object
+              if (!/json/i.test(messages[0].content)) {
+                messages[0].content += '\nRespond in JSON format.';
+              }
             }
           }
         }
@@ -304,6 +309,7 @@ module.exports = function (app) {
                 lastParsedLength += newQs.length;
                 accumulatedQuestions = accumulatedQuestions.concat(newQs);
                 if (lastParsedLength >= totalQ) {
+                  console.log('[stream] early abort: parsed=' + lastParsedLength + ' >= totalQ=' + totalQ + ', model=' + model);
                   streamAborter.abort();
                   streamDone = true;
                 }
@@ -328,6 +334,11 @@ module.exports = function (app) {
         }
 
         if (streamDone) {
+          var typeDist = {};
+          (accumulatedQuestions.slice(0, totalQ) || []).forEach(function(q) {
+            typeDist[q.type || '?'] = (typeDist[q.type || '?'] || 0) + 1;
+          });
+          console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.slice(0, totalQ).length + ', types=' + JSON.stringify(typeDist));
           try {
             res.write('data: ' + JSON.stringify({ done: true, questions: accumulatedQuestions.slice(0, totalQ), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
@@ -345,6 +356,9 @@ module.exports = function (app) {
         try {
           var questions = JSON.parse(finalClean);
           if (!Array.isArray(questions)) questions = [questions];
+          var typeDist3 = {};
+          (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
+          console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
           res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
           res.end();
         } catch (e) {
@@ -371,6 +385,10 @@ module.exports = function (app) {
             // For Gemini, no response_format at all — rely on prompt
             if (providerName !== 'gemini') {
               opts.response_format = { type: 'json_object' };
+              // DeepSeek requires "json" in prompt for json_object
+              if (!/json/i.test(messages[0].content)) {
+                messages[0].content += '\nRespond in JSON format.';
+              }
             }
           }
         }
@@ -379,6 +397,7 @@ module.exports = function (app) {
         const output = completion.choices[0].message.content;
         let questions;
         try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
+        if (!Array.isArray(questions)) questions = [questions];
 
         await pool.query(
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',

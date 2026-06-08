@@ -17,7 +17,7 @@ const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 const authLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: '请求过于频繁' }, keyGenerator: (req) => req.ip });
-const generalLimiter = rateLimit({ windowMs: 60000, max: 600, keyGenerator: (req) => req.ip });
+const generalLimiter = rateLimit({ windowMs: 60000, max: 120, keyGenerator: (req) => req.ip });
 app.use('/api/v1/auth/', authLimiter);
 app.use('/api/v1/', generalLimiter);
 
@@ -40,6 +40,6 @@ require('./src/routes/users.routes')(app);
 require('./src/routes/quiz.routes')(app);
 require('./src/routes/files.routes')(app);
 require('./src/routes/issues.routes')(app);
-require('./src/routes/chat.routes')(app);
+require("./src/routes/chat.routes")(app);
 
 app.listen(PORT, () => console.log(`Qbao API running on port ${PORT}`));
