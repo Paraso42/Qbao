@@ -1723,7 +1723,7 @@ function chatShareCurrentQuizSet() {
 //  Share current question from quiz modal
 // =============================================================================
 
-function shareCurrentQuestion() {
+async function shareCurrentQuestion() {
   var as = getActiveSet();
   if (!as || !as.questions || !as.questions.length) {
     if (typeof showToast === 'function') showToast('暂无题目可分享');
@@ -1744,12 +1744,36 @@ function shareCurrentQuestion() {
     fromUserId: authUser.id
   };
 
+  // Load chat data on demand if caches are empty (user may not have opened chat this session)
+  await _ensureChatDataLoaded();
+
   if (chatFriendsCache.length === 0 && (!chatRoomsCache || chatRoomsCache.length === 0)) {
     if (typeof showToast === 'function') showToast('请先添加好友或加入群聊');
     return;
   }
 
   _showQuizShareTargetSelector(quizData);
+}
+
+async function _ensureChatDataLoaded() {
+  if (chatFriendsCache.length === 0) {
+    try {
+      var fRes = await fetchWithAuth('/chat/friends');
+      if (fRes && fRes.ok) {
+        var fData = await fRes.json();
+        chatFriendsCache = fData.friends || [];
+      }
+    } catch(e) { /* ignore */ }
+  }
+  if (!chatRoomsCache || chatRoomsCache.length === 0) {
+    try {
+      var rRes = await fetchWithAuth('/chat/rooms');
+      if (rRes && rRes.ok) {
+        var rData = await rRes.json();
+        chatRoomsCache = rData.rooms || [];
+      }
+    } catch(e) { /* ignore */ }
+  }
 }
 
 function _showQuizShareTargetSelector(quizData) {

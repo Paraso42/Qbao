@@ -142,6 +142,9 @@ async function init(){ try{
 			} else {
 				showScreen('start');
 			}
+		} else if (saved === 'report') {
+			// Don't restore report view on refresh — go to start
+			showScreen('start');
 		} else {
 			showScreen(saved);
 		}
