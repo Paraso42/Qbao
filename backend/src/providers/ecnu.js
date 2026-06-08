@@ -115,12 +115,12 @@ async function callEcnuApi(apiKey, model, messages, options) {
 
 // ECNU model capability helpers
 function supportsJsonSchema(model) {
-  return model === 'ecnu-plus' || model === 'ecnu-turbo';
+  return model === 'ecnu-plus' || model === 'ecnu-max' || model === 'ecnu-turbo';
 }
 
-function supportsStreamWithJsonSchema(_model) {
-  // ECNU streaming is incompatible with json_schema
-  return false;
+function supportsStreamWithJsonSchema(model) {
+  // Diagnostic verified: both ecnu-plus and ecnu-max support json_schema in streaming mode
+  return model === 'ecnu-plus' || model === 'ecnu-max';
 }
 
 module.exports = {

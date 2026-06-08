@@ -712,6 +712,7 @@ module.exports = function (app) {
       // Normalize quiz_data question answers to letter format (A/B/C/D...)
       if (quiz_data && quiz_data.questions) {
         quiz_data.questions.forEach(function(q) {
+          console.log('[POST /msg normalize] before:', q.answer, 'type:', typeof q.answer);
           if (q.answer !== undefined && q.answer !== null && q.answer !== '') {
             var labels = ['A','B','C','D','E','F'];
             if (typeof q.answer === 'number' || /^\d+$/.test(String(q.answer))) {
@@ -723,6 +724,7 @@ module.exports = function (app) {
               q.answer = q.answer.toUpperCase();
             }
           }
+          console.log('[POST /msg normalize] after:', q.answer, 'type:', typeof q.answer);
         });
       }
 
