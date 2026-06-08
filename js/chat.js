@@ -1720,6 +1720,177 @@ function chatShareCurrentQuizSet() {
   if (typeof showToast === 'function') showToast('题目已准备分享，选择好友并发送消息即可');
 }
 
+//  Share current question from quiz modal
+// =============================================================================
+
+function shareCurrentQuestion() {
+  var as = getActiveSet();
+  if (!as || !as.questions || !as.questions.length) {
+    if (typeof showToast === 'function') showToast('暂无题目可分享');
+    return;
+  }
+  var q = as.questions[as.currentIdx];
+  if (!q) {
+    if (typeof showToast === 'function') showToast('当前没有题目');
+    return;
+  }
+
+  var ch = getCh();
+  var quizData = {
+    questions: [q],
+    setName: as.setName || '',
+    chapterName: ch ? ch.name : '',
+    fromUserName: authUser.displayName || authUser.username,
+    fromUserId: authUser.id
+  };
+
+  if (chatFriendsCache.length === 0 && (!chatRoomsCache || chatRoomsCache.length === 0)) {
+    if (typeof showToast === 'function') showToast('请先添加好友或加入群聊');
+    return;
+  }
+
+  _showQuizShareTargetSelector(quizData);
+}
+
+function _showQuizShareTargetSelector(quizData) {
+  // Remove existing selector
+  var existing = document.getElementById('quiz-share-target-dialog');
+  if (existing) existing.remove();
+
+  var dialog = document.createElement('div');
+  dialog.id = 'quiz-share-target-dialog';
+  dialog.className = 'dialog-overlay';
+  dialog.setAttribute('onclick', 'if(event.target===this)this.remove()');
+  dialog.style.zIndex = '99999';
+
+  // Build friendId → roomId map from existing rooms
+  var friendRoomMap = {};
+  (chatRoomsCache || []).forEach(function(room) {
+    if (room.type === 'direct' && room.members) {
+      room.members.forEach(function(m) {
+        if (m.id !== authUser?.id) friendRoomMap[m.id] = room.id;
+      });
+    }
+  });
+
+  var itemsHtml = '';
+
+  // Friends section
+  if (chatFriendsCache.length > 0) {
+    itemsHtml += '<div class="quiz-share-section-title">👤 好友</div>';
+    chatFriendsCache.forEach(function(friend) {
+      var name = escapeHtml(friend.display_name || friend.username);
+      var roomId = friendRoomMap[friend.id];
+      var onclick = roomId
+        ? "event.stopPropagation();_sendQuizShareToRoom(" + roomId + ")"
+        : "event.stopPropagation();_createAndShareQuiz(" + friend.id + ")";
+      itemsHtml += '<div class="quiz-share-target-item" onclick="' + onclick + '">' +
+        '<span class="quiz-share-target-avatar direct">' + name.charAt(0).toUpperCase() + '</span>' +
+        '<span class="quiz-share-target-name">' + name + '</span>' +
+        '</div>';
+    });
+  }
+
+  // Groups section
+  var groups = (chatRoomsCache || []).filter(function(r) { return r.type === 'group'; });
+  if (groups.length > 0) {
+    itemsHtml += '<div class="quiz-share-section-title" style="margin-top:8px;">👥 群聊</div>';
+    groups.forEach(function(group) {
+      var name = escapeHtml(group.name || '群聊');
+      itemsHtml += '<div class="quiz-share-target-item" onclick="event.stopPropagation();_sendQuizShareToRoom(' + group.id + ')">' +
+        '<span class="quiz-share-target-avatar group">' + name.charAt(0).toUpperCase() + '</span>' +
+        '<span class="quiz-share-target-name">' + name + '</span>' +
+        '</div>';
+    });
+  }
+
+  var html = '<div class="dialog-box quiz-share-target-dialog-box" onclick="event.stopPropagation()" style="max-width:360px;max-height:70vh;display:flex;flex-direction:column;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+    '<h3 style="margin:0;font-size:15px;">📤 分享题目给</h3>' +
+    '<button onclick="var d=document.getElementById(\'quiz-share-target-dialog\');if(d)d.remove();" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);padding:0 4px;line-height:1;">&times;</button>' +
+    '</div>' +
+    '<div class="quiz-share-target-list">' +
+    (itemsHtml || '<div style="color:var(--text-muted);text-align:center;padding:20px;">暂无好友或群聊</div>') +
+    '</div>' +
+    '</div>';
+
+  dialog.innerHTML = html;
+  document.body.appendChild(dialog);
+  dialog.classList.add('active');
+
+  // Store pending quizData
+  window._pendingQuizShareData = quizData;
+}
+
+async function _sendQuizShareToRoom(roomId) {
+  var quizData = window._pendingQuizShareData;
+  if (!quizData) return;
+
+  try {
+    var res = await fetchWithAuth('/chat/rooms/' + roomId + '/messages', {
+      method: 'POST',
+      body: JSON.stringify({ content: '', msg_type: 'quiz_share', quiz_data: quizData })
+    });
+    if (res && res.ok) {
+      if (typeof showToast === 'function') showToast('已分享');
+    } else {
+      var errData = null;
+      try { errData = res ? await res.json() : null; } catch(_) {}
+      if (typeof showToast === 'function') showToast('分享失败: ' + ((errData && errData.error) || '请重试'));
+    }
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('分享失败: ' + (e.message || '网络错误'));
+  }
+
+  // Close dialog & clean up
+  var dialog = document.getElementById('quiz-share-target-dialog');
+  if (dialog) dialog.remove();
+  window._pendingQuizShareData = null;
+}
+
+async function _createAndShareQuiz(friendId) {
+  var quizData = window._pendingQuizShareData;
+  if (!quizData) return;
+
+  try {
+    // Create direct room first
+    var roomRes = await fetchWithAuth('/chat/rooms', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'direct', friendId: friendId })
+    });
+    if (!roomRes || !roomRes.ok) {
+      var eData = null;
+      try { eData = roomRes ? await roomRes.json() : null; } catch(_) {}
+      if (typeof showToast === 'function') showToast('创建会话失败: ' + ((eData && eData.error) || '请重试'));
+      return;
+    }
+    var roomData = await roomRes.json();
+    var roomId = roomData.roomId;
+
+    // Send the quiz share
+    var res = await fetchWithAuth('/chat/rooms/' + roomId + '/messages', {
+      method: 'POST',
+      body: JSON.stringify({ content: '', msg_type: 'quiz_share', quiz_data: quizData })
+    });
+    if (res && res.ok) {
+      if (typeof showToast === 'function') showToast('已分享');
+      // Refresh room list since we created a new room
+      if (typeof chatLoadRooms === 'function') chatLoadRooms();
+    } else {
+      var errData = null;
+      try { errData = res ? await res.json() : null; } catch(_) {}
+      if (typeof showToast === 'function') showToast('分享失败: ' + ((errData && errData.error) || '请重试'));
+    }
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('分享失败: ' + (e.message || '网络错误'));
+  }
+
+  // Close dialog & clean up
+  var dialog = document.getElementById('quiz-share-target-dialog');
+  if (dialog) dialog.remove();
+  window._pendingQuizShareData = null;
+}
+
 // =============================================================================
 //  Polling
 // =============================================================================

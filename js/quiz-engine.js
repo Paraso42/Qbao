@@ -226,10 +226,10 @@ setupQuizKeyboard();
 
 function renderQuestion() {
   const as = getActiveSet(); const area = document.getElementById('question-area'); const tagEl = document.getElementById('quiz-tag'), typeEl = document.getElementById('quiz-type'); const navEl = document.getElementById('quiz-nav'), sb = document.getElementById('btn-submit'), nx = document.getElementById('btn-next');
-  if (!as||!as.questions||!as.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; return; }
+  if (!as||!as.questions||!as.questions.length) { if (area) area.innerHTML = '<div class="empty-state">📭 暂无题目</div>'; if (sb) sb.style.display='none'; if (nx) { nx.style.display='none'; nx.onclick=null; } if (tagEl) tagEl.textContent='标签'; if (typeEl) typeEl.textContent='题型'; if (navEl) navEl.innerHTML=''; var sh=document.getElementById('btn-share-quiz'); if(sh)sh.style.display='none'; return; }
   if (as.currentIdx>=as.questions.length) as.setCurrentIdx(as.questions.length-1); if (as.currentIdx<0) as.setCurrentIdx(0);
   const qi = as.currentIdx;
-  const q = as.questions[qi]; if (!q) { if (area) area.innerHTML='<div class="empty-state">🎉 全部完成</div>'; return; }
+  const q = as.questions[qi]; if (!q) { if (area) area.innerHTML='<div class="empty-state">🎉 全部完成</div>'; var sh2=document.getElementById('btn-share-quiz'); if(sh2)sh2.style.display='none'; return; }
   const typeMap = { single:'单选题', judge:'判断题', term:'名词解释', short:'简答题' };
   if (tagEl) tagEl.textContent = as.setName||'未标注'; if (typeEl) typeEl.textContent = typeMap[q.type]||q.type;
   const ans = as.userAnswers[qi]; const hasAns = ans !== undefined && ans !== -1 && ans !== null; const isCor = hasAns ? getCi(q, as.userAnswers[qi]) : null;
@@ -243,6 +243,7 @@ function renderQuestion() {
   if (area) area.innerHTML = html;
   if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined&&as.userAnswers[idx]!==null) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
   if (sb) sb.style.display = hasAns?'none':'inline-block'; var ig=document.getElementById('btn-ignore'); if(ig){ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block';ig.textContent='👍 我会了';}
+  var sq=document.getElementById('btn-share-quiz'); if(sq)sq.style.display='inline-block';
   if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
 
   applyQuizFontSize();
