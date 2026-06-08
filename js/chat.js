@@ -1838,11 +1838,20 @@ async function chatAnswerSharedQuiz(msgId, optionIndex) {
 
   try {
 
-    // Backend normalizes question.answer to letter format (A/B/C/D/E/F)
+    // Backend normalizes new messages to letter format. Old messages may have numeric.
     var labels = ['A', 'B', 'C', 'D', 'E', 'F'];
-    var answerLetter = (question.answer !== undefined && question.answer !== null && question.answer !== '')
-      ? String(question.answer).toUpperCase() : '';
-    var correctIdx = labels.indexOf(answerLetter);
+    var rawAnswer = (question.answer !== undefined && question.answer !== null && question.answer !== '')
+      ? question.answer : '';
+    var correctIdx = -1;
+    if (rawAnswer !== '') {
+      // Try letter format first (A,B,C...)
+      correctIdx = labels.indexOf(String(rawAnswer).toUpperCase());
+      // Fallback: numeric index (0,1,2...) from old messages
+      if (correctIdx === -1) {
+        var n = Number(rawAnswer);
+        if (!isNaN(n) && n >= 0 && n < labels.length) correctIdx = n;
+      }
+    }
 
     if (question.type === 'single') {
       chosenAnswer = labels[optionIndex] || String(optionIndex);
