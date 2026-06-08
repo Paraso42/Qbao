@@ -327,6 +327,25 @@ async function _qbankDoShare(type, targetId) {
   for (var i = 0; i < questions.length; i++) {
     try {
       var q = questions[i];
+      // Fill in missing answer/options from chapter data (old history records may lack them)
+      if ((q.answer === undefined || q.answer === null) && q.question) {
+        var subj = getSubj(); if (subj && subj.chapterIds) {
+          for (var ci = 0; ci < subj.chapterIds.length; ci++) {
+            var ch2 = state.chapters[subj.chapterIds[ci]];
+            if (ch2 && ch2.questions) {
+              for (var qi = 0; qi < ch2.questions.length; qi++) {
+                if (ch2.questions[qi].question === q.question && ch2.questions[qi].answer !== undefined) {
+                  q.answer = ch2.questions[qi].answer;
+                  if (!q.options) q.options = ch2.questions[qi].options;
+                  if (!q.explanation) q.explanation = ch2.questions[qi].explanation;
+                  break;
+                }
+              }
+            }
+            if (q.answer !== undefined) break;
+          }
+        }
+      }
       var quizData = {
         questions: [q],
         setName: (q.question || '').substring(0, 30),
