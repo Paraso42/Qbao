@@ -5,17 +5,16 @@ const PROVIDERS = {
     id: 'ecnu',
     name: 'ECNU (华师大)',
     models: [
-      { id: 'ecnu-plus', name: 'ecnu-plus', streaming: false, jsonSchema: true },
-      { id: 'ecnu-turbo', name: 'ecnu-turbo', streaming: false, jsonSchema: true },
-      { id: 'ecnu-max', name: 'ecnu-max', streaming: false, jsonSchema: false }
+      { id: 'ecnu-plus', name: 'ecnu-plus', streaming: true, jsonSchema: true },
+      { id: 'ecnu-max', name: 'ecnu-max', streaming: true, jsonSchema: true }
     ]
   },
   deepseek: {
     id: 'deepseek',
     name: 'DeepSeek',
     models: [
-      { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', streaming: true, jsonSchema: true },
-      { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', streaming: true, jsonSchema: true }
+      { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', streaming: true, jsonSchema: false },
+      { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', streaming: true, jsonSchema: false }
     ]
   },
   openai: {
