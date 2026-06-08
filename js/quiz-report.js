@@ -1,4 +1,5 @@
 function renderReport() {
+  _reportWrongOnly = false;
   const ch=getCh(); const c=document.getElementById('report-content'); if (!c) return;
   if (!ch||!ch.questions||!ch.questions.length) { c.innerHTML='<div class="empty-state">暂无数据</div>'; return; }
   const stats=calcStats(ch); const correctTotal=stats.objCorrect+stats.subjCount; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0;
@@ -11,6 +12,7 @@ function renderReport() {
 }
 // ===== 历史 =====
 function renderReportForSet(as) {
+  _reportWrongOnly = false;
   const c=document.getElementById('report-content'); if(!c) return;
   const stats=calcStats(as); const correctTotal=stats.objCorrect+stats.subjCount; const rate=stats.objTotal>0?Math.round((stats.objCorrect/stats.objTotal)*100):0;
   let html='<div class="report-grid"><div class="report-stat correct"><div class="num">'+correctTotal+'</div><div class="label">✅ 正确</div></div><div class="report-stat wrong"><div class="num">'+stats.wrongCount+'</div><div class="label">❌ 错误</div></div><div class="report-stat rate"><div class="num">'+rate+'%</div><div class="label">📊 正确率</div></div><div class="report-stat"><div class="num">'+stats.answered+'/'+stats.total+'</div><div class="label">📝 进度</div></div></div>';
