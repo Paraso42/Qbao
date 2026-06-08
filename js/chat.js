@@ -1838,38 +1838,22 @@ async function chatAnswerSharedQuiz(msgId, optionIndex) {
 
   try {
 
+    // Backend normalizes question.answer to letter format (A/B/C/D/E/F)
+    var labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+    var answerLetter = (question.answer !== undefined && question.answer !== null && question.answer !== '')
+      ? String(question.answer).toUpperCase() : '';
+    var correctIdx = labels.indexOf(answerLetter);
+
     if (question.type === 'single') {
-      var labels = ['A', 'B', 'C', 'D', 'E', 'F'];
       chosenAnswer = labels[optionIndex] || String(optionIndex);
-      // question.answer may be numeric index (0,1,2) or letter (A,B,C)
-      var rawAnswer = question.answer;
-      var correctIdx = -1;
-      if (rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== '') {
-        if (typeof rawAnswer === 'number' || /^\d+$/.test(String(rawAnswer))) {
-          correctIdx = Number(rawAnswer);
-        } else {
-          correctIdx = labels.indexOf(String(rawAnswer).toUpperCase());
-        }
-      }
       correct = (optionIndex === correctIdx);
     } else if (question.type === 'judge') {
-      // question.answer is 0 (正确) or 1 (错误) — numeric index
       chosenAnswer = optionIndex === 0 ? '正确' : '错误';
-      var judgeCorrect = (question.answer !== undefined && question.answer !== null && question.answer !== '') ? Number(question.answer) : -1;
-      correct = (optionIndex === judgeCorrect);
+      correct = (optionIndex === correctIdx);
     }
 
     // Save result to the message's quiz_data
-    var rawAns = question.answer;
-    var correctAnswerIdx = -1;
-    if (rawAns !== undefined && rawAns !== null && rawAns !== '') {
-      if (typeof rawAns === 'number' || /^\d+$/.test(String(rawAns))) {
-        correctAnswerIdx = Number(rawAns);
-      } else {
-        var labelsAns = ['A','B','C','D','E','F'];
-        correctAnswerIdx = labelsAns.indexOf(String(rawAns).toUpperCase());
-      }
-    }
+    var correctAnswerIdx = correctIdx;
     var correctAnswerText = question.options && correctAnswerIdx >= 0 ? question.options[correctAnswerIdx] :
       (question.type === 'judge' ? (correctAnswerIdx === 0 ? '正确' : '错误') : String(question.answer || ''));
     var chosenAnswerIdx = optionIndex;

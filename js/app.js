@@ -1,4 +1,8 @@
 function showScreen(name){
+  // Ensure chat polling is always running when logged in (badge reliability)
+  if (typeof chatStartPolling === 'function' && typeof isOnlineMode !== 'undefined' && isOnlineMode && typeof getToken === 'function' && getToken() && !chatPollTimer) {
+    chatStartPolling();
+  }
   closeAllModals();
   // 弹窗类路由
   if (name === 'quiz')      { openQuizModal('quiz'); return; }
