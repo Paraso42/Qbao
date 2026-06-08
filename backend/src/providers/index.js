@@ -5,8 +5,9 @@ const PROVIDERS = {
     id: 'ecnu',
     name: 'ECNU (华师大)',
     models: [
-      { id: 'ecnu-plus', name: 'ecnu-plus', streaming: true, jsonSchema: true },
-      { id: 'ecnu-max', name: 'ecnu-max', streaming: true, jsonSchema: false }
+      { id: 'ecnu-plus', name: 'ecnu-plus', streaming: false, jsonSchema: true },
+      { id: 'ecnu-turbo', name: 'ecnu-turbo', streaming: false, jsonSchema: true },
+      { id: 'ecnu-max', name: 'ecnu-max', streaming: false, jsonSchema: false }
     ]
   },
   deepseek: {
