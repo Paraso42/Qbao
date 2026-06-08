@@ -709,15 +709,18 @@ module.exports = function (app) {
         return res.status(422).json({ error: '题目分享需要包含题目数据' });
       }
 
-      // Normalize quiz_data question answers to numeric index (handle A/B/C letter format)
+      // Normalize quiz_data question answers to letter format (A/B/C/D...)
       if (quiz_data && quiz_data.questions) {
         quiz_data.questions.forEach(function(q) {
           if (q.answer !== undefined && q.answer !== null && q.answer !== '') {
-            if (typeof q.answer === 'string' && !/^\d+$/.test(q.answer)) {
-              var idx = q.answer.toUpperCase().charCodeAt(0) - 65;
-              if (idx >= 0) q.answer = idx;
+            var labels = ['A','B','C','D','E','F'];
+            if (typeof q.answer === 'number' || /^\d+$/.test(String(q.answer))) {
+              // Numeric index (0,1,2) or string number ('0','1','2') → letter
+              var n = Number(q.answer);
+              if (n >= 0 && n < labels.length) q.answer = labels[n];
             } else if (typeof q.answer === 'string') {
-              q.answer = Number(q.answer);
+              // Already a letter — uppercase it
+              q.answer = q.answer.toUpperCase();
             }
           }
         });
