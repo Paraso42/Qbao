@@ -37,6 +37,7 @@ function _tagArr(s, cat) { return cat === 'new' ? (s.newTopicTags || []) : (s[ca
 var _dragTag = null, _dragCat = null;
 
 function _setupDragListeners() {
+  console.log('_setupDragListeners: chips=' + document.querySelectorAll('.tag-chip-v2[draggable]').length + ' panel=' + !!document.getElementById('tags-manager-v2'));
   // Programmatic dragstart on all chips (more reliable than inline ondragstart)
   document.querySelectorAll('.tag-chip-v2[draggable]').forEach(function(chip) {
     if (chip._hasDrag) return;

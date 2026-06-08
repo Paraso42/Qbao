@@ -379,3 +379,7 @@ body.dark-mode .chat-user-search-input { background: #121214; border-color: #383
 body.dark-mode .chat-user-search-item:hover { background: #22222a; }
 body.dark-mode .chat-quiz-select-item { border-bottom-color: #2a2a30; }
 body.dark-mode .chat-quiz-select-item:hover { background: #22222a; }
+
+/* Quiz Share Target Selector (v3.11.9) */
+body.dark-mode .quiz-share-target-dialog-box { background: #1a1a1f; }
+body.dark-mode .quiz-share-target-item:hover { background: #252530; }

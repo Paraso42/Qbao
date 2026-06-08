@@ -795,7 +795,14 @@ async function handleFilePoolUpload(e) {
     try {
       var res = await fetchWithAuth('/files/upload', { method: 'POST', body: formData, headers: {} });
       if (res && res.ok) { successCount++; }
-      else { failCount++; }
+      else {
+        failCount++;
+        var errData = null;
+        try { errData = res ? await res.json() : null; } catch(_) {}
+        if (errData && errData.error && typeof showToast === 'function') {
+          showToast(errData.error);
+        }
+      }
     } catch (err) {
       failCount++;
     }
