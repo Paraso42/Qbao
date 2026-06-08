@@ -3,28 +3,6 @@ function saveChapterMaterials(cid, materials) { if(!state.chapterMaterials)state
 function onAiGlobalToggle() { const enabled=document.getElementById('ai-global-toggle').checked; state.aiEnabled=enabled; saveState(); applyAiModeUi(); updateTopbarAiIndicator(); if(enabled) showAiModeTooltip(); }
 function showAiModeTooltip() { var t=document.getElementById('ai-mode-tooltip'); if(t){t.style.display='block';t.style.opacity='0';t.style.transform='translateY(4px)';setTimeout(function(){t.style.opacity='1';t.style.transform='translateY(0)';},10); if(state._aiTooltipTimer) clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=setTimeout(function(){closeAiModeTooltip();},6000);} }
 function closeAiModeTooltip() { var t=document.getElementById('ai-mode-tooltip'); if(t){t.style.opacity='0';t.style.transform='translateY(4px)';setTimeout(function(){t.style.display='none';},200);} if(state._aiTooltipTimer){clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=null;} }
-
-// 模型能力自动检测（静默，无需用户手动设置流式/严格开关）
-function _getModelCapabilities() {
-  var ac = state.aiConfig || {};
-  var model = ac.model || 'ecnu-plus';
-  var providers = window.aiProviders || [];
-  for (var i = 0; i < providers.length; i++) {
-    for (var j = 0; j < (providers[i].models || []).length; j++) {
-      if (providers[i].models[j].id === model) {
-        return providers[i].models[j];
-      }
-    }
-  }
-  return { streaming: false, jsonSchema: true };
-}
-function _shouldUseStreaming() {
-  return _getModelCapabilities().streaming === true;
-}
-function _shouldUseStrictFormat() {
-  var caps = _getModelCapabilities();
-  return caps.jsonSchema === true;
-}
 function cancelAiGenerate() {
   if(aiTimer){clearInterval(aiTimer);aiTimer=null;}
   aiGenerating=false;
@@ -158,7 +136,7 @@ async function _aiExecuteTask(task) {
     var finalPrompt = envPrompt + task.promptText;
     var questions = null; var lastJson = ''; var maxAttempts = 3;
     
-    if (_shouldUseStreaming()) {
+    if (ac.streamMode === true) {
       var emptySet = createEmptyQuizSet(task.chapterId);
       task.streamSetRef = emptySet;
       var streamResult = await _aiStreamGenerate(task, { uploadData:uploadData, tagStats:tagStats, totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, topWrongTags:topWrongTags, finalPrompt:finalPrompt, ac:ac, ch:ch, abortController:abortController });
@@ -170,7 +148,7 @@ async function _aiExecuteTask(task) {
         for (var attempt2 = 1; attempt2 <= maxAttempts && !questions; attempt2++) {
           if (attempt2 > 1) { await sleep(2000*(attempt2-1)); }
           var retry2 = attempt2 > 1 ? task.promptText + '\n\n重要：你上次返回了无效JSON，错误是：'+lastJson+'。请修正后重新输出纯JSON数组。' : task.promptText;
-          var genRes2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':ac.apiKey||'', 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-strict-format':_shouldUseStrictFormat()?'true':'false' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retry2, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
+          var genRes2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':ac.apiKey||'', 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-strict-format':ac.strictFormat!==false?'true':'false' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retry2, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
           var genData2 = await genRes2.json();
           if (genData2.poolFilesStatus) task._poolFilesStatus = genData2.poolFilesStatus;
           var raw2 = genData2.questions; if(!raw2&&genData2.output) raw2=genData2.output; if(!raw2&&typeof genData2==='object') raw2=Object.values(genData2).find(function(v){return Array.isArray(v)||typeof v==='string';});
@@ -187,7 +165,7 @@ async function _aiExecuteTask(task) {
       if (attempt > 1) { await sleep(2000*(attempt-1)); }
       var retryPrompt = attempt > 1 ? task.promptText + '\n\n重要：你上次返回了无效JSON，错误是：'+lastJson+'。请修正后重新输出纯JSON数组。' : task.promptText;
       var apiKey = (ac.providerKeys && ac.providerKeys[ac.provider||'ecnu']) || ac.apiKey || '';
-      var genRes = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key': apiKey, 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-provider': ac.provider||'ecnu', 'x-ai-strict-format':_shouldUseStrictFormat()?'true':'false' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retryPrompt, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
+      var genRes = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key': apiKey, 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-provider': ac.provider||'ecnu', 'x-ai-strict-format':ac.strictFormat!==false?'true':'false' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retryPrompt, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
       var genData = await genRes.json();
       if (genData.poolFilesStatus) task._poolFilesStatus = genData.poolFilesStatus;
       var raw = genData.questions; if(!raw&&genData.output) raw=genData.output; if(!raw&&typeof genData==='object') raw=Object.values(genData).find(function(v){return Array.isArray(v)||typeof v==='string';});
