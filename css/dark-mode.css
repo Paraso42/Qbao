@@ -216,6 +216,8 @@ body.dark-mode #sidebar-footer .btn-util:hover { background: #22222a; color: #e4
 body.dark-mode .subject-header:hover { background: #22222a; }
 body.dark-mode .subject-header.active { background: #1e2e44; color: #7aade0; }
 body.dark-mode .subj-btn:hover { color: #e4e4e8; background: #22222a; }
+body.dark-mode .subj-collapse-arrow { color: #707078; }
+body.dark-mode .subj-collapse-arrow:hover { color: #e4e4e8; background: #22222a; }
 body.dark-mode .chapter-item:hover { background: #22222a; }
 body.dark-mode .chapter-item.active { background: #1e2e44; color: #7aade0; }
 body.dark-mode .btn-add-chapter { border-color: #383840; color: #707078; }

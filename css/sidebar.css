@@ -67,6 +67,19 @@
 .subject-header .subj-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1em; }
 .subject-header .subj-count { font-size: 0.846em; color: var(--text-muted); font-weight: 400; margin: 0 4px; }
 
+/* 折叠箭头 — 使用 em 随 --sidebar-font-size 缩放 */
+.subj-collapse-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.6em; height: 1.6em; flex-shrink: 0; margin-right: 0.15em;
+  font-size: 0.75em; color: var(--text-muted); cursor: pointer;
+  border-radius: var(--radius-sm); user-select: none;
+  transition: color var(--transition-fast);
+}
+.subj-collapse-arrow:hover { color: var(--text-primary); background: var(--surface-hover); }
+
+/* 折叠状态：隐藏章节列表 */
+.subject-group.collapsed .chapter-list-in-subj { display: none; }
+
 .subj-actions { display: flex; gap: 1px; opacity: 0; transition: opacity var(--transition-fast); }
 .subject-header:hover .subj-actions { opacity: 1; }
 
