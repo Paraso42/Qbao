@@ -283,6 +283,12 @@ function migrateState(s) {
     s.subjects[sid] = { id: sid, name: '默认科目', chapterIds: Object.keys(s.chapters) };
     s.currentSubjectId = sid;
   }
+  // 确保所有科目有 collapsed 字段 (v3.12.2)
+  for (const sid in s.subjects) {
+    if (typeof s.subjects[sid].collapsed !== 'boolean') {
+      s.subjects[sid].collapsed = false;
+    }
+  }
   if (!s.achievements) s.achievements = { unlocked: [], history: [] };
   if (!s.ignoredQuestions) s.ignoredQuestions = [];
   if (!s.srsData) s.srsData = {};
