@@ -28,7 +28,7 @@ function createSubject() {
   var defaultName = '科目 ' + (Object.keys(state.subjects).length + 1);
   showInlinePrompt('新建科目', defaultName, function(name) {
   const id = 'subj_' + Date.now().toString(36);
-  state.subjects[id] = { id, name: name.trim(), chapterIds: [] };
+  state.subjects[id] = { id: id, name: name.trim(), chapterIds: [], collapsed: false };
   if (!state.currentSubjectId) state.currentSubjectId = id;
   saveState(); renderSubjectList(); checkAchievements();
   });
@@ -69,7 +69,7 @@ function _doCreateChapter(subjId, name) {
   s.chapterIds.push(id); state.currentChapterId = id;
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); checkAchievements();
 }
-function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; break; } } saveState(); renderSubjectList(); updateQuickActions(); showScreen('start'); restoreQuizFromServer(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); }
+function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; if (state.subjects[sid].collapsed) { state.subjects[sid].collapsed = false; } break; } } saveState(); renderSubjectList(); updateQuickActions(); showScreen('start'); restoreQuizFromServer(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); }
 function renameChapter(chId, newName) { const ch = state.chapters[chId]; if (!ch || !newName || !newName.trim()) return; ch.name = newName.trim(); saveState(); renderSubjectList(); }
 function deleteChapter(chId) {
   if (!confirm('删除该章节？')) return;
@@ -79,6 +79,25 @@ function deleteChapter(chId) {
   saveState(); renderSubjectList(); updateQuickActions(); showScreen('start');
 }
 function renameChapterPrompt(chId) { var ch = state.chapters[chId]; if (!ch) return; showInlinePrompt('重命名章节', ch.name, function(n) { renameChapter(chId, n); }); }
+
+function toggleSubjectCollapse(sid, event) {
+  if (event) event.stopPropagation();
+  const s = state.subjects[sid];
+  if (!s) return;
+  s.collapsed = !s.collapsed;
+  saveState();
+  // Instant DOM update — no full re-render, preserves scroll position
+  const group = document.querySelector('.subject-group[data-subject-id="' + sid + '"]');
+  if (!group) return;
+  const arrow = group.querySelector('.subj-collapse-arrow');
+  if (s.collapsed) {
+    group.classList.add('collapsed');
+    if (arrow) arrow.textContent = '▶';
+  } else {
+    group.classList.remove('collapsed');
+    if (arrow) arrow.textContent = '▼';
+  }
+}
 // ===== 侧边栏渲染 =====
 function renderSubjectList() {
   const container = document.getElementById('subject-list');
@@ -88,7 +107,9 @@ function renderSubjectList() {
   let html = '';
   sids.forEach(sid => {
     const s = state.subjects[sid]; const active = sid === state.currentSubjectId ? 'active' : '';
-    html += '<div class="subject-group"><div class="subject-header ' + active + '" onclick="switchSubject(\'' + sid + '\')">';
+    const collapsedClass = s.collapsed ? ' collapsed' : '';
+    html += '<div class="subject-group' + collapsedClass + '" data-subject-id="' + sid + '"><div class="subject-header ' + active + '" onclick="switchSubject(\'' + sid + '\')">';
+    html += '<span class="subj-collapse-arrow" onclick="toggleSubjectCollapse(\'' + sid + '\', event)">' + (s.collapsed ? '▶' : '▼') + '</span>';
     html += '<span class="subj-name">📂 ' + escapeHtml(s.name) + '</span><span class="subj-count">' + s.chapterIds.length + '</span>';
     html += '<span class="subj-actions"><button class="subj-btn" title="重命名" onclick="event.stopPropagation();renameSubject(\'' + sid + '\')">✏️</button><button class="subj-btn sb-del" title="删除" onclick="event.stopPropagation();deleteSubject(\'' + sid + '\')">🗑️</button></span></div>';
     html += '<div class="chapter-list-in-subj">';

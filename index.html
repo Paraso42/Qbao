@@ -435,7 +435,8 @@
                 </div>
                 <div class="settings-section">
                   <h4>⚙️ 任务队列</h4>
-                  <!-- 流式输出和严格格式由系统根据模型能力自动选择，无需用户手动设置 -->
+                  <div class="settings-row"><label>📡 实时注入</label><input type="checkbox" id="ai-stream-mode" style="width:auto;height:auto;margin:0;"><span style="color:#888;font-size:11px;margin-left:6px;">出题过程中逐步注入答题模式，开启后将自动关闭严格格式</span></div>
+                  <div class="settings-row"><label>📐 严格格式</label><input type="checkbox" id="ai-strict-format" checked style="width:auto;height:auto;margin:0;"><span style="color:#888;font-size:11px;margin-left:6px;">关闭可加速（仍自动重试3次保证格式）</span></div>
                   <div class="settings-row"><label>可答题阈值</label><input type="number" id="ai-stream-threshold" min="1" max="20" value="3" style="width:60px;padding:4px 6px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><span style="color:#888;font-size:11px;margin-left:6px;">注入多少题后显示"可答题"（1-20）</span></div>
                 </div>
                 <div class="settings-section">
