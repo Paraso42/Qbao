@@ -3,28 +3,6 @@ function saveChapterMaterials(cid, materials) { if(!state.chapterMaterials)state
 function onAiGlobalToggle() { const enabled=document.getElementById('ai-global-toggle').checked; state.aiEnabled=enabled; saveState(); applyAiModeUi(); updateTopbarAiIndicator(); if(enabled) showAiModeTooltip(); }
 function showAiModeTooltip() { var t=document.getElementById('ai-mode-tooltip'); if(t){t.style.display='block';t.style.opacity='0';t.style.transform='translateY(4px)';setTimeout(function(){t.style.opacity='1';t.style.transform='translateY(0)';},10); if(state._aiTooltipTimer) clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=setTimeout(function(){closeAiModeTooltip();},6000);} }
 function closeAiModeTooltip() { var t=document.getElementById('ai-mode-tooltip'); if(t){t.style.opacity='0';t.style.transform='translateY(4px)';setTimeout(function(){t.style.display='none';},200);} if(state._aiTooltipTimer){clearTimeout(state._aiTooltipTimer); state._aiTooltipTimer=null;} }
-function _buildAiRequestBody(task, uploadData, envPrompt, retryPrompt, totalQuestions, totalAnswered, totalWrong, tagStats, topWrongTags) {
-  var st = task.strategySnapshot;
-  var body = {
-    textContent: uploadData.text,
-    imageUrls: uploadData.images,
-    typeCounts: st ? st.typeCounts : {single:10,judge:5,term:2,short:1},
-    errPct: st ? (st.errPct !== undefined ? st.errPct : 60) : 60,
-    reviewPct: st ? (st.reviewPct !== undefined ? st.reviewPct : 20) : 20,
-    newPct: st ? (st.newPct !== undefined ? st.newPct : 20) : 20,
-    prompt: envPrompt + retryPrompt,
-    chapterHistory: {
-      totalQuestions: totalQuestions || 0,
-      totalAnswered: totalAnswered || 0,
-      totalWrong: totalWrong || 0,
-      tagStats: tagStats || {},
-      topWrongTags: topWrongTags || []
-    },
-    chapterId: task.chapterId
-  };
-  return body;
-}
-
 function cancelAiGenerate() {
   if(aiTimer){clearInterval(aiTimer);aiTimer=null;}
   aiGenerating=false;
@@ -161,47 +139,16 @@ async function _aiExecuteTask(task) {
     if (ac.streamMode === true) {
       var emptySet = createEmptyQuizSet(task.chapterId);
       task.streamSetRef = emptySet;
-      task._streamRound = 1;
       var streamResult = await _aiStreamGenerate(task, { uploadData:uploadData, tagStats:tagStats, totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, topWrongTags:topWrongTags, finalPrompt:finalPrompt, ac:ac, ch:ch, abortController:abortController });
       if (streamResult && streamResult.length > 0) {
         streamResult.forEach(function(q,i) { if(!q.id) q.id=i+1; });
         questions = streamResult.filter(function(q) { return q.question && q.question.trim().length > 2; });
       }
-      // Round 2: if screening quotas not met, re-run with adjusted remaining quotas
-      if (task._lastStreamScreening && !task._lastStreamScreening.allQuotasMet) {
-        task._streamRound = 2;
-        // Build adjusted strategy snapshot with only remaining quotas
-        var rem = task._lastStreamScreening.remaining || {};
-        var remStrat = task._lastStreamScreening.remainingStrategy || {};
-        var origSnapshot = task.strategySnapshot;
-        var remTotal = (rem.single||0) + (rem.judge||0) + (rem.term||0) + (rem.short||0);
-        if (remTotal > 0) {
-          var remErr = remStrat.error || 0;
-          var remRev = remStrat.review || 0;
-          var remNew = remStrat.new || 0;
-          var remStratTotal = remErr + remRev + remNew;
-          task.strategySnapshot = {
-            typeCounts: { single: rem.single||0, judge: rem.judge||0, term: rem.term||0, short: rem.short||0 },
-            errPct: remStratTotal > 0 ? Math.round(remErr / remStratTotal * 100) : 60,
-            reviewPct: remStratTotal > 0 ? Math.round(remRev / remStratTotal * 100) : 20,
-            newPct: remStratTotal > 0 ? Math.round(remNew / remStratTotal * 100) : 20
-          };
-        }
-        var streamResult2 = await _aiStreamGenerate(task, { uploadData:uploadData, tagStats:tagStats, totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, topWrongTags:topWrongTags, finalPrompt:finalPrompt, ac:ac, ch:ch, abortController:abortController });
-        task.strategySnapshot = origSnapshot; // restore original
-        if (streamResult2 && streamResult2.length > 0) {
-          var startId2 = streamResult ? streamResult.length : 0;
-          streamResult2.forEach(function(q,i) { if(!q.id) q.id = startId2 + i + 1; });
-          if (streamResult) { streamResult = streamResult.concat(streamResult2); }
-          else { streamResult = streamResult2; }
-          questions = streamResult.filter(function(q) { return q.question && q.question.trim().length > 2; });
-        }
-      }
       if (!questions || questions.length === 0) {
         for (var attempt2 = 1; attempt2 <= maxAttempts && !questions; attempt2++) {
           if (attempt2 > 1) { await sleep(2000*(attempt2-1)); }
           var retry2 = attempt2 > 1 ? task.promptText + '\n\n重要：你上次返回了无效JSON，错误是：'+lastJson+'。请修正后重新输出纯JSON数组。' : task.promptText;
-          var genRes2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':ac.apiKey||'', 'x-ai-model':ac.model||'ecnu-plus' }, body:JSON.stringify(_buildAiRequestBody(task, uploadData, envPrompt, retryPrompt, totalQuestions, totalAnswered, totalWrong, tagStats, topWrongTags)) }, 3, 5000);
+          var genRes2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':ac.apiKey||'', 'x-ai-model':ac.model||'ecnu-plus' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retry2, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
           var genData2 = await genRes2.json();
           if (genData2.poolFilesStatus) task._poolFilesStatus = genData2.poolFilesStatus;
           var raw2 = genData2.questions; if(!raw2&&genData2.output) raw2=genData2.output; if(!raw2&&typeof genData2==='object') raw2=Object.values(genData2).find(function(v){return Array.isArray(v)||typeof v==='string';});
@@ -229,63 +176,21 @@ async function _aiExecuteTask(task) {
       // 过滤掉空题目（题目文本为空或过短）
       questions = questions.filter(function(q) { return q.question && q.question.trim().length > 2; });
       if (questions.length === 0) { lastJson='题目内容为空'; if(attempt<maxAttempts) continue; else throw new Error('AI返回的题目全部为空'); }
-      // Non-streaming: check screening, trigger second round with remaining quotas if needed
-      if (genData && genData.screening && !genData.screening.allQuotasMet) {
-        if (!task._nsScreeningRounds) task._nsScreeningRounds = [];
-        task._nsScreeningRounds.push(genData.screening);
-        var rem2 = genData.screening.remaining || {};
-        var remStrat2 = genData.screening.remainingStrategy || {};
-        var remTotal2 = (rem2.single||0) + (rem2.judge||0) + (rem2.term||0) + (rem2.short||0);
-        if (remTotal2 > 0) {
-          var remErr2 = remStrat2.error || 0;
-          var remRev2 = remStrat2.review || 0;
-          var remNew2 = remStrat2.new || 0;
-          var remStratTotal2 = remErr2 + remRev2 + remNew2;
-          var origSt2 = task.strategySnapshot;
-          task.strategySnapshot = {
-            typeCounts: { single: rem2.single||0, judge: rem2.judge||0, term: rem2.term||0, short: rem2.short||0 },
-            errPct: remStratTotal2 > 0 ? Math.round(remErr2 / remStratTotal2 * 100) : 60,
-            reviewPct: remStratTotal2 > 0 ? Math.round(remRev2 / remStratTotal2 * 100) : 20,
-            newPct: remStratTotal2 > 0 ? Math.round(remNew2 / remStratTotal2 * 100) : 20
-          };
-          var apiKey2 = (ac.providerKeys && ac.providerKeys[ac.provider||'ecnu']) || ac.apiKey || '';
-          var genResR2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key': apiKey2, 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-provider': ac.provider||'ecnu' }, body:JSON.stringify(_buildAiRequestBody(task, uploadData, envPrompt, retryPrompt, totalQuestions, totalAnswered, totalWrong, tagStats, topWrongTags)) }, 3, 5000);
-          task.strategySnapshot = origSt2;
-          var genDataR2 = await genResR2.json();
-          var rawR2 = genDataR2.questions; if (!rawR2 && genDataR2.output) rawR2 = genDataR2.output;
-          if (Array.isArray(rawR2) && rawR2.length > 0) {
-            if (genDataR2.screening) task._nsScreeningRounds.push(genDataR2.screening);
-            var startIdNs = questions.length;
-            rawR2.filter(function(q) { return q.question && q.question.trim().length > 2; }).forEach(function(q,i) { if(!q.id) q.id = startIdNs + i + 1; questions.push(q); });
-          }
-        }
-      } else if (genData && genData.screening) {
-        if (!task._nsScreeningRounds) task._nsScreeningRounds = [];
-        task._nsScreeningRounds.push(genData.screening);
-      }
     }
     }
-    // Strategy compliance + screening summary
+    // Strategy compliance validation
     if (questions && questions.length > 0) {
       var sc = { error: 0, review: 0, new: 0, unlabeled: 0 };
-      var tcActual = { single: 0, judge: 0, term: 0, short: 0 };
       questions.forEach(function(q) {
         if (q.strategy && ['error','review','new'].indexOf(q.strategy) >= 0) sc[q.strategy]++;
         else sc.unlabeled++;
-        if (tcActual[q.type] !== undefined) tcActual[q.type]++;
       });
       var st = task.strategySnapshot;
       var totalQ2 = (st ? st.typeCounts.single + st.typeCounts.judge + st.typeCounts.term + st.typeCounts.short : questions.length) || questions.length;
       var expErr = Math.round(totalQ2 * (st ? st.errPct : 60) / 100);
       var expRev = Math.round(totalQ2 * (st ? st.reviewPct : 20) / 100);
       var expNew = totalQ2 - expErr - expRev;
-      task.strategyCompliance = { expected: { error: expErr, review: expRev, new: expNew }, actual: sc, typeCounts: { expected: st ? st.typeCounts : {}, actual: tcActual }, ok: Math.abs(sc.error - expErr) <= 2 && Math.abs(sc.review - expRev) <= 2 && Math.abs(sc.new - expNew) <= 2 };
-      if (task._streamScreeningRounds && task._streamScreeningRounds.length > 0) {
-        task.strategyCompliance.screeningRounds = task._streamScreeningRounds.length;
-        var lastScr = task._streamScreeningRounds[task._streamScreeningRounds.length - 1];
-        task.strategyCompliance.screeningAccepted = lastScr.accepted;
-        task.strategyCompliance.screeningGenerated = lastScr.totalGenerated;
-      }
+      task.strategyCompliance = { expected: { error: expErr, review: expRev, new: expNew }, actual: sc, ok: Math.abs(sc.error - expErr) <= 2 && Math.abs(sc.review - expRev) <= 2 && Math.abs(sc.new - expNew) <= 2 };
     }
 
     // Stream path already injected, skip createQuizSetForChapter
@@ -318,37 +223,8 @@ async function _aiExecuteTask(task) {
   saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); updateGenerateButtonState();
   if (task.status === 'completed') {
     var msg = task.chapterName + ' 完成，生成 ' + task.questionCount + ' 题';
-    if (task.strategyCompliance && task.strategyCompliance.screeningRounds) {
-      var scrRounds = task.strategyCompliance.screeningRounds;
-      msg += ' (筛选' + scrRounds + '轮';
-      if (task.strategyCompliance.screeningGenerated) {
-        msg += ' ' + task.strategyCompliance.screeningAccepted + '/' + task.strategyCompliance.screeningGenerated;
-      }
-      msg += ')';
-    }
-    if (task.strategyCompliance && task.strategyCompliance.typeCounts && task.strategyCompliance.typeCounts.actual) {
-      var tca = task.strategyCompliance.typeCounts.actual;
-      var tce = task.strategyCompliance.typeCounts.expected;
-      msg += '\n题型：';
-      var typeParts = [];
-      ['single','judge','term','short'].forEach(function(t) {
-        var tn = {single:'单选',judge:'判断',term:'名词解释',short:'简答'}[t] || t;
-        var expCount = tce ? (tce[t] || 0) : 0;
-        if (expCount > 0) {
-          var okMark = (tca[t] || 0) >= expCount ? '✓' : '✗';
-          typeParts.push(tn + (tca[t]||0) + '/' + expCount + ' ' + okMark);
-        } else if ((tca[t] || 0) > 0) {
-          typeParts.push(tn + (tca[t]||0));
-        }
-      });
-      msg += typeParts.join('  ');
-    }
-    if (task.strategyCompliance && task.strategyCompliance.actual) {
-      var sc2 = task.strategyCompliance.actual;
-      msg += '\n策略：错题' + (sc2.error||0) + '  复习' + (sc2.review||0) + '  新题' + (sc2.new||0);
-    }
     if (task.poolFilesUsed !== undefined && task.poolFilesTotal !== undefined) {
-      msg += '\n资料 ' + task.poolFilesUsed + '/' + task.poolFilesTotal;
+      msg += ' (资料 ' + task.poolFilesUsed + '/' + task.poolFilesTotal + ')';
     }
     if (task.poolFileWarnings && task.poolFileWarnings.length) {
       msg += '\n⚠ 资料提取问题：' + task.poolFileWarnings.join('; ');
@@ -421,9 +297,6 @@ async function _aiStreamGenerate(task, opts) {
       body: JSON.stringify({
         textContent: uploadData.text,
         typeCounts: task.strategySnapshot ? task.strategySnapshot.typeCounts : { single: 10, judge: 5, term: 2, short: 1 },
-        errPct: task.strategySnapshot ? (task.strategySnapshot.errPct !== undefined ? task.strategySnapshot.errPct : 60) : 60,
-        reviewPct: task.strategySnapshot ? (task.strategySnapshot.reviewPct !== undefined ? task.strategySnapshot.reviewPct : 20) : 20,
-        newPct: task.strategySnapshot ? (task.strategySnapshot.newPct !== undefined ? task.strategySnapshot.newPct : 20) : 20,
         prompt: (ac.systemPrompt ? ac.systemPrompt.trim() + '\n\n' : '') + retryPrompt,
         chapterId: task.chapterId,
         chapterHistory: {
@@ -497,29 +370,14 @@ async function _aiStreamGenerate(task, opts) {
             if (evt.error) { lastStreamError = evt.error; break; }
             streamDoneOk = true;
             streamCompleted = true;
-            if (evt.screening) {
-              task._lastStreamScreening = evt.screening;
-              if (!task._streamScreeningRounds) task._streamScreeningRounds = [];
-              task._streamScreeningRounds.push(evt.screening);
-            }
             if (evt.questions && Array.isArray(evt.questions)) {
-              if (task._streamRound === 2) {
-                accumulatedQuestions = accumulatedQuestions.concat(evt.questions);
-                if (task.streamSetRef) {
-                  task.streamSetRef.questions = task.streamSetRef.questions.concat(evt.questions);
-                  for (var k2 = 0; k2 < evt.questions.length; k2++) {
-                    task.streamSetRef.userAnswers.push(undefined);
-                  }
-                }
-              } else {
-                accumulatedQuestions = evt.questions.slice();
-                if (task.streamSetRef) {
-                  var oldAnswers = task.streamSetRef.userAnswers.slice();
-                  task.streamSetRef.questions = evt.questions.slice();
-                  task.streamSetRef.userAnswers = [];
-                  for (var k = 0; k < evt.questions.length; k++) {
-                    task.streamSetRef.userAnswers.push(k < oldAnswers.length && oldAnswers[k] !== undefined ? oldAnswers[k] : undefined);
-                  }
+              accumulatedQuestions = evt.questions.slice();
+              if (task.streamSetRef) {
+                var oldAnswers = task.streamSetRef.userAnswers.slice();
+                task.streamSetRef.questions = evt.questions.slice();
+                task.streamSetRef.userAnswers = [];
+                for (var k = 0; k < evt.questions.length; k++) {
+                  task.streamSetRef.userAnswers.push(k < oldAnswers.length && oldAnswers[k] !== undefined ? oldAnswers[k] : undefined);
                 }
               }
             }
