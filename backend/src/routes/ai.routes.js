@@ -142,13 +142,12 @@ module.exports = function (app) {
       const providerName = req.headers['x-ai-provider'] || getProviderByModel(model);
       const { textContent, typeCounts, prompt, chapterHistory, chapterId } = req.body;
       const useStream = req.headers['x-ai-stream'] === 'true';
-      const useStrictFormat = req.headers['x-ai-strict-format'] !== 'false';
 
       const provider = getProvider(providerName);
       console.log('AI generate: provider=' + providerName + ', model=' + model +
         ', apiKey=' + ((apiKey || '').substring(0, 10) + '...') +
         ', textContentLen=' + (textContent ? textContent.length : 0) +
-        ', stream=' + useStream + ', strictFormat=' + useStrictFormat +
+        ', stream=' + useStream +
         ', typeCounts=', JSON.stringify(typeCounts) + ', chapterId=' + (chapterId || 'none'));
 
       if (!apiKey || apiKey.length < 10) {
@@ -160,7 +159,7 @@ module.exports = function (app) {
       if ((safeTc.single || 0) + (safeTc.judge || 0) + (safeTc.term || 0) + (safeTc.short || 0) === 0) {
         safeTc.single = 1;
       }
-      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成题目。\n重要：只输出JSON数组，不要包含任何其他文字、代码块标记或解释。\n输出顺序：单选题→判断题→名词解释→简答题。';
+      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成考试题目。\n\n重要规则：\n1. 只输出纯JSON数组，不要包含任何其他文字、代码块标记或解释\n2. 每道题必须包含字段：type(值为single/judge/term/short)、question、options(数组)、answer(数字索引)、tag、strategy(值为error/review/new)、explanation\n3. 单选题(single)：options为4个选项的数组，answer为0-3的索引\n4. 判断题(judge)：options为["正确","错误"]，answer为0或1\n5. 名词解释(term)和简答题(short)：不需要options和answer\n6. 输出顺序：单选题→判断题→名词解释→简答题';
       let userText = textContent || '';
 
       // If chapterId provided, read assigned pool files from disk
@@ -243,9 +242,13 @@ module.exports = function (app) {
         }
       }
 
-      let content = userText;
-      const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content }];
       const totalQ = safeTc.single + safeTc.judge + safeTc.term + safeTc.short;
+      let content = userText;
+      if (content.length > 128000) {
+        content = content.substring(0, 128000);
+        console.log('Content truncated to 128000 chars for model=' + model);
+      }
+      const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content }];
       const jsonSchema = {
         type: 'array',
         items: {
@@ -277,21 +280,17 @@ module.exports = function (app) {
         var streamDone = false;
         var streamError = null;
 
-        // Build options: only use response_format when provider supports streaming + structured output
+        // Auto-select response_format based on provider capability
         var streamOpts = { temperature: 0.7, max_tokens: maxTokens };
-        if (useStrictFormat) {
-          if (provider.supportsStreamWithJsonSchema && provider.supportsStreamWithJsonSchema(model)) {
-            if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
-              streamOpts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
-            } else {
-              streamOpts.response_format = { type: 'json_object' };
-              // DeepSeek requires "json" in prompt for json_object
-              if (!/json/i.test(messages[0].content)) {
-                messages[0].content += '\nRespond in JSON format.';
-              }
-            }
-          }
+        if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
+          // ECNU/OpenAI: native json_schema in streaming
+          streamOpts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
+        } else if (providerName === 'deepseek') {
+          // DeepSeek: json_object in streaming (streaming + json_object works well)
+          streamOpts.response_format = { type: 'json_object' };
+          messages[0].content += '\nRespond in JSON format.';
         }
+        // Gemini: no response_format — prompt-only JSON enforcement
 
         // Set up SSE response
         res.setHeader('Content-Type', 'text/event-stream');
@@ -340,7 +339,7 @@ module.exports = function (app) {
           });
           console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.slice(0, totalQ).length + ', types=' + JSON.stringify(typeDist));
           try {
-            res.write('data: ' + JSON.stringify({ done: true, questions: accumulatedQuestions.slice(0, totalQ), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(accumulatedQuestions.slice(0, totalQ)), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           } catch(e) { /* connection already closed */ }
           return;
@@ -354,8 +353,7 @@ module.exports = function (app) {
         while (finalClean.trimEnd().endsWith(',')) finalClean = finalClean.trimEnd().slice(0, -1);
 
         try {
-          var questions = JSON.parse(finalClean);
-          if (!Array.isArray(questions)) questions = [questions];
+          var questions = normalizeQuestions(JSON.parse(finalClean));
           var typeDist3 = {};
           (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
           console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
@@ -364,8 +362,8 @@ module.exports = function (app) {
         } catch (e) {
           if (!finalClean.endsWith(']')) finalClean += ']';
           try {
-            questions = JSON.parse(finalClean);
-            if (Array.isArray(questions)) {
+            questions = normalizeQuestions(JSON.parse(finalClean));
+            if (questions.length > 0) {
               res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
               res.end();
             } else throw new Error();
@@ -375,29 +373,23 @@ module.exports = function (app) {
           }
         }
       } else {
-        // Non-streaming path
+        // Non-streaming path — auto-select response_format by provider capability
         const opts = { temperature: 0.7, max_tokens: maxTokens };
-        if (useStrictFormat) {
-          if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
-            opts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
-          } else {
-            // Fallback: use json_object if provider supports it but not json_schema
-            // For Gemini, no response_format at all — rely on prompt
-            if (providerName !== 'gemini') {
-              opts.response_format = { type: 'json_object' };
-              // DeepSeek requires "json" in prompt for json_object
-              if (!/json/i.test(messages[0].content)) {
-                messages[0].content += '\nRespond in JSON format.';
-              }
-            }
-          }
+        if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
+          // ECNU/OpenAI: native json_schema
+          opts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
+        } else if (providerName === 'deepseek') {
+          // DeepSeek: json_object (requires "json" keyword in prompt)
+          opts.response_format = { type: 'json_object' };
+          messages[0].content += '\nRespond in JSON format.';
         }
+        // Gemini: no response_format — prompt-only JSON enforcement
 
         const completion = await provider.chatCompletions(apiKey, model, messages, opts);
         const output = completion.choices[0].message.content;
         let questions;
         try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
-        if (!Array.isArray(questions)) questions = [questions];
+        questions = normalizeQuestions(questions);
 
         await pool.query(
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
@@ -417,6 +409,101 @@ module.exports = function (app) {
   });
 };
 
+
+// Helper: normalize questions from providers that don't support json_schema (e.g. DeepSeek)
+// Handles various output formats: nested {multipleChoice: [...], trueFalse: [...]}
+// options as object {A:..., B:...} → array [...], answer letter A/B → index 0/1
+function normalizeQuestions(raw) {
+  if (!raw) return [];
+  // If plain object (not array), wrap for uniform processing
+  var items = Array.isArray(raw) ? raw : [raw];
+  // Flatten: if any item is a wrapper object with nested question arrays, extract them
+  var flat = [];
+  items.forEach(function(item) {
+    if (item && typeof item === 'object' && !item.question) {
+      var found = false;
+      // Check for wrapper objects — handles camelCase, snake_case, and other variants
+      ['multipleChoice', 'multiple_choice', 'multiplechoice', 'singleChoice', 'single_choice',
+       'trueFalse', 'true_false', 'truefalse', 'questions', 'topics', 'items', 'results'].forEach(function(k) {
+        if (Array.isArray(item[k])) {
+          // For 'topics'/'items'/'results', check if contents look like questions (have 'question' field)
+          var arr = item[k];
+          if (arr.length > 0 && arr[0].question) {
+            flat = flat.concat(arr); found = true;
+          }
+          // Only add if items have question field
+        }
+      });
+      if (!found) flat.push(item); // Not a recognizable wrapper, keep as-is
+    } else {
+      flat.push(item);
+    }
+  });
+  raw = flat;
+
+  raw = raw.map(function(q) {
+    if (!q || typeof q !== 'object') return null;
+    // Must have a question field
+    if (!q.question || typeof q.question !== 'string' || q.question.trim().length < 3) return null;
+
+    // Normalize options: object {A: "opt1", B: "opt2"} → array ["opt1", "opt2"]
+    // Also strip "A: ", "B: " etc. prefix from array options if present
+    if (q.options && typeof q.options === 'object' && !Array.isArray(q.options)) {
+      var keys = Object.keys(q.options).sort();
+      q.options = keys.map(function(k) { return q.options[k]; });
+    }
+    if (!q.options || !Array.isArray(q.options)) {
+      q.options = [];
+    }
+    // Strip "A: ", "B: " prefix from option strings
+    q.options = q.options.map(function(opt) {
+      if (typeof opt === 'string') return opt.replace(/^[A-D]:\s*/, '');
+      return opt;
+    });
+
+    // Normalize answer: letter "A"/"B"/"C"/"D" → index 0/1/2/3
+    if (typeof q.answer === 'string' && q.answer.length === 1) {
+      var code = q.answer.toUpperCase().charCodeAt(0);
+      if (code >= 65 && code <= 90) {
+        q.answer = code - 65;
+      } else if (q.answer === '对' || q.answer === '√' || q.answer.toLowerCase() === 'true') {
+        q.answer = 0; q.type = q.type || 'judge';
+      } else if (q.answer === '错' || q.answer === '×' || q.answer.toLowerCase() === 'false') {
+        q.answer = 1; q.type = q.type || 'judge';
+      }
+    }
+    if (typeof q.answer === 'boolean') {
+      q.answer = q.answer ? 0 : 1;
+      q.type = q.type || 'judge';
+    }
+
+    // Normalize type variants
+    if (q.type) {
+      var t = q.type.toLowerCase().replace(/[-_\s]/g, '');
+      if (t === 'singlechoice' || t === 'multiplechoice' || t === 'choice' || t === 'multichoice') q.type = 'single';
+      else if (t === 'truefalse' || t === 'bool' || t === 'boolean') q.type = 'judge';
+      else if (t === 'term' || t === 'definition' || t === 'explain') q.type = 'term';
+      else if (t === 'short' || t === 'shortanswer' || t === 'essay') q.type = 'short';
+      if (['single', 'judge', 'term', 'short'].indexOf(q.type) === -1) {
+        q.type = (q.options && q.options.length >= 2) ? 'single' : 'short';
+      }
+    } else {
+      q.type = (q.options && q.options.length >= 2) ? 'single' : 'short';
+    }
+
+    // Ensure required fields
+    if (!q.tag) q.tag = 'default';
+    if (!q.strategy) q.strategy = 'new';
+    if (!q.explanation) q.explanation = '';
+
+    return q;
+  }).filter(Boolean); // Remove null entries (invalid questions)
+
+  if (flat.length > 0 && raw.length === 0) {
+    console.log('[normalize] All ' + flat.length + ' items filtered out — no valid question objects found');
+  }
+  return raw;
+}
 
 // Helper: extract completed JSON objects from streaming accumulated text
 // Does not require valid overall JSON — extracts individual {complete objects} and validates
