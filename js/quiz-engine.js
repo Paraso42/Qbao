@@ -237,7 +237,7 @@ function renderQuestion() {
   if (tagEl) tagEl.textContent = as.setName||'未标注'; if (typeEl) typeEl.textContent = typeMap[q.type]||q.type;
   const ans = as.userAnswers[qi]; const hasAns = ans !== undefined && ans !== -1 && ans !== null; const isCor = hasAns ? getCi(q, as.userAnswers[qi]) : null;
   let html = '<div class="quiz-question"><strong>'+(qi+1)+'. </strong>'+renderMarkdown(q.question)+'</div>';
-  if (q.type==='single'||q.type==='judge') {
+  if ((q.type==='single'||q.type==='judge') && q.options && Array.isArray(q.options) && q.options.length > 0) {
     html += '<div class="quiz-options">';
     q.options.forEach((opt,idx) => { let cls = 'quiz-option'; if (hasAns) cls+=' disabled'; if (hasAns&&idx===as.userAnswers[as.currentIdx]) cls+=isCor?' correct':' wrong'; if (hasAns&&idx===q.answer) cls+=' correct'; if (!hasAns&&as.userAnswers[as.currentIdx]===idx) cls+=' selected'; html += '<div class="'+cls+'" onclick="'+(hasAns?'':'selectOption('+idx+')')+'">'+String.fromCharCode(65+idx)+'. '+renderMarkdown(opt)+'</div>'; });
     html += '</div>';
