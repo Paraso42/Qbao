@@ -118,32 +118,10 @@ function composeSrsCustom(subjId) {
   const selected = [];
   checkedCids.forEach(cid => {
     const ch = state.chapters[cid]; if (!ch || !ch.questions) return;
-    var s2 = getChStrategy(cid);
-    var stratPcts = s2 ? { err: s2.errPct !== undefined ? s2.errPct : 60, review: s2.reviewPct !== undefined ? s2.reviewPct : 20, new: s2.newPct !== undefined ? s2.newPct : 20 } : { err: 60, review: 20, new: 20 };
     const pool = ch.questions.filter(q => (q.type === 'single' || q.type === 'judge') && !isQuestionIgnored(cid, q));
-    var stratPick = function(typePool, count) {
-      if (count <= 0 || typePool.length === 0) return [];
-      var errorP = typePool.filter(function(q) { return q.strategy === 'error'; });
-      var reviewP = typePool.filter(function(q) { return q.strategy === 'review'; });
-      var newP2 = typePool.filter(function(q) { return q.strategy === 'new'; });
-      var errT = Math.round(count * (stratPcts.err || 60) / 100);
-      var revT = Math.round(count * (stratPcts.review || 20) / 100);
-      var newT = count - errT - revT;
-      var sel = [];
-      sel = sel.concat(pickRandom(errorP, errT));
-      sel = sel.concat(pickRandom(reviewP, revT));
-      sel = sel.concat(pickRandom(newP2, newT));
-      var deficit = count - sel.length;
-      if (deficit > 0) {
-        var remaining = typePool.filter(function(q) { return sel.indexOf(q) < 0; });
-        sel = sel.concat(pickRandom(remaining, deficit));
-      }
-      return sel;
-    };
-    const singlePool = pool.filter(q => q.type === 'single');
-    const judgePool = pool.filter(q => q.type === 'judge');
-    selected.push(...stratPick(singlePool, ts));
-    selected.push(...stratPick(judgePool, tj));
+    const singlePool = pool.filter(q => q.type === 'single'); const judgePool = pool.filter(q => q.type === 'judge');
+    const sh = [...singlePool]; for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } selected.push(...sh.slice(0, ts));
+    const sh2 = [...judgePool]; for (let i = sh2.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh2[i], sh2[j]] = [sh2[j], sh2[i]]; } selected.push(...sh2.slice(0, tj));
   });
   if (!selected.length) { showToast('所选章节没有可用题目', 'warning'); return; }
   const eid = 'srs_' + Date.now().toString(36);
