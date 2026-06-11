@@ -140,7 +140,7 @@ module.exports = function (app) {
       const apiKey = req.headers['x-ai-api-key'];
       const model = req.headers['x-ai-model'] || 'ecnu-plus';
       const providerName = req.headers['x-ai-provider'] || getProviderByModel(model);
-      const { textContent, typeCounts, prompt, chapterHistory, chapterId } = req.body;
+      const { textContent, typeCounts, prompt, chapterHistory, chapterId, errPct, reviewPct, newPct } = req.body;
       const useStream = req.headers['x-ai-stream'] === 'true';
 
       const provider = getProvider(providerName);
@@ -243,6 +243,18 @@ module.exports = function (app) {
       }
 
       const totalQ = safeTc.single + safeTc.judge + safeTc.term + safeTc.short;
+
+      var _errPct = errPct !== undefined ? errPct : 60;
+      var _reviewPct = reviewPct !== undefined ? reviewPct : 20;
+      var _newPct = newPct !== undefined ? newPct : 20;
+      var stratErrTarget = Math.round(totalQ * _errPct / 100);
+      var stratRevTarget = Math.round(totalQ * _reviewPct / 100);
+      var stratNewTarget = totalQ - stratErrTarget - stratRevTarget;
+      var quota = {
+        type:   { single: safeTc.single || 0, judge: safeTc.judge || 0, term: safeTc.term || 0, short: safeTc.short || 0 },
+        strategy: { error: stratErrTarget, review: stratRevTarget, new: stratNewTarget }
+      };
+
       let content = userText;
       if (content.length > 128000) {
         content = content.substring(0, 128000);
@@ -274,7 +286,9 @@ module.exports = function (app) {
 
       if (useStream) {
         const streamAborter = new AbortController();
-        var accumulatedQuestions = [];
+        var screenedQuestions = [];
+        var totalGenerated = 0;
+        var maxGenerated = totalQ * 2;
         var lastParsedLength = 0;
         var finalFullContent = '';
         var streamDone = false;
@@ -306,14 +320,35 @@ module.exports = function (app) {
               var newQs = tryExtractCompletedObjects(cleaned, lastParsedLength);
               if (newQs && newQs.length > 0) {
                 lastParsedLength += newQs.length;
-                accumulatedQuestions = accumulatedQuestions.concat(newQs);
-                if (lastParsedLength >= totalQ) {
-                  console.log('[stream] early abort: parsed=' + lastParsedLength + ' >= totalQ=' + totalQ + ', model=' + model);
+                var screenedNew = [];
+                for (var qi = 0; qi < newQs.length; qi++) {
+                  totalGenerated++;
+                  var q = newQs[qi];
+                  var t = q.type, s = q.strategy || 'new';
+                  if (totalGenerated > maxGenerated) {
+                    if (quota.type[t] > 0) {
+                      screenedNew.push(q);
+                      quota.type[t]--;
+                    }
+                  } else {
+                    if (quota.type[t] > 0 && quota.strategy[s] > 0) {
+                      screenedNew.push(q);
+                      quota.type[t]--;
+                      quota.strategy[s]--;
+                    }
+                  }
+                }
+                if (screenedNew.length > 0) {
+                  screenedQuestions = screenedQuestions.concat(screenedNew);
+                }
+                var allMet = ['single','judge','term','short'].every(function(t2) { return quota.type[t2] === 0; });
+                if (allMet || totalGenerated >= maxGenerated) {
+                  console.log('[stream] screening abort: screened=' + screenedQuestions.length + ', generated=' + totalGenerated + ', allMet=' + allMet + ', model=' + model);
                   streamAborter.abort();
                   streamDone = true;
                 }
                 try {
-                  res.write('data: ' + JSON.stringify({ content: evt.content, newParsed: newQs, parsedCount: lastParsedLength }) + '\n\n');
+                  res.write('data: ' + JSON.stringify({ content: evt.content, newParsed: screenedNew, parsedCount: lastParsedLength }) + '\n\n');
                 } catch (e) { /* connection closed */ }
                 return;
               }
@@ -333,45 +368,59 @@ module.exports = function (app) {
         }
 
         if (streamDone) {
+          var allQuotasMet = ['single','judge','term','short'].every(function(t) { return quota.type[t] === 0; });
+          var screenResult = { totalGenerated: totalGenerated, accepted: screenedQuestions.length, allQuotasMet: allQuotasMet, remaining: quota.type, remainingStrategy: quota.strategy };
           var typeDist = {};
-          (accumulatedQuestions.slice(0, totalQ) || []).forEach(function(q) {
+          (screenedQuestions || []).forEach(function(q) {
             typeDist[q.type || '?'] = (typeDist[q.type || '?'] || 0) + 1;
           });
-          console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.slice(0, totalQ).length + ', types=' + JSON.stringify(typeDist));
+          console.log('[stream] screening done: model=' + model + ', screened=' + screenedQuestions.length + ', generated=' + totalGenerated + ', allMet=' + allQuotasMet + ', types=' + JSON.stringify(typeDist));
           try {
-            res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(accumulatedQuestions.slice(0, totalQ)), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(screenedQuestions), screening: screenResult, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           } catch(e) { /* connection already closed */ }
           return;
         }
 
-        // Parse final output
+        // Stream ended naturally — use screenedQuestions accumulated during streaming
+        if (screenedQuestions.length > 0) {
+          var allQuotasMet2 = ['single','judge','term','short'].every(function(t) { return quota.type[t] === 0; });
+          var screenResult2 = { totalGenerated: totalGenerated, accepted: screenedQuestions.length, allQuotasMet: allQuotasMet2, remaining: quota.type };
+          var typeDist2 = {};
+          (screenedQuestions || []).forEach(function(q) { typeDist2[q.type || '?'] = (typeDist2[q.type || '?'] || 0) + 1; });
+          console.log('[stream] natural end screening: model=' + model + ', screened=' + screenedQuestions.length + ', types=' + JSON.stringify(typeDist2));
+          res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(screenedQuestions), screening: screenResult2, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+          res.end();
+          return;
+        }
+
+        // Fallback: parse final output from scratch
         var finalClean = finalFullContent.trim();
         finalClean = finalClean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
         var jsonMatch = finalClean.match(/\[[\s\S]*\]/);
         if (jsonMatch) finalClean = jsonMatch[0];
         while (finalClean.trimEnd().endsWith(',')) finalClean = finalClean.trimEnd().slice(0, -1);
 
+        var questions;
         try {
-          var questions = normalizeQuestions(JSON.parse(finalClean));
-          var typeDist3 = {};
-          (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
-          console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
-          res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
-          res.end();
+          questions = normalizeQuestions(JSON.parse(finalClean));
         } catch (e) {
           if (!finalClean.endsWith(']')) finalClean += ']';
           try {
             questions = normalizeQuestions(JSON.parse(finalClean));
-            if (questions.length > 0) {
-              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
-              res.end();
-            } else throw new Error();
+            if (questions.length === 0) throw new Error();
           } catch (e2) {
             res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
+            return;
           }
         }
+        var screened2 = screenQuestions(questions, quota, totalQ);
+        var typeDist3 = {};
+        (screened2.questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
+        console.log('[stream] fallback screening: model=' + model + ', screened=' + screened2.questions.length + ', types=' + JSON.stringify(typeDist3));
+        res.write('data: ' + JSON.stringify({ done: true, questions: screened2.questions, screening: screened2.screening, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+        res.end();
       } else {
         // Non-streaming path — auto-select response_format by provider capability
         const opts = { temperature: 0.7, max_tokens: maxTokens };
@@ -390,12 +439,13 @@ module.exports = function (app) {
         let questions;
         try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
         questions = normalizeQuestions(questions);
+        var screenedResult = screenQuestions(questions, quota, totalQ);
 
         await pool.query(
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
           [req.userId, model, 'ok']
         );
-        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus });
+        res.json({ questions: screenedResult.questions, screening: screenedResult.screening, usage: completion.usage, poolFilesStatus: poolFilesStatus });
       }
     } catch (e) {
       console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);
@@ -534,4 +584,31 @@ function tryExtractCompletedObjects(text, knownCount) {
   }
   if (result.length > knownCount) return result.slice(knownCount);
   return null;
+}
+
+// Helper: screen questions against dual-dimension quotas (type + strategy)
+// Returns { questions: [], screening: { totalGenerated, accepted, allQuotasMet, remaining } }
+function screenQuestions(questions, quota, totalQ) {
+  var screened = [];
+  var totalGenerated = 0;
+  var maxGenerated = totalQ * 2;
+  var typeQuota = { single: quota.type.single || 0, judge: quota.type.judge || 0, term: quota.type.term || 0, short: quota.type.short || 0 };
+  var stratQuota = { error: quota.strategy.error || 0, review: quota.strategy.review || 0, new: quota.strategy.new || 0 };
+
+  for (var i = 0; i < questions.length; i++) {
+    totalGenerated++;
+    var q = questions[i];
+    var t = q.type, s = q.strategy || 'new';
+    if (totalGenerated > maxGenerated) {
+      if (typeQuota[t] > 0) { screened.push(q); typeQuota[t]--; }
+      continue;
+    }
+    if (typeQuota[t] > 0 && stratQuota[s] > 0) {
+      screened.push(q);
+      typeQuota[t]--;
+      stratQuota[s]--;
+    }
+  }
+  var allQuotasMet = ['single','judge','term','short'].every(function(t) { return typeQuota[t] === 0; });
+  return { questions: screened, screening: { totalGenerated: totalGenerated, accepted: screened.length, allQuotasMet: allQuotasMet, remaining: typeQuota, remainingStrategy: stratQuota } };
 }
