@@ -1,45 +1,13 @@
 
 function setupSettingsAutoSave() {
-  var sf = document.getElementById('ai-strict-format');
-  var sm = document.getElementById('ai-stream-mode');
   var st = document.getElementById('ai-stream-threshold');
-  if (sf && !sf._autoSaveBound) { sf._autoSaveBound = true; sf.addEventListener('change', function() { _autoSaveAiCheckbox(); }); }
-  if (sm && !sm._autoSaveBound) { sm._autoSaveBound = true; sm.addEventListener('change', function() { _autoSaveAiCheckbox(); }); }
-  if (st && !st._autoSaveBound) { st._autoSaveBound = true; st.addEventListener('change', function() { _autoSaveAiThreshold(); }); }
+  if (st && !st._autoSaveBound) { st._autoSaveBound = true; st.addEventListener('change', function() {
+    if (!state.aiConfig) state.aiConfig = {};
+    state.aiConfig.streamThreshold = parseInt(st.value) || 3;
+    saveState();
+  }); }
 }
-function _autoSaveAiCheckbox() {
-  if (!state.aiConfig) state.aiConfig = {};
-  var sf = document.getElementById('ai-strict-format');
-  var sm = document.getElementById('ai-stream-mode');
-  var streamMode = sm ? sm.checked : false;
-  // P1-11: Instant conflict detection
-  if (streamMode && sf && sf.checked) {
-    var prov = (state.aiConfig && state.aiConfig.provider) || 'ecnu';
-    if (prov === 'ecnu') {
-      alert('实时注入与严格格式不兼容（尤其是 ECNU 模型）。\n\n已自动关闭严格格式。如需同时开启，请切换到 DeepSeek 或 OpenAI。');
-      sf.checked = false;
-    } else {
-      if (!confirm('实时注入与严格格式同时开启可能导致解析失败。\n\n建议关闭严格格式。是否继续？')) {
-        sm.checked = false;
-        state.aiConfig.streamMode = false;
-      } else {
-        sf.checked = false;
-        state.aiConfig.strictFormat = false;
-      }
-    }
-  }
-  state.aiConfig.streamMode = sm ? sm.checked : false;
-  state.aiConfig.strictFormat = sf ? sf.checked : true;
-  saveState();
-  var status = document.getElementById('ai-config-status');
-  if (status) { status.textContent = '✅ 已自动保存'; status.style.color = '#2ed573'; setTimeout(function() { status.textContent = state.aiConfig.apiKeySet ? '✅ 已配置 AI API' : '⚠️ 尚未配置 API 密钥'; }, 2000); }
-}
-function _autoSaveAiThreshold() {
-  if (!state.aiConfig) state.aiConfig = {};
-  var st = document.getElementById('ai-stream-threshold');
-  state.aiConfig.streamThreshold = st ? parseInt(st.value) || 3 : 3;
-  saveState();
-}
+
 
 function renderSettings() { const quizFs=state.settings?state.settings.quizFontSize:17; const sidebarFs=state.settings?state.settings.sidebarFontSize:13; const topbarFs=state.settings?state.settings.topbarFontSize:14; const mainFs=state.settings?state.settings.mainFontSize:17; const s1=document.getElementById('settings-quiz-font-size');const v1=document.getElementById('settings-quiz-font-size-val');if(s1)s1.value=quizFs;if(v1)v1.textContent=quizFs+'px';const s2=document.getElementById('settings-sidebar-font-size');const v2=document.getElementById('settings-sidebar-font-size-val');if(s2)s2.value=sidebarFs;if(v2)v2.textContent=sidebarFs+'px';const s4=document.getElementById('settings-topbar-font-size');const v4=document.getElementById('settings-topbar-font-size-val');if(s4)s4.value=topbarFs;if(v4)v4.textContent=topbarFs+'px';const s3=document.getElementById('settings-main-font-size');const v3=document.getElementById('settings-main-font-size-val');if(s3)s3.value=mainFs;if(v3)v3.textContent=mainFs+'px';const dm=document.getElementById('settings-dark-mode');if(dm)dm.checked=state.settings?state.settings.darkMode:false;const nb=document.getElementById('settings-notice-bar');if(nb)nb.checked=state.settings?state.settings.showNoticeBar!==false:true;applyAllFontSizes(); refreshDataMgmtTab(); loadAiConfig(); var btn=document.getElementById('tab-btn-notices'); if(btn)btn.style.display=state.userRole==='admin'?'block':'none'; }
 function onSettingsQuizFontSize() { const fs=parseInt(document.getElementById('settings-quiz-font-size').value)||17; state.settings.quizFontSize=fs; document.getElementById('settings-quiz-font-size-val').textContent=fs+'px'; saveState(); applyAllFontSizes(); var preview=document.getElementById('preview-quiz'); if(preview)preview.style.fontSize=fs+'px'; }
@@ -108,10 +76,8 @@ function loadAiConfig() {
     if (valEl) valEl.textContent = (ac.taskInterval || 30) + 's';
   }
 
-  var sf = document.getElementById('ai-strict-format');
-  if (sf) sf.checked = ac.strictFormat !== false;
-  var sm = document.getElementById('ai-stream-mode');
-  if (sm) sm.checked = ac.streamMode === true;
+  // streamMode defaults to true for all providers; backend handles response_format by provider
+  if (ac.streamMode === undefined) ac.streamMode = true;
   var st = document.getElementById('ai-stream-threshold');
   if (st) st.value = ac.streamThreshold || 3;
 }
@@ -194,6 +160,10 @@ function onAiProviderChange() {
   }
 
   updateAiBaseUrl();
+
+  // All providers default to streaming mode; backend auto-selects response_format
+  if (!state.aiConfig) state.aiConfig = {};
+  state.aiConfig.streamMode = true;
 }
 
 function updateAiBaseUrl() {
@@ -244,21 +214,8 @@ function saveAiConfig() {
     state.aiConfig.taskInterval = vi;
   }
 
-  var sf = document.getElementById('ai-strict-format');
-  var sm = document.getElementById('ai-stream-mode');
-  var streamMode = sm ? sm.checked : false;
-  if (streamMode && sf && sf.checked) {
-    if (!confirm('实时注入与严格格式不兼容，将自动关闭严格格式。是否继续？')) {
-      sm.checked = false;
-      state.aiConfig.streamMode = false;
-    } else {
-      sf.checked = false;
-      state.aiConfig.strictFormat = false;
-    }
-  }
-  state.aiConfig.strictFormat = sf ? sf.checked : true;
-  state.aiConfig.streamMode = sm ? sm.checked : false;
-
+  // Streaming and response_format are auto-selected by backend based on provider
+  state.aiConfig.streamMode = true;
   var st = document.getElementById('ai-stream-threshold');
   state.aiConfig.streamThreshold = st ? parseInt(st.value) || 3 : 3;
 
