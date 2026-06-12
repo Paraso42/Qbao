@@ -148,6 +148,7 @@ async function init(){ try{
 		} else {
 			showScreen(saved);
 		}
+			updateChapterProgress();
 		updateQuickActions();
 		loadChapterStrategyToUI();
 		checkAchievements();

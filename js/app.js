@@ -57,6 +57,8 @@ function closeQuizModal() {
     document.getElementById('quiz-modal').classList.remove('active');
     showScreen('start');
     updateQuickActions();
+    renderSubjectList();
+    updateChapterProgress();
     return;
   }
 
@@ -74,6 +76,8 @@ function closeQuizModal() {
   document.getElementById('quiz-modal').classList.remove('active');
   showScreen('start');
   updateQuickActions();
+  renderSubjectList();
+  updateChapterProgress();
 }
 
 function updateBreadcrumb(screenName) {
