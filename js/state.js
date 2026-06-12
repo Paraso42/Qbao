@@ -119,6 +119,16 @@ function createQuizSetForChapter(questions, chId) {
   if (!ch.userAnswers) ch.userAnswers = [];
   ch.userAnswers = ch.userAnswers.concat(new Array(questions.length).fill(undefined));
   if (typeof ch.currentIdx === 'undefined') ch.currentIdx = 0;
+  // 初始化本轮标签统计
+  var _s2 = getChStrategy(chId);
+  if (_s2) {
+    _s2._roundTagStats = {};
+    questions.forEach(function(_q) {
+      if (!_q.tag) return;
+      if (!_s2._roundTagStats[_q.tag]) _s2._roundTagStats[_q.tag] = { correct: 0, wrong: 0, total: 0 };
+      _s2._roundTagStats[_q.tag].total++;
+    });
+  }
   return set;
 }
 function createQuizSet(questions) { return createQuizSetForChapter(questions, state.currentChapterId); }
@@ -164,6 +174,18 @@ function startQuizSession() {
         }
         saveState();
       }
+      // 初始化/重置本轮标签统计
+      var _s3 = getChStrategy(ch.id);
+      if (_s3) {
+        _s3._roundTagStats = {};
+        qs.questions.forEach(function(_q2) {
+          if (!_q2.tag) return;
+          if (!_s3._roundTagStats[_q2.tag]) _s3._roundTagStats[_q2.tag] = { correct: 0, wrong: 0, total: 0 };
+          _s3._roundTagStats[_q2.tag].total++;
+        });
+        // 清除已被重置题目的_tagSynced标记
+        if (qs._tagSynced) { for (var _k = 0; _k < qs._tagSynced.length; _k++) { if (qs.userAnswers[_k] === undefined) qs._tagSynced[_k] = false; } }
+      }
       openQuizModal('quiz'); renderQuestion(); updateProgress(); return;
     }
   }
@@ -188,6 +210,19 @@ function endQuizSession() {
   if (streamStillRunning) {
     var answeredCopy = { questions: as.questions.slice(), userAnswers: as.userAnswers.slice() };
     finalizeUnansweredQuestions(answeredCopy);
+  // 将 quizSet 答案同步回全局 ch.userAnswers（科目题库依赖）
+  var _ch2 = getCh();
+  if (as._isSet && _ch2 && _ch2.quizSets && _ch2.userAnswers) {
+    var _qsIdx = _ch2.currentQuizSetIdx;
+    if (_qsIdx >= 0 && _qsIdx < _ch2.quizSets.length) {
+      var _offset = 0;
+      for (var _s = 0; _s < _qsIdx; _s++) _offset += _ch2.quizSets[_s].questions.length;
+      var _qsA = _ch2.quizSets[_qsIdx].userAnswers;
+      for (var _a = 0; _a < _qsA.length && (_offset + _a) < _ch2.userAnswers.length; _a++) {
+        if (_qsA[_a] !== undefined && _qsA[_a] !== null) _ch2.userAnswers[_offset + _a] = _qsA[_a];
+      }
+    }
+  }
     saveQuizHistory({ id: as.setId, name: as.setName, questions: answeredCopy.questions, userAnswers: answeredCopy.userAnswers, setName: as.setName, setId: as.setId });
     updateSRSAfterExam({ setId: as.setId, questions: answeredCopy.questions, userAnswers: answeredCopy.userAnswers });
     if (as.setId) autoUpdateChapterWeakTags(state.chapters[as.setId]);
@@ -196,10 +231,25 @@ function endQuizSession() {
     syncAnswerToServerFinal();
     var unusedStats = calcStats(as);
     saveState();
+  updateChapterProgress();
     openQuizModal('report');
     renderReportForSet(as);
     return;
   }
+  // 将 quizSet 答案同步回全局 ch.userAnswers（科目题库依赖）
+  var _ch2b = getCh();
+  if (as._isSet && _ch2b && _ch2b.quizSets && _ch2b.userAnswers) {
+    var _qsIdx2 = _ch2b.currentQuizSetIdx;
+    if (_qsIdx2 >= 0 && _qsIdx2 < _ch2b.quizSets.length) {
+      var _offset2 = 0;
+      for (var _s2 = 0; _s2 < _qsIdx2; _s2++) _offset2 += _ch2b.quizSets[_s2].questions.length;
+      var _qsA2 = _ch2b.quizSets[_qsIdx2].userAnswers;
+      for (var _a2 = 0; _a2 < _qsA2.length && (_offset2 + _a2) < _ch2b.userAnswers.length; _a2++) {
+        if (_qsA2[_a2] !== undefined && _qsA2[_a2] !== null) _ch2b.userAnswers[_offset2 + _a2] = _qsA2[_a2];
+      }
+    }
+  }
+  renderSubjectList();
   finalizeUnansweredQuestions(as);
   saveState();
   syncAnswerToServerFinal();
@@ -212,6 +262,7 @@ function endQuizSession() {
   checkAchievements();
   var stats2 = calcStats(as);
   saveState();
+  updateChapterProgress();
   openQuizModal('report');
   renderReportForSet(as);
 }

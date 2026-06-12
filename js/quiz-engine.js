@@ -251,63 +251,112 @@ function renderQuestion() {
 
   applyQuizFontSize();
 }
-function selectOption(idx) { const as=getActiveSet(); if (!as||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return; as.userAnswers[as.currentIdx]=idx; saveState(); renderQuestion(); syncAnswerToServer(); }
+function selectOption(idx) { const as=getActiveSet(); if (!as||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return; as.userAnswers[as.currentIdx]=idx; var ch3=getCh(); if(ch3&&as._isSet){if(!as._tagSynced)as._tagSynced=[];if(!as._tagSynced[as.currentIdx]){_syncSingleAnswerToTagMeta(ch3.id,as.questions[as.currentIdx],idx);as._tagSynced[as.currentIdx]=true;}} saveState(); renderQuestion(); syncAnswerToServer(); }
 function submitAnswer() {
   const as=getActiveSet(); if (!as||!as.questions||!as.questions.length) return;
   const q=as.questions[as.currentIdx]; if (!q||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return;
   if (q.type==='term'||q.type==='short') { const ta=document.getElementById('subjective-answer'); if (!ta||!ta.value.trim()) { alert('请输入答案'); return; } as.userAnswers[as.currentIdx]=ta.value.trim(); }
   else { if (as.userAnswers[as.currentIdx]===undefined) { alert('请选择选项'); return; } }
+  var ch4=getCh(); if(ch4&&as._isSet&&as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null){if(!as._tagSynced)as._tagSynced=[];if(!as._tagSynced[as.currentIdx]){_syncSingleAnswerToTagMeta(ch4.id,as.questions[as.currentIdx],as.userAnswers[as.currentIdx]);as._tagSynced[as.currentIdx]=true;}}
   saveState(); renderQuestion(); updateProgress(); updateQuickActions(); checkAchievements(); syncAnswerToServer();
 }
 function nextQuestion() { const as=getActiveSet(); if (!as) return; if (as.currentIdx<as.questions.length-1) { as.setCurrentIdx(as.currentIdx+1); saveState(); renderQuestion(); updateProgress(); } }
 function goToQuestion(idx) { const as=getActiveSet(); if (!as||idx<0||idx>=as.questions.length) return; as.setCurrentIdx(idx); saveState(); renderQuestion(); updateProgress(); }
-function endExam() { const as=getActiveSet(); if (!as) return; if (as._isSet) { endQuizSession(); } else if (as.isExam) { endExamGenerated(as); } else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); syncAnswerToServerFinal(); openQuizModal("report"); renderReport(); } }
+function endExam() { const as=getActiveSet(); if (!as) return; if (as._isSet) { endQuizSession(); } else if (as.isExam) { endExamGenerated(as); } else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); syncAnswerToServerFinal(); updateChapterProgress(); openQuizModal("report"); renderReport(); } }
 function resetQuiz() { const as=getActiveSet(); if (!as) return; if (as._isSet) { as.userAnswers=new Array(as.questions.length).fill(undefined); as.setCurrentIdx(0); saveState(); openQuizModal('quiz'); renderQuestion(); updateProgress(); return; } as.userAnswers=new Array(as.questions.length).fill(undefined); as.setCurrentIdx(0); saveState(); renderQuestion(); updateProgress(); closeQuizModal(); showScreen('start'); updateQuickActions(); }
+// 基于本轮统计重新分类标签（不受历史错题拖累）
+function _reclassifyTagsByRound(s) {
+  // 保护手动标签：从未答过题（tagMeta totalQ===0 或无记录）的标签保留原始分类
+  var manualError = (s.errorTags || []).filter(function(t) {
+    var m = s.tagMeta && s.tagMeta[t];
+    return !m || m.totalQ === 0;
+  });
+  var manualReview = (s.reviewTags || []).filter(function(t) {
+    var m = s.tagMeta && s.tagMeta[t];
+    return !m || m.totalQ === 0;
+  });
+  // 基于本轮统计自动分类
+  var autoError = [], autoReview = [];
+  var rts = s._roundTagStats || {};
+  Object.keys(rts).forEach(function(tag) {
+    var rs = rts[tag];
+    // 只有该标签本轮全部题目都已作答，才触发自动分类
+    if (rs.correct + rs.wrong < rs.total) return;
+    if (rs.wrong > 0) {
+      autoError.push(tag);
+    } else {
+      autoReview.push(tag);
+    }
+  });
+  // 合并：手动保留 + 自动分类
+  s.errorTags = manualError.concat(
+    autoError.filter(function(t) { return manualError.indexOf(t) < 0 && manualReview.indexOf(t) < 0; })
+  );
+  s.reviewTags = manualReview.concat(
+    autoReview.filter(function(t) { return manualError.indexOf(t) < 0 && manualReview.indexOf(t) < 0; })
+  );
+  // 去重
+  s.errorTags = s.errorTags.filter(function(t, i, arr) { return arr.indexOf(t) === i; });
+  s.reviewTags = s.reviewTags.filter(function(t, i, arr) { return arr.indexOf(t) === i; });
+}
+
+// 单题标签统计更新 — 每道题作答后立即更新
+function _syncSingleAnswerToTagMeta(chapterId, question, answerVal) {
+  if (!question || !question.tag) return;
+  var s = getChStrategy(chapterId);
+  if (!s) return;
+  // 更新本轮统计
+  if (!s._roundTagStats) s._roundTagStats = {};
+  if (!s._roundTagStats[question.tag]) s._roundTagStats[question.tag] = { correct: 0, wrong: 0, total: 0 };
+  var ci = isObjType(question.type) ? getCi(question, answerVal) : (answerVal !== undefined && answerVal !== null && answerVal !== -1);
+  if (ci === true) s._roundTagStats[question.tag].correct++;
+  else s._roundTagStats[question.tag].wrong++;
+  // 更新累计 tagMeta（展示用）
+  if (!s.tagMeta) s.tagMeta = {};
+  if (!s.tagMeta[question.tag]) s.tagMeta[question.tag] = { totalQ: 0, correct: 0 };
+  s.tagMeta[question.tag].totalQ++;
+  if (ci === true) s.tagMeta[question.tag].correct++;
+  s.tagMeta[question.tag].lastAnswer = Date.now();
+  // 重新分类并刷新 UI
+  _reclassifyTagsByRound(s);
+  saveState();
+  renderTagColumns();
+  updateChapterPromptTemplate();
+}
+
 function autoUpdateChapterWeakTags(ch) {
   ch = ch || getCh();
   if (!ch) return;
   var s = getChStrategy(ch.id);
   if (!s) return;
-  // Get the current/active quiz set for incremental update
   var as = getActiveSet ? (typeof getActiveSet === 'function' ? getActiveSet() : null) : null;
   if (!as || !as.questions) {
-    // Fallback: find the last quiz set in this chapter
     var sets = ch.quizSets || [];
     as = sets.length > 0 ? sets[sets.length - 1] : null;
   }
   if (!as) return;
-  // Count this round's per-tag totals
-  var roundStats = {};
+  // 处理未被单题函数覆盖的答案（如直接点"结束"跳过的题目）
   (as.questions || []).forEach(function(q, qi) {
     if (!q.tag) return;
+    if (as._tagSynced && as._tagSynced[qi]) return; // 已被单题函数处理过
     var ans = as.userAnswers && as.userAnswers[qi];
     if (ans === undefined || ans === -1 || ans === null) return;
-    if (!roundStats[q.tag]) roundStats[q.tag] = { correct: 0, total: 0 };
-    roundStats[q.tag].total++;
-    if (isObjType(q.type) && getCi(q, ans) === true) roundStats[q.tag].correct++;
-    else if (!isObjType(q.type) && ans && ans.length > 0) roundStats[q.tag].correct++;
+    // 更新本轮统计
+    if (!s._roundTagStats) s._roundTagStats = {};
+    if (!s._roundTagStats[q.tag]) s._roundTagStats[q.tag] = { correct: 0, wrong: 0, total: 0 };
+    var ci = isObjType(q.type) ? getCi(q, ans) : (ans !== undefined && ans !== null && ans !== -1);
+    if (ci === true) s._roundTagStats[q.tag].correct++;
+    else s._roundTagStats[q.tag].wrong++;
+    // 更新累计 tagMeta
+    if (!s.tagMeta) s.tagMeta = {};
+    if (!s.tagMeta[q.tag]) s.tagMeta[q.tag] = { totalQ: 0, correct: 0 };
+    s.tagMeta[q.tag].totalQ++;
+    if (ci === true) s.tagMeta[q.tag].correct++;
+    s.tagMeta[q.tag].lastAnswer = Date.now();
+    if (as._tagSynced) as._tagSynced[qi] = true;
   });
-  // Incremental update of tagMeta
-  if (!s.tagMeta) s.tagMeta = {};
-  Object.keys(roundStats).forEach(function(tag) {
-    var rs = roundStats[tag];
-    if (!s.tagMeta[tag]) s.tagMeta[tag] = { totalQ: 0, correct: 0 };
-    s.tagMeta[tag].totalQ += rs.total;
-    s.tagMeta[tag].correct += rs.correct;
-    s.tagMeta[tag].lastAnswer = Date.now();
-  });
-  // Reclassify all tags based on updated tagMeta
-  var allTracked = {};
-  Object.keys(s.tagMeta).forEach(function(tag) {
-    var m = s.tagMeta[tag];
-    if (m.totalQ === 0) { allTracked[tag] = 'new'; }
-    else if (m.correct < m.totalQ) { allTracked[tag] = 'error'; }
-    else { allTracked[tag] = 'review'; }
-  });
-  // Auto-classify errorTags and reviewTags from tagMeta
-  s.errorTags = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'error'; });
-  s.reviewTags = Object.keys(allTracked).filter(function(t) { return allTracked[t] === 'review'; });
-  // newTopicTags: fully user-managed, no auto-injection
+  // 基于本轮统计重新分类（不再用累计正确率）
+  _reclassifyTagsByRound(s);
   if (!s.newTopicTags) s.newTopicTags = [];
   saveState(); renderTagColumns(); updateChapterPromptTemplate();
 }
