@@ -140,7 +140,7 @@ module.exports = function (app) {
       const apiKey = req.headers['x-ai-api-key'];
       const model = req.headers['x-ai-model'] || 'ecnu-plus';
       const providerName = req.headers['x-ai-provider'] || getProviderByModel(model);
-      const { textContent, typeCounts, prompt, chapterHistory, chapterId, errPct, reviewPct, newPct } = req.body;
+      const { textContent, typeCounts, prompt, chapterHistory, chapterId } = req.body;
       const useStream = req.headers['x-ai-stream'] === 'true';
 
       const provider = getProvider(providerName);
@@ -159,8 +159,8 @@ module.exports = function (app) {
       if ((safeTc.single || 0) + (safeTc.judge || 0) + (safeTc.term || 0) + (safeTc.short || 0) === 0) {
         safeTc.single = 1;
       }
-      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成考试题目。\n\n重要规则：\n1. 只输出纯JSON数组，不要包含任何其他文字、代码块标记或解释\n2. 每道题必须包含字段：type(值为single/judge/term/short)、question、options(数组)、answer(数字索引)、tag、strategy(值为error/review/new)、explanation\n3. 单选题(single)：options为4个选项的数组，answer为0-3的索引\n4. 判断题(judge)：options为["正确","错误"]，answer为0或1\n5. 名词解释(term)和简答题(short)：不需要options和answer\n6. 输出顺序：单选题→判断题→名词解释→简答题\n7. LaTeX公式格式：题目中含有数学符号、上下标、分式、根号、积分、求和等内容时，必须使用$...$包裹行内公式（如$x_1$、$E=mc^2$），使用$$...$$包裹独立公式块（如$$\\sum_{i=1}^{n} x_i$$）';
-      let userText = textContent || '';
+      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成考试题目。\n\n重要规则：\n1. 只输出纯JSON数组，不要包含任何其他文字、代码块标记或解释\n2. 每道题必须包含字段：type(值为single/judge/term/short)、question、options(数组)、answer(数字索引)、tag、strategy(值为error/review/new)、explanation\n3. 单选题(single)：options为4个选项的数组，answer为0-3的索引\n4. 判断题(judge)：options为["正确","错误"]，answer为0或1\n5. 名词解释(term)和简答题(short)：不需要options和answer\n6. 输出顺序：单选题→判断题→名词解释→简答题\n7. LaTeX公式格式：题目中含有数学符号、上下标、分式、根号、积分、求和等内容时，必须使用\$...\$包裹行内公式（如\$x_1\$、\$E=mc^2\$），使用\$\$...\$\$包裹独立公式块（如\$\$\\sum_{i=1}^{n} x_i\$\$）';
+let userText = textContent || '';
 
       // If chapterId provided, read assigned pool files from disk
       var poolTexts = [];
@@ -243,24 +243,14 @@ module.exports = function (app) {
       }
 
       const totalQ = safeTc.single + safeTc.judge + safeTc.term + safeTc.short;
-
-      var _errPct = errPct !== undefined ? errPct : 60;
-      var _reviewPct = reviewPct !== undefined ? reviewPct : 20;
-      var _newPct = newPct !== undefined ? newPct : 20;
-      var stratErrTarget = Math.round(totalQ * _errPct / 100);
-      var stratRevTarget = Math.round(totalQ * _reviewPct / 100);
-      var stratNewTarget = totalQ - stratErrTarget - stratRevTarget;
-      var quota = {
-        type:   { single: safeTc.single || 0, judge: safeTc.judge || 0, term: safeTc.term || 0, short: safeTc.short || 0 },
-        strategy: { error: stratErrTarget, review: stratRevTarget, new: stratNewTarget }
-      };
-
       let content = userText;
-      if (content.length > 128000) {
-        content = content.substring(0, 128000);
-        console.log('Content truncated to 128000 chars for model=' + model);
-      }
       const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content }];
+
+      // DeepSeek json_object mode: concise format instruction
+      if (providerName === 'deepseek') {
+        messages[0].content += '\n\n输出格式：必须输出一个合法的JSON对象 {\"questions\": [...]}，不要输出纯数组或其他格式。';
+      }
+
       const jsonSchema = {
         type: 'array',
         items: {
@@ -279,16 +269,14 @@ module.exports = function (app) {
       };
 
       // Dynamic max_tokens calculation
-      var baseTokens = Math.max(4096, Math.ceil((typeof content === 'string' ? content.length : 0) / 2) * 3);
+      var baseTokens = Math.max(4096, Math.ceil((typeof userText === 'string' ? userText.length : 0) / 2) * 3);
       var perQuestionTokens = 300;
       var neededTokens = baseTokens + totalQ * perQuestionTokens;
       var maxTokens = Math.min(16384, Math.max(4096, neededTokens));
 
       if (useStream) {
         const streamAborter = new AbortController();
-        var screenedQuestions = [];
-        var totalGenerated = 0;
-        var maxGenerated = totalQ * 2;
+        var accumulatedQuestions = [];
         var lastParsedLength = 0;
         var finalFullContent = '';
         var streamDone = false;
@@ -302,7 +290,6 @@ module.exports = function (app) {
         } else if (providerName === 'deepseek') {
           // DeepSeek: json_object in streaming (streaming + json_object works well)
           streamOpts.response_format = { type: 'json_object' };
-          messages[0].content += '\nRespond in JSON format.';
         }
         // Gemini: no response_format — prompt-only JSON enforcement
 
@@ -315,40 +302,19 @@ module.exports = function (app) {
         try {
           var result = await provider.streamChatCompletions(apiKey, model, messages, streamOpts, function(evt) {
             finalFullContent = evt.full;
-            if (evt.deltaCount % 5 === 0) {
+            if (evt.deltaCount % 2 === 0) {
               var cleaned = evt.full.trim();
               var newQs = tryExtractCompletedObjects(cleaned, lastParsedLength);
               if (newQs && newQs.length > 0) {
                 lastParsedLength += newQs.length;
-                var screenedNew = [];
-                for (var qi = 0; qi < newQs.length; qi++) {
-                  totalGenerated++;
-                  var q = newQs[qi];
-                  var t = q.type, s = q.strategy || 'new';
-                  if (totalGenerated > maxGenerated) {
-                    if (quota.type[t] > 0) {
-                      screenedNew.push(q);
-                      quota.type[t]--;
-                    }
-                  } else {
-                    if (quota.type[t] > 0 && quota.strategy[s] > 0) {
-                      screenedNew.push(q);
-                      quota.type[t]--;
-                      quota.strategy[s]--;
-                    }
-                  }
-                }
-                if (screenedNew.length > 0) {
-                  screenedQuestions = screenedQuestions.concat(screenedNew);
-                }
-                var allMet = ['single','judge','term','short'].every(function(t2) { return quota.type[t2] === 0; });
-                if (allMet || totalGenerated >= maxGenerated) {
-                  console.log('[stream] screening abort: screened=' + screenedQuestions.length + ', generated=' + totalGenerated + ', allMet=' + allMet + ', model=' + model);
+                accumulatedQuestions = accumulatedQuestions.concat(newQs);
+                if (lastParsedLength >= totalQ) {
+                  console.log('[stream] early abort: parsed=' + lastParsedLength + ' >= totalQ=' + totalQ + ', model=' + model);
                   streamAborter.abort();
                   streamDone = true;
                 }
                 try {
-                  res.write('data: ' + JSON.stringify({ content: evt.content, newParsed: screenedNew, parsedCount: lastParsedLength }) + '\n\n');
+                  res.write('data: ' + JSON.stringify({ content: evt.content, newParsed: newQs, parsedCount: lastParsedLength }) + '\n\n');
                 } catch (e) { /* connection closed */ }
                 return;
               }
@@ -368,59 +334,54 @@ module.exports = function (app) {
         }
 
         if (streamDone) {
-          var allQuotasMet = ['single','judge','term','short'].every(function(t) { return quota.type[t] === 0; });
-          var screenResult = { totalGenerated: totalGenerated, accepted: screenedQuestions.length, allQuotasMet: allQuotasMet, remaining: quota.type, remainingStrategy: quota.strategy };
           var typeDist = {};
-          (screenedQuestions || []).forEach(function(q) {
+          (accumulatedQuestions.slice(0, totalQ) || []).forEach(function(q) {
             typeDist[q.type || '?'] = (typeDist[q.type || '?'] || 0) + 1;
           });
-          console.log('[stream] screening done: model=' + model + ', screened=' + screenedQuestions.length + ', generated=' + totalGenerated + ', allMet=' + allQuotasMet + ', types=' + JSON.stringify(typeDist));
+          console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.slice(0, totalQ).length + ', types=' + JSON.stringify(typeDist));
           try {
-            res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(screenedQuestions), screening: screenResult, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(accumulatedQuestions.slice(0, totalQ)), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           } catch(e) { /* connection already closed */ }
           return;
         }
 
-        // Stream ended naturally — use screenedQuestions accumulated during streaming
-        if (screenedQuestions.length > 0) {
-          var allQuotasMet2 = ['single','judge','term','short'].every(function(t) { return quota.type[t] === 0; });
-          var screenResult2 = { totalGenerated: totalGenerated, accepted: screenedQuestions.length, allQuotasMet: allQuotasMet2, remaining: quota.type };
-          var typeDist2 = {};
-          (screenedQuestions || []).forEach(function(q) { typeDist2[q.type || '?'] = (typeDist2[q.type || '?'] || 0) + 1; });
-          console.log('[stream] natural end screening: model=' + model + ', screened=' + screenedQuestions.length + ', types=' + JSON.stringify(typeDist2));
-          res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(screenedQuestions), screening: screenResult2, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
-          res.end();
-          return;
-        }
-
-        // Fallback: parse final output from scratch
+        // Parse final output
         var finalClean = finalFullContent.trim();
         finalClean = finalClean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
         var jsonMatch = finalClean.match(/\[[\s\S]*\]/);
         if (jsonMatch) finalClean = jsonMatch[0];
         while (finalClean.trimEnd().endsWith(',')) finalClean = finalClean.trimEnd().slice(0, -1);
 
-        var questions;
         try {
-          questions = normalizeQuestions(JSON.parse(finalClean));
+          var questions = normalizeQuestions(JSON.parse(repairJson(finalClean)));
+          var typeDist3 = {};
+          (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
+          console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
+          res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+          res.end();
         } catch (e) {
           if (!finalClean.endsWith(']')) finalClean += ']';
           try {
-            questions = normalizeQuestions(JSON.parse(finalClean));
-            if (questions.length === 0) throw new Error();
+            questions = normalizeQuestions(JSON.parse(repairJson(finalClean)));
+            if (questions.length > 0) {
+              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+              res.end();
+            } else throw new Error();
           } catch (e2) {
-            res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent, poolFilesStatus: poolFilesStatus }) + '\n\n');
-            res.end();
-            return;
+            // Fallback: extract individual complete objects from partially malformed JSON
+            var extracted = tryExtractCompletedObjects(finalFullContent, 0);
+            if (extracted && extracted.length > 0) {
+              questions = normalizeQuestions(extracted);
+              console.log('[stream] fallback extract: model=' + model + ', questions=' + questions.length);
+              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+              res.end();
+            } else {
+              res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent, poolFilesStatus: poolFilesStatus }) + '\n\n');
+              res.end();
+            }
           }
         }
-        var screened2 = screenQuestions(questions, quota, totalQ);
-        var typeDist3 = {};
-        (screened2.questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
-        console.log('[stream] fallback screening: model=' + model + ', screened=' + screened2.questions.length + ', types=' + JSON.stringify(typeDist3));
-        res.write('data: ' + JSON.stringify({ done: true, questions: screened2.questions, screening: screened2.screening, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
-        res.end();
       } else {
         // Non-streaming path — auto-select response_format by provider capability
         const opts = { temperature: 0.7, max_tokens: maxTokens };
@@ -428,9 +389,8 @@ module.exports = function (app) {
           // ECNU/OpenAI: native json_schema
           opts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
         } else if (providerName === 'deepseek') {
-          // DeepSeek: json_object (requires "json" keyword in prompt)
+          // DeepSeek: json_object
           opts.response_format = { type: 'json_object' };
-          messages[0].content += '\nRespond in JSON format.';
         }
         // Gemini: no response_format — prompt-only JSON enforcement
 
@@ -439,13 +399,12 @@ module.exports = function (app) {
         let questions;
         try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
         questions = normalizeQuestions(questions);
-        var screenedResult = screenQuestions(questions, quota, totalQ);
 
         await pool.query(
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
           [req.userId, model, 'ok']
         );
-        res.json({ questions: screenedResult.questions, screening: screenedResult.screening, usage: completion.usage, poolFilesStatus: poolFilesStatus });
+        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus });
       }
     } catch (e) {
       console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);
@@ -555,22 +514,48 @@ function normalizeQuestions(raw) {
   return raw;
 }
 
+// Helper: repair common DeepSeek JSON syntax errors before parse
+function repairJson(text) {
+  // Fix missing colons between key and string value: "key" "value" → "key": "value"
+  text = text.replace(/"(\w+)"\s+"/g, '"$1": "');
+  // Fix missing colons before numeric/boolean/null values: "key" 123 → "key": 123
+  text = text.replace(/"(\w+)"\s+(-?\d+(?:\.\d+)?|true|false|null)/g, '"$1": $2');
+  return text;
+}
+
 // Helper: extract completed JSON objects from streaming accumulated text
-// Does not require valid overall JSON — extracts individual {complete objects} and validates
+// JSON state machine — tracks both {} and [] nesting, handles json_object wrapper
 function tryExtractCompletedObjects(text, knownCount) {
   var cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   var result = [];
-  var depth = 0;
-  var start = -1;
+  var braceDepth = 0;       // {} nesting
+  var arrDepth = 0;         // [] nesting
+  var arrBaseBrace = 0;     // braceDepth when outermost [...] was entered
+  var inObj = false;        // tracking a potential question object
+  var objStart = -1;
+  var inString = false;
+  var escaped = false;
   for (var i = 0; i < cleaned.length; i++) {
     var ch = cleaned[i];
+    if (inString) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === '"') { inString = false; }
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
     if (ch === '{') {
-      if (depth === 0) start = i;
-      depth++;
+      // Start of a question object: inside an array at the element level
+      if (!inObj && arrDepth > 0 && braceDepth === arrBaseBrace) {
+        inObj = true;
+        objStart = i;
+      }
+      braceDepth++;
     } else if (ch === '}') {
-      depth--;
-      if (depth === 0 && start >= 0) {
-        var candidate = cleaned.substring(start, i + 1);
+      braceDepth--;
+      if (inObj && braceDepth === arrBaseBrace) {
+        // Question object completed
+        var candidate = repairJson(cleaned.substring(objStart, i + 1));
         try {
           var obj = JSON.parse(candidate);
           if (obj && obj.question && typeof obj.question === 'string') {
@@ -578,37 +563,20 @@ function tryExtractCompletedObjects(text, knownCount) {
             if (!isDup) result.push(obj);
           }
         } catch (e) { /* skip malformed object */ }
-        start = -1;
+        inObj = false;
+        objStart = -1;
+      }
+    } else if (ch === '[') {
+      if (arrDepth === 0) arrBaseBrace = braceDepth;
+      arrDepth++;
+    } else if (ch === ']') {
+      arrDepth--;
+      if (arrDepth === 0) {
+        inObj = false;
+        objStart = -1;
       }
     }
   }
   if (result.length > knownCount) return result.slice(knownCount);
   return null;
-}
-
-// Helper: screen questions against dual-dimension quotas (type + strategy)
-// Returns { questions: [], screening: { totalGenerated, accepted, allQuotasMet, remaining } }
-function screenQuestions(questions, quota, totalQ) {
-  var screened = [];
-  var totalGenerated = 0;
-  var maxGenerated = totalQ * 2;
-  var typeQuota = { single: quota.type.single || 0, judge: quota.type.judge || 0, term: quota.type.term || 0, short: quota.type.short || 0 };
-  var stratQuota = { error: quota.strategy.error || 0, review: quota.strategy.review || 0, new: quota.strategy.new || 0 };
-
-  for (var i = 0; i < questions.length; i++) {
-    totalGenerated++;
-    var q = questions[i];
-    var t = q.type, s = q.strategy || 'new';
-    if (totalGenerated > maxGenerated) {
-      if (typeQuota[t] > 0) { screened.push(q); typeQuota[t]--; }
-      continue;
-    }
-    if (typeQuota[t] > 0 && stratQuota[s] > 0) {
-      screened.push(q);
-      typeQuota[t]--;
-      stratQuota[s]--;
-    }
-  }
-  var allQuotasMet = ['single','judge','term','short'].every(function(t) { return typeQuota[t] === 0; });
-  return { questions: screened, screening: { totalGenerated: totalGenerated, accepted: screened.length, allQuotasMet: allQuotasMet, remaining: typeQuota, remainingStrategy: stratQuota } };
 }
