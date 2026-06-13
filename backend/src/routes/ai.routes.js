@@ -159,7 +159,7 @@ module.exports = function (app) {
       if ((safeTc.single || 0) + (safeTc.judge || 0) + (safeTc.term || 0) + (safeTc.short || 0) === 0) {
         safeTc.single = 1;
       }
-      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成考试题目。\n\n重要规则：\n1. 只输出纯JSON数组，不要包含任何其他文字、代码块标记或解释\n2. 每道题必须包含字段：type(值为single/judge/term/short)、question、options(数组)、answer(数字索引)、tag、strategy(值为error/review/new)、explanation\n3. 单选题(single)：options为4个选项的数组，answer为0-3的索引\n4. 判断题(judge)：options为["正确","错误"]，answer为0或1\n5. 名词解释(term)和简答题(short)：不需要options和answer\n6. 输出顺序：单选题→判断题→名词解释→简答题';
+      const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成考试题目。\n\n重要规则：\n1. 只输出纯JSON数组，不要包含任何其他文字、代码块标记或解释\n2. 每道题必须包含字段：type(值为single/judge/term/short)、question、options(数组)、answer(数字索引)、tag、strategy(值为error/review/new)、explanation\n3. 单选题(single)：options为4个选项的数组，answer为0-3的索引\n4. 判断题(judge)：options为["正确","错误"]，answer为0或1\n5. 名词解释(term)和简答题(short)：不需要options和answer\n6. 输出顺序：单选题→判断题→名词解释→简答题\n7. LaTeX公式格式：题目中含有数学符号、上下标、分式、根号、积分、求和等内容时，必须使用$...$包裹行内公式（如$x_1$、$E=mc^2$），使用$$...$$包裹独立公式块（如$$\\sum_{i=1}^{n} x_i$$）';
       let userText = textContent || '';
 
       // If chapterId provided, read assigned pool files from disk

@@ -249,7 +249,7 @@ function generatePromptText(chId) {
   base += '【出题要求】\n';
   base += '1. 题型与数量：' + qStr + '。\n';
   base += '2. 内容来源：必须严格基于提供的资料。\n';
-  base += '3. 格式要求：只输出纯文本的 JSON 数组。\n';
+  base += '3. 格式要求：只输出纯文本的 JSON 数组。含有数学符号、上下标、分式、根号、积分、求和等内容的题目，必须使用 $...$ 包裹行内公式（如 $E=mc^2$、$x_1$），使用 $$...$$ 包裹独立公式块（如 $$\\sum_{i=1}^{n} x_i$$）。\n';
   base += '4. JSON 字段结构：所有题目必须包含 id, type("single"/"judge"/"term"/"short"), tag(知识点标签), question, explanation, strategy("error"/"review"/"new")。\n';
   base += '   单选增加 options(数组), answer(索引 0-3)；判断增加 options(["正确","错误"]), answer(0或1)；名词解释和简答不需要 options 和 answer。\n';
   base += '5. 出题策略分配 — 严格遵循：\n';
