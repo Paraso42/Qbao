@@ -43,6 +43,11 @@ body.dark-mode .quiz-question code, body.dark-mode .quiz-option code,
 body.dark-mode .explanation-box code, body.dark-mode .qd-question code,
 body.dark-mode .qd-answer code, body.dark-mode .qd-explanation code { background: #333; }
 
+/* KaTeX formulas in dark mode */
+body.dark-mode .katex { color: var(--text-primary) !important; }
+body.dark-mode .katex .mord { color: var(--text-primary); }
+body.dark-mode .katex-error { background: #301a1a; color: #e5534b; }
+
 body.dark-mode .quiz-question { color: #e4e4e8; }
 body.dark-mode .quiz-option { border-color: #383840; color: #e4e4e8; }
 body.dark-mode .quiz-option:hover { border-color: #6b9fd4; background: #1a2840; }

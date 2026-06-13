@@ -280,9 +280,37 @@ function escapeHtml(text) {
 }
 function renderMarkdown(text) {
   if (typeof text !== 'string') return escapeHtml(String(text ?? ''));
-  let s = escapeHtml(text);
-  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_,m) => { try { return katex.renderToString(m.trim(),{displayMode:true,throwOnError:false}); } catch(e){ return '<code>'+m+'</code>'; } });
-  s = s.replace(/\$([^\$]+?)\$/g, (_,m) => { try { return katex.renderToString(m.trim(),{displayMode:false,throwOnError:false}); } catch(e){ return '<code>'+m+'</code>'; } });
+
+  // Step 1: Extract and pre-render display math $$...$$ with placeholders
+  const displayMath = [];
+  let s = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => {
+    try {
+      displayMath.push(katex.renderToString(m.trim(), {displayMode: true, throwOnError: false}));
+    } catch(e) {
+      displayMath.push('<code class="katex-error">' + escapeHtml(m.trim()) + '</code>');
+    }
+    return '%%DM' + (displayMath.length - 1) + '%%';
+  });
+
+  // Step 2: Extract and pre-render inline math $...$ with placeholders
+  const inlineMath = [];
+  s = s.replace(/\$([^\$]+?)\$/g, (_, m) => {
+    try {
+      inlineMath.push(katex.renderToString(m.trim(), {displayMode: false, throwOnError: false}));
+    } catch(e) {
+      inlineMath.push('<code class="katex-error">' + escapeHtml(m.trim()) + '</code>');
+    }
+    return '%%IM' + (inlineMath.length - 1) + '%%';
+  });
+
+  // Step 3: HTML-escape the remaining non-math text only
+  s = escapeHtml(s);
+
+  // Step 4: Restore placeholders with pre-rendered KaTeX HTML
+  s = s.replace(/%%DM(\d+)%%/g, (_, i) => displayMath[parseInt(i)]);
+  s = s.replace(/%%IM(\d+)%%/g, (_, i) => inlineMath[parseInt(i)]);
+
+  // Step 5: Apply other markdown formatting (on escaped text — safe tags only)
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
