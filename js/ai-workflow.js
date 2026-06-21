@@ -112,14 +112,20 @@ async function _aiExecuteTask(task) {
   aiTaskAbortController = abortController;
   try {
     var fd = new FormData();
+    var hasFilesToUpload = false;
     for (var i = 0; i < localMaterials.length; i++) {
       var m = localMaterials[i];
       var dataUrl = await idbGetMaterial(m.id);
-      if (!dataUrl) { task.status = 'failed'; task.error = '资料 ' + m.name + ' 数据丢失'; saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar(); return; }
+      if (!dataUrl) {
+        // 跨设备场景：IndexedDB 中无此文件，降级为后端通过 chapter_id 查询 user_files 表
+        if (task.log) task.log.push('资料 ' + m.name + ' 本地无缓存，将在服务端读取');
+        continue;
+      }
       var dec = atob(dataUrl.split(',')[1]); var bin = new Uint8Array(dec.length); for(var j=0;j<dec.length;j++) bin[j]=dec.charCodeAt(j); fd.append('files', new Blob([bin]), m.name);
+      hasFilesToUpload = true;
     }
     var uploadData = { text: '', images: [] };
-    if (localMaterials.length > 0) {
+    if (hasFilesToUpload) {
       var uploadRes = await fetch(API_BASE+'/ai/upload', {method:'POST', headers:{'Authorization':'Bearer '+getToken()}, body:fd});
       if (!uploadRes.ok) { var err = await uploadRes.json().catch(function(){return {};}); throw new Error(err.error || '上传失败: '+uploadRes.status); }
       uploadData = await uploadRes.json();

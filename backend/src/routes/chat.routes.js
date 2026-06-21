@@ -409,16 +409,6 @@ module.exports = function (app) {
         }
 
         // 验证所有成员都是好友
-        var placeholders = ids.map(function(_, i) { return '$' + (i + 1); }).join(',');
-        var friendCheck = await client.query(
-          `SELECT COUNT(*) AS cnt FROM friendships
-           WHERE status = 'accepted'
-             AND ((user_id = $1 AND friend_id IN (` + placeholders + `))
-               OR (friend_id = $1 AND user_id IN (` + placeholders + `)))`,
-          [req.userId].concat(ids)
-        );
-        var expectedCount = ids.length * 2; // 双向好友关系
-        // 简化检查：每个 id 至少有一条关系即可
         var simpleCheck = await client.query(
           `SELECT friend_id FROM friendships
            WHERE status = 'accepted'
@@ -681,6 +671,7 @@ module.exports = function (app) {
     try {
       var roomId = parseInt(req.params.roomId);
       var { content, images, file_info, msg_type, quiz_data, reply_to } = req.body;
+
 
       // 检查权限
       var memberCheck = await pool.query(
