@@ -240,7 +240,7 @@ async function chatLoadMessages(roomId, isPollingRefresh) {
 
   var quizBtn = document.getElementById('chat-tool-share-quiz');
   if (quizBtn) {
-    quizBtn.style.display = (room && room.type === 'direct') ? '' : 'none';
+    quizBtn.style.display = (room && (room.type === 'direct' || room.type === 'group')) ? '' : 'none';
   }
 
   try {
@@ -377,7 +377,7 @@ function chatRenderMessage(msg) {
         html += '<div style="margin:6px 0 2px;"><span style="font-size:10px;padding:1px 6px;background:var(--surface-hover);border-radius:10px;color:var(--text-secondary);">🏷️ ' + escapeHtml(question.tag) + '</span></div>';
       }
       // Question text
-      html += '<div style="font-size:13px;color:var(--text-primary);margin:6px 0;line-height:1.6;">' + escapeHtml(question.question || '') + '</div>';
+      html += '<div style="font-size:13px;color:var(--text-primary);margin:6px 0;line-height:1.6;">' + renderMarkdown(question.question || '') + '</div>';
 
       if (quizResult && quizResult.answered) {
         // Already answered — show full result matching quiz system format
@@ -403,7 +403,7 @@ function chatRenderMessage(msg) {
             } else {
               optStyle += 'color:var(--text-secondary);';
             }
-            html += '<div style="' + optStyle + '">' + optLabel + '. ' + escapeHtml(opt) + '</div>';
+            html += '<div style="' + optStyle + '">' + optLabel + '. ' + renderMarkdown(opt) + '</div>';
           });
           html += '</div>';
         }
@@ -413,16 +413,16 @@ function chatRenderMessage(msg) {
         var yourOptLabel = (quizResult.chosenAnswerIdx !== undefined && quizResult.chosenAnswerIdx >= 0) ? resultLabels[quizResult.chosenAnswerIdx] : '';
         var correctOptLabel = (quizResult.correctAnswerIdx !== undefined && quizResult.correctAnswerIdx >= 0) ? resultLabels[quizResult.correctAnswerIdx] : '';
         var yourMark2 = resultCorrect ? '✓' : '✗';
-        html += '<div style="margin-bottom:3px;">' + yourMark2 + ' <b>你的答案：</b>' + yourOptLabel + '. ' + escapeHtml(quizResult.chosenAnswerText || quizResult.chosenAnswer || '') + '</div>';
-        html += '<div style="margin-bottom:3px;color:#2ea856;">✓ <b>标准答案：</b>' + correctOptLabel + '. ' + escapeHtml(quizResult.correctAnswerText || '') + '</div>';
+        html += '<div style="margin-bottom:3px;">' + yourMark2 + ' <b>你的答案：</b>' + yourOptLabel + '. ' + renderMarkdown(quizResult.chosenAnswerText || quizResult.chosenAnswer || '') + '</div>';
+        html += '<div style="margin-bottom:3px;color:#2ea856;">✓ <b>标准答案：</b>' + correctOptLabel + '. ' + renderMarkdown(quizResult.correctAnswerText || '') + '</div>';
         html += '</div>';
         html += '</div>';
         } else if (question.type === 'term' || question.type === 'short') {
         html += '<div style="margin-top:8px;padding:10px;border-radius:8px;background:rgba(46,168,86,0.08);border:1px solid rgba(46,168,86,0.25);">';
         html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px;">✅ 已作答（主观题）</div>';
-        html += '<div style="font-size:11px;margin-bottom:3px;"><b>你的答案：</b>' + escapeHtml(quizResult.chosenAnswerText || quizResult.chosenAnswer || '') + '</div>';
+        html += '<div style="font-size:11px;margin-bottom:3px;"><b>你的答案：</b>' + renderMarkdown(quizResult.chosenAnswerText || quizResult.chosenAnswer || '') + '</div>';
         if (quizResult.correctAnswerText) {
-          html += '<div style="font-size:11px;margin-bottom:3px;color:#2ea856;"><b>参考答案：</b>' + escapeHtml(quizResult.correctAnswerText) + '</div>';
+          html += '<div style="font-size:11px;margin-bottom:3px;color:#2ea856;"><b>参考答案：</b>' + renderMarkdown(quizResult.correctAnswerText) + '</div>';
         }
         html += '</div>';
         }
@@ -432,7 +432,7 @@ function chatRenderMessage(msg) {
 
         // Explanation
         if (question.explanation) {
-          html += '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,0.03);border-radius:4px;">📖 ' + escapeHtml(question.explanation) + '</div>';
+          html += '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,0.03);border-radius:4px;">📖 ' + renderMarkdown(question.explanation) + '</div>';
         }
       } else if (!isMine) {
         // Recipient hasn't answered yet — show answer interface
@@ -441,7 +441,7 @@ function chatRenderMessage(msg) {
           html += '<div style="display:flex;flex-direction:column;gap:4px;">';
           var labels = ['A', 'B', 'C', 'D', 'E', 'F'];
           question.options.forEach(function(opt, oi) {
-            html += '<button class="chat-quiz-option-btn" onclick="chatAnswerSharedQuiz(' + msg.id + ',' + oi + ')" style="text-align:left;padding:6px 10px;border:1px solid var(--border-default);border-radius:6px;background:var(--surface-bg);cursor:pointer;font-family:inherit;font-size:12px;color:var(--text-primary);">' + labels[oi] + '. ' + escapeHtml(opt) + '</button>';
+            html += '<button class="chat-quiz-option-btn" onclick="chatAnswerSharedQuiz(' + msg.id + ',' + oi + ')" style="text-align:left;padding:6px 10px;border:1px solid var(--border-default);border-radius:6px;background:var(--surface-bg);cursor:pointer;font-family:inherit;font-size:12px;color:var(--text-primary);">' + labels[oi] + '. ' + renderMarkdown(opt) + '</button>';
           });
           html += '</div>';
         } else if (question.type === 'judge') {
@@ -511,6 +511,7 @@ async function chatSendMessage() {
   var hasQuiz = chatPendingQuiz !== null;
 
   if (!content && !hasImages && !hasFile && !hasQuiz) return;
+
 
   // Determine message type
   var msgType = 'text';
@@ -1639,6 +1640,8 @@ function chatShareCart() {
     if (typeof showToast === 'function') showToast('请先打开一个对话');
     return;
   }
+
+
 
   // Send each question as a separate quiz_share message
   var sendPromises = [];
