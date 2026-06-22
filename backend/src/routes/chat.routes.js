@@ -69,6 +69,7 @@ module.exports = function (app) {
       );
       res.json({ users: result.rows });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -93,6 +94,7 @@ module.exports = function (app) {
       );
       res.json({ friends: result.rows });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -147,6 +149,7 @@ module.exports = function (app) {
       );
       res.status(201).json({ requestId: result.rows[0].id });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -165,6 +168,7 @@ module.exports = function (app) {
       );
       res.json({ requests: result.rows });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -209,6 +213,7 @@ module.exports = function (app) {
 
       res.json({ accepted: true, roomId: roomId });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -226,6 +231,7 @@ module.exports = function (app) {
       }
       res.json({ rejected: true });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -279,6 +285,7 @@ module.exports = function (app) {
       res.json({ deleted: true });
     } catch (e) {
       await client.query('ROLLBACK');
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     } finally {
       client.release();
@@ -338,6 +345,7 @@ module.exports = function (app) {
 
       res.json({ rooms: rooms });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -473,6 +481,7 @@ module.exports = function (app) {
       return res.status(422).json({ error: '无效的会话类型' });
     } catch (e) {
       await client.query('ROLLBACK');
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     } finally {
       client.release();
@@ -511,6 +520,7 @@ module.exports = function (app) {
 
       res.json({ room: room });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -546,6 +556,7 @@ module.exports = function (app) {
 
       res.json({ left: true });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -615,6 +626,7 @@ module.exports = function (app) {
 
       res.json({ added: addedNames.length });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     } finally {
       client.release();
@@ -662,6 +674,7 @@ module.exports = function (app) {
 
       res.json({ messages: messages });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -748,6 +761,7 @@ module.exports = function (app) {
 
       res.status(201).json({ message: msg });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -762,6 +776,7 @@ module.exports = function (app) {
       );
       res.json({ read: true });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -782,6 +797,7 @@ module.exports = function (app) {
         mimeType: req.file.mimetype
       });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -815,6 +831,7 @@ module.exports = function (app) {
 
       res.json({ revoked: true });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -839,6 +856,7 @@ module.exports = function (app) {
 
       res.json({ updated: true });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
@@ -897,6 +915,7 @@ module.exports = function (app) {
         updatedRoomIds: updatedRooms.rows.map(function(r) { return r.id; })
       });
     } catch (e) {
+      console.error('[chat] error:', e.message, e.stack);
       res.status(500).json({ error: e.message });
     }
   });
