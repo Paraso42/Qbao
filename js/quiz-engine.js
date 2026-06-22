@@ -264,40 +264,52 @@ function nextQuestion() { const as=getActiveSet(); if (!as) return; if (as.curre
 function goToQuestion(idx) { const as=getActiveSet(); if (!as||idx<0||idx>=as.questions.length) return; as.setCurrentIdx(idx); saveState(); renderQuestion(); updateProgress(); }
 function endExam() { const as=getActiveSet(); if (!as) return; if (as._isSet) { endQuizSession(); } else if (as.isExam) { endExamGenerated(as); } else { const ch=as; autoUpdateChapterWeakTags(ch); saveQuizHistory(ch); updateSRSAfterExam(ch); autoBackup(); checkAchievements(); syncAnswerToServerFinal(); updateChapterProgress(); openQuizModal("report"); renderReport(); } }
 function resetQuiz() { const as=getActiveSet(); if (!as) return; if (as._isSet) { as.userAnswers=new Array(as.questions.length).fill(undefined); as.setCurrentIdx(0); saveState(); openQuizModal('quiz'); renderQuestion(); updateProgress(); return; } as.userAnswers=new Array(as.questions.length).fill(undefined); as.setCurrentIdx(0); saveState(); renderQuestion(); updateProgress(); closeQuizModal(); showScreen('start'); updateQuickActions(); }
-// 基于本轮统计重新分类标签（不受历史错题拖累）
+// 基于本轮统计重新分类标签，同时保留不在本轮中的历史标签
 function _reclassifyTagsByRound(s) {
-  // 保护手动标签：从未答过题（tagMeta totalQ===0 或无记录）的标签保留原始分类
-  var manualError = (s.errorTags || []).filter(function(t) {
-    var m = s.tagMeta && s.tagMeta[t];
-    return !m || m.totalQ === 0;
-  });
-  var manualReview = (s.reviewTags || []).filter(function(t) {
-    var m = s.tagMeta && s.tagMeta[t];
-    return !m || m.totalQ === 0;
-  });
-  // 基于本轮统计自动分类
-  var autoError = [], autoReview = [];
   var rts = s._roundTagStats || {};
+
+  // 1. 不在本轮题目中的标签 — 保留原分类不变
+  var keepError = (s.errorTags || []).filter(function(t) { return !rts[t]; });
+  var keepReview = (s.reviewTags || []).filter(function(t) { return !rts[t]; });
+
+  // 2. 在本轮题目中但尚未全部答完的 — 保留原分类（等答完再判定）
+  var pendingError = (s.errorTags || []).filter(function(t) {
+    if (!rts[t]) return false;
+    return (rts[t].correct + rts[t].wrong) < rts[t].total;
+  });
+  var pendingReview = (s.reviewTags || []).filter(function(t) {
+    if (!rts[t]) return false;
+    return (rts[t].correct + rts[t].wrong) < rts[t].total;
+  });
+
+  // 3. 本轮全部答完的标签 — 本轮表现决定分类（体现最新学习状态）
+  var autoError = [], autoReview = [];
   Object.keys(rts).forEach(function(tag) {
     var rs = rts[tag];
-    // 只有该标签本轮全部题目都已作答，才触发自动分类
-    if (rs.correct + rs.wrong < rs.total) return;
-    if (rs.wrong > 0) {
-      autoError.push(tag);
-    } else {
-      autoReview.push(tag);
-    }
+    if (rs.correct + rs.wrong < rs.total) return;  // 未答完，跳过
+    if (rs.wrong > 0) autoError.push(tag);
+    else autoReview.push(tag);
   });
-  // 合并：手动保留 + 自动分类
-  s.errorTags = manualError.concat(
-    autoError.filter(function(t) { return manualError.indexOf(t) < 0 && manualReview.indexOf(t) < 0; })
-  );
-  s.reviewTags = manualReview.concat(
-    autoReview.filter(function(t) { return manualError.indexOf(t) < 0 && manualReview.indexOf(t) < 0; })
-  );
-  // 去重
-  s.errorTags = s.errorTags.filter(function(t, i, arr) { return arr.indexOf(t) === i; });
-  s.reviewTags = s.reviewTags.filter(function(t, i, arr) { return arr.indexOf(t) === i; });
+
+  // 4. 合并（用对象 key 去重，error 优先）
+  var errSet = {}, revSet = {};
+  keepError.forEach(function(t) { errSet[t] = true; });
+  pendingError.forEach(function(t) { errSet[t] = true; });
+  keepReview.forEach(function(t) { revSet[t] = true; });
+  pendingReview.forEach(function(t) { revSet[t] = true; });
+  autoError.forEach(function(t) { if (!revSet[t]) errSet[t] = true; });
+  autoReview.forEach(function(t) { if (!errSet[t]) revSet[t] = true; });
+
+  s.errorTags = Object.keys(errSet);
+  s.reviewTags = Object.keys(revSet);
+
+  // 5. 清理 newTopicTags — 已产生答题数据的标签不再是「新」标签
+  if (s.newTopicTags && s.newTopicTags.length > 0) {
+    s.newTopicTags = s.newTopicTags.filter(function(t) {
+      var m = s.tagMeta && s.tagMeta[t];
+      return !m || m.totalQ === 0;
+    });
+  }
 }
 
 // 单题标签统计更新 — 每道题作答后立即更新
