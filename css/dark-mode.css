@@ -251,6 +251,7 @@ body.dark-mode .settings-modal-sidebar { background: #18181c; border-right-color
 body.dark-mode .settings-nav-title { color: #707078; }
 body.dark-mode .quiz-modal-box { border-color: #2a2a30; }
 body.dark-mode .quiz-modal-box .quiz-question { color: #e4e4e8; }
+body.dark-mode #btn-dont-know { background: #a71d2a; }
 body.dark-mode .ucm-name { color: #e4e4e8; }
 body.dark-mode .ucm-username { color: #a0a0a8; }
 

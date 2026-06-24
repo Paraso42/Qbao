@@ -127,7 +127,7 @@ async function init(){ try{
 		if (!isOnlineMode) loadState();
 		try{await tryAutoRestore();}catch(e){console.warn('auto restore skipped',e);}
 		const sids=Object.keys(state.subjects);
-		if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;}
+		if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;if(!state.subjectOrder)state.subjectOrder=[];state.subjectOrder.push(sid);}
 		else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0];
 		const s=getSubj();
 		if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;

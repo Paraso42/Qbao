@@ -50,6 +50,8 @@
   .subject-header { padding: 10px 10px; min-height: 40px; }
   .chapter-item { padding: 8px 8px; min-height: 36px; }
   .subj-btn, .ch-btn { padding: 4px 6px; min-width: 28px; min-height: 28px; }
+  .subj-btn.sb-top { min-width: 28px; min-height: 28px; padding: 4px 6px; }
+  .ch-btn.ch-top { min-width: 26px; min-height: 26px; padding: 3px 6px; }
   .subj-collapse-arrow { width: 2.2em; height: 2.2em; font-size: 0.85em; margin-right: 0.3em; }
   .btn-add-chapter { padding: 8px; min-height: 36px; }
 

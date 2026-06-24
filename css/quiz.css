@@ -69,6 +69,8 @@
 
 .quiz-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-lg); flex-wrap: wrap; }
 
+#btn-dont-know:hover { background: #c0392b !important; }
+
 .quiz-nav { display: flex; gap: 4px; margin-top: var(--space-md); flex-wrap: wrap; }
 
 .quiz-nav .dot {
