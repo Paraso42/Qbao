@@ -245,7 +245,7 @@ function renderQuestion() {
   if (hasAns&&q.explanation) html += '<div class="explanation-box"><h4>📖 参考答案</h4><p>'+renderMarkdown(q.explanation)+'</p></div>';
   if (area) area.innerHTML = html;
   if (navEl) { navEl.innerHTML = as.questions.map((q2,idx) => { let cls='dot'; if (idx===as.currentIdx) cls+=' current'; if(isQuestionIgnored(as.setId,q2))cls+=' ignored'; if (as.userAnswers[idx]!==undefined&&as.userAnswers[idx]!==null) cls+=getCi(as.questions[idx],as.userAnswers[idx])?' answered':' wrong'; return '<div class="'+cls+'" onclick="goToQuestion('+idx+')">'+(idx+1)+'</div>'; }).join(''); }
-  if (sb) sb.style.display = hasAns?'none':'inline-block'; var ig=document.getElementById('btn-ignore'); if(ig){ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block';ig.textContent='👍 我会了';}
+  if (sb) sb.style.display = hasAns?'none':'inline-block'; var ig=document.getElementById('btn-ignore'); if(ig){ig.style.display=(hasAns||isQuestionIgnored(as.setId,q))?'none':'inline-block';ig.textContent='👍 我会了';} var dk=document.getElementById('btn-dont-know'); if(dk){var isObj2=q.type==='single'||q.type==='judge';dk.style.display=(!hasAns&&isObj2&&!isQuestionIgnored(as.setId,q))?'inline-block':'none';}
   var sq=document.getElementById('btn-share-quiz'); if(sq)sq.style.display='inline-block';
   if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
 
