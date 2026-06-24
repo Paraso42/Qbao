@@ -96,6 +96,8 @@
 
 .subj-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
 .subj-btn.sb-del:hover { color: var(--color-danger); background: var(--color-danger-light); }
+.subj-btn.sb-top { font-size: 0.75em; padding: 1px 3px; }
+.subj-btn.sb-top:hover:not([disabled]) { color: var(--color-primary); }
 
 .chapter-list-in-subj { margin-left: 12px; margin-top: 1px; }
 
@@ -136,6 +138,8 @@
 .ch-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
 .ch-btn.ch-del:hover { background: var(--color-danger-light); color: var(--color-danger); }
 .ch-btn.ch-hist:hover { background: var(--color-primary-light); color: var(--color-primary); }
+.ch-btn.ch-top { font-size: 9px; padding: 0px 3px; }
+.ch-btn.ch-top:hover:not([disabled]) { color: var(--color-primary); }
 
 .btn-add-chapter {
   width: 100%;

@@ -370,6 +370,10 @@ function migrateState(s) {
   }
   if (!s.achievements) s.achievements = { unlocked: [], history: [] };
   if (!s.ignoredQuestions) s.ignoredQuestions = [];
+  // subjectOrder 迁移 (v3.18)
+  if (!s.subjectOrder || !Array.isArray(s.subjectOrder)) { s.subjectOrder = Object.keys(s.subjects); }
+  Object.keys(s.subjects).forEach(function(sid2) { if (!s.subjectOrder.includes(sid2)) s.subjectOrder.push(sid2); });
+  s.subjectOrder = s.subjectOrder.filter(function(sid2) { return !!s.subjects[sid2]; });
   if (!s.srsData) s.srsData = {};
   if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, topbarFontSize: 14, mainFontSize: 17, darkMode: false, showNoticeBar: true };
   if (!s.settings.sidebarFontSize) s.settings.sidebarFontSize = 13;
