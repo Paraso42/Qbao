@@ -30,6 +30,8 @@ function createSubject() {
   const id = 'subj_' + Date.now().toString(36);
   state.subjects[id] = { id: id, name: name.trim(), chapterIds: [], collapsed: false };
   if (!state.currentSubjectId) state.currentSubjectId = id;
+  if (!state.subjectOrder) state.subjectOrder = Object.keys(state.subjects);
+  state.subjectOrder.push(id);
   saveState(); renderSubjectList(); checkAchievements();
   });
 }
@@ -39,6 +41,8 @@ function deleteSubject(id) {
   if (!confirm('删除科目「' + s.name + '」及其所有章节？')) return;
   s.chapterIds.forEach(cid => { delete state.chapters[cid]; });
   delete state.subjects[id];
+  var orderIdx = (state.subjectOrder || []).indexOf(id);
+  if (orderIdx !== -1) state.subjectOrder.splice(orderIdx, 1);
   const keys = Object.keys(state.subjects);
   if (keys.length === 0) { const sid2 = 'subj_' + Date.now().toString(36); state.subjects[sid2] = { id: sid2, name: '默认科目', chapterIds: [] }; state.currentSubjectId = sid2; }
   else if (state.currentSubjectId === id) { state.currentSubjectId = keys[0]; state.currentChapterId = state.subjects[keys[0]].chapterIds[0] || null; }
@@ -98,20 +102,38 @@ function toggleSubjectCollapse(sid, event) {
     if (arrow) arrow.textContent = '▼';
   }
 }
+// ===== 排序 =====
+function moveSubjectToTop(sid) {
+  var arr = state.subjectOrder || Object.keys(state.subjects);
+  var idx = arr.indexOf(sid);
+  if (idx <= 0) return;
+  arr.splice(idx, 1);
+  arr.unshift(sid);
+  state.subjectOrder = arr;
+  saveState(); renderSubjectList();
+}
+function moveChapterToTop(subjId, cid) {
+  var s = state.subjects[subjId]; if (!s) return;
+  var idx = s.chapterIds.indexOf(cid);
+  if (idx <= 0) return;
+  s.chapterIds.splice(idx, 1);
+  s.chapterIds.unshift(cid);
+  saveState(); renderSubjectList();
+}
 // ===== 侧边栏渲染 =====
 function renderSubjectList() {
   const container = document.getElementById('subject-list');
   if (!container) return;
-  const sids = Object.keys(state.subjects);
+  const sids = state.subjectOrder || Object.keys(state.subjects);
   if (sids.length === 0) { container.innerHTML = '<div style="color:#666;text-align:center;padding:14px;font-size:13px;">暂无科目<br>点击上方「＋科目」</div>'; return; }
   let html = '';
-  sids.forEach(sid => {
+  sids.forEach((sid, sidIdx) => {
     const s = state.subjects[sid]; const active = sid === state.currentSubjectId ? 'active' : '';
     const collapsedClass = s.collapsed ? ' collapsed' : '';
     html += '<div class="subject-group' + collapsedClass + '" data-subject-id="' + sid + '"><div class="subject-header ' + active + '" onclick="switchSubject(\'' + sid + '\')">';
     html += '<span class="subj-collapse-arrow" onclick="toggleSubjectCollapse(\'' + sid + '\', event)">' + (s.collapsed ? '▶' : '▼') + '</span>';
     html += '<span class="subj-name">📂 ' + escapeHtml(s.name) + '</span><span class="subj-count">' + s.chapterIds.length + '</span>';
-    html += '<span class="subj-actions"><button class="subj-btn" title="重命名" onclick="event.stopPropagation();renameSubject(\'' + sid + '\')">✏️</button><button class="subj-btn sb-del" title="删除" onclick="event.stopPropagation();deleteSubject(\'' + sid + '\')">🗑️</button></span></div>';
+    html += '<span class="subj-actions"><button class="subj-btn sb-top" title="置顶" onclick="event.stopPropagation();moveSubjectToTop(\'' + sid + '\')"' + (sidIdx === 0 ? ' disabled style="visibility:hidden"' : '') + '>⬆</button><button class="subj-btn" title="重命名" onclick="event.stopPropagation();renameSubject(\'' + sid + '\')">✏️</button><button class="subj-btn sb-del" title="删除" onclick="event.stopPropagation();deleteSubject(\'' + sid + '\')">🗑️</button></span></div>';
     html += '<div class="chapter-list-in-subj">';
     if (s.chapterIds.length > 0) {
       s.chapterIds.forEach(cid => {
@@ -125,7 +147,8 @@ function renderSubjectList() {
           }
         });
         html += '<div class="chapter-item ' + ca + '" ondblclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')" onclick="closeSidebarIfMobile();switchChapter(\'' + cid + '\')"><div class="chapter-info"><span class="chapter-name">' + escapeHtml(ch.name) + '</span><span class="chapter-count">' + totalAnswered + ' 题已答</span></div>';
-        html += '<div class="ch-actions"><button class="ch-btn" title="重命名" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" title="删除" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
+        var isFirstCh2 = s.chapterIds.length > 1 && cid === s.chapterIds[0];
+        html += '<div class="ch-actions"><button class="ch-btn ch-top" title="置顶" onclick="event.stopPropagation();moveChapterToTop(\'' + sid + '\',\'' + cid + '\')"' + (isFirstCh2 ? ' disabled style="visibility:hidden"' : '') + '>⬆</button><button class="ch-btn" title="重命名" onclick="event.stopPropagation();renameChapterPrompt(\'' + cid + '\')">✏️</button><button class="ch-btn ch-del" title="删除" onclick="event.stopPropagation();deleteChapter(\'' + cid + '\')">🗑️</button></div></div>';
       });
     }
     html += '<button class="btn-add-chapter" onclick="event.stopPropagation();createChapter(\'' + sid + '\')">＋ 新建章节</button></div></div>';
