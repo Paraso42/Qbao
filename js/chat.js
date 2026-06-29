@@ -141,6 +141,12 @@ function chatRenderRoomList() {
     var name = chatGetRoomName(room);
     var avatarInitial = name.charAt(0).toUpperCase();
     var avatarClass = room.type === 'direct' ? 'direct' : 'group';
+    // Get other member's avatar for direct chats
+    var otherAvatar = null;
+    if (room.type === 'direct' && room.members && room.members.length > 0) {
+      var otherUser = room.members.find(function(m) { return m.id !== (authUser && authUser.id); });
+      if (otherUser && otherUser.avatar_url) otherAvatar = otherUser.avatar_url;
+    }
     var lastMsg = room.last_message || null;
     var lastMsgPreview = '';
     if (lastMsg) {
@@ -154,7 +160,11 @@ function chatRenderRoomList() {
     var activeClass = chatOpenRoomId === room.id ? ' active' : '';
 
     html += '<div class="chat-room-item' + activeClass + '" onclick="chatOpenRoom(' + room.id + ')">';
-    html += '<div class="chat-room-avatar ' + avatarClass + '">' + avatarInitial + '</div>';
+    if (otherAvatar) {
+      html += '<div class="chat-room-avatar ' + avatarClass + '"><img src="' + escapeHtml(otherAvatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + avatarInitial + '\';"></div>';
+    } else {
+      html += '<div class="chat-room-avatar ' + avatarClass + '">' + avatarInitial + '</div>';
+    }
     html += '<div class="chat-room-info">';
     html += '<div class="chat-room-name">' + escapeHtml(name) + '</div>';
     if (lastMsgPreview) html += '<div class="chat-room-last-msg">' + escapeHtml(lastMsgPreview) + '</div>';
@@ -765,7 +775,11 @@ function chatRenderFriendList(list) {
     var diff = friend.last_seen_at ? (Date.now() - new Date(friend.last_seen_at).getTime()) : Infinity;
     var online = diff < 5 * 60 * 1000;
     html += '<div class="chat-friend-item">';
-    html += '<div class="chat-friend-avatar">' + initial + '</div>';
+    if (friend.avatar_url) {
+      html += '<div class="chat-friend-avatar"><img src="' + escapeHtml(friend.avatar_url) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + initial + '\';"></div>';
+    } else {
+      html += '<div class="chat-friend-avatar">' + initial + '</div>';
+    }
     html += '<div class="chat-friend-info">';
     html += '<div class="chat-friend-name">' + escapeHtml(friend.display_name || friend.username) + '</div>';
     html += '<div class="chat-friend-status">' + (online ? '在线' : '离线') + '</div>';
@@ -971,7 +985,11 @@ async function chatSearchUsers() {
         html += '<div class="chat-user-search-item">';
         html += '<div style="display:flex;align-items:center;gap:8px;">';
         var initial = (user.display_name || user.username || '?').charAt(0).toUpperCase();
-        html += '<div class="chat-friend-avatar">' + initial + '</div>';
+        if (user.avatar_url) {
+          html += '<div class="chat-friend-avatar"><img src="' + escapeHtml(user.avatar_url) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + initial + '\';"></div>';
+        } else {
+          html += '<div class="chat-friend-avatar">' + initial + '</div>';
+        }
         html += '<div class="chat-user-search-info">';
         html += '<div class="chat-user-search-name">' + escapeHtml(user.display_name || user.username) + '</div>';
         html += '<div class="chat-user-search-username">@' + escapeHtml(user.username) + '</div>';
