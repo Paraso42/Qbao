@@ -354,6 +354,12 @@
 /* --- Chapter pct labels --- */
 .chapter-pct-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-sm); justify-content: center; }
 .chapter-pct-label { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: var(--radius-full); font-size: var(--fs-xs); font-weight: 600; color: #fff; }
+.chapter-pct-label-row { display: inline-flex; align-items: center; gap: 4px; }
+.chapter-pct-input { width: 48px; padding: 2px 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--fs-xs); text-align: center; background: var(--bg-primary); color: var(--text-primary); }
+.chapter-pct-input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-light); }
+
+.strategy-pct-input { padding: 1px 4px; border: 1px solid var(--border-color); border-radius: 4px; font-size: var(--fs-xs); font-weight: 600; text-align: center; background: var(--bg-primary); color: var(--text-primary); }
+.strategy-pct-input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-light); }
 
 /* --- AI mode --- */
 .ai-mode-hidden { display: none !important; }

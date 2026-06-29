@@ -57,7 +57,7 @@ module.exports = function (app) {
       if (!q || q.length < 1) return res.json({ users: [] });
 
       var result = await pool.query(
-        `SELECT id, username, display_name, last_seen_at
+        `SELECT id, username, display_name, avatar_url, last_seen_at
          FROM users
          WHERE id != $1
            AND (username ILIKE $2 OR display_name ILIKE $2)
@@ -82,7 +82,7 @@ module.exports = function (app) {
   app.get('/api/v1/chat/friends', requireAuth, async (req, res) => {
     try {
       var result = await pool.query(
-        `SELECT u.id, u.username, u.display_name, u.last_seen_at,
+        `SELECT u.id, u.username, u.display_name, u.avatar_url, u.last_seen_at,
                 f.id AS friendship_id, f.created_at AS friend_since
          FROM friendships f
          JOIN users u ON (f.user_id = u.id OR f.friend_id = u.id)
@@ -334,7 +334,7 @@ module.exports = function (app) {
       var rooms = result.rows;
       for (var i = 0; i < rooms.length; i++) {
         var membersResult = await pool.query(
-          `SELECT u.id, u.username, u.display_name, u.last_seen_at
+          `SELECT u.id, u.username, u.display_name, u.avatar_url, u.last_seen_at
            FROM chat_room_members crm
            JOIN users u ON crm.user_id = u.id
            WHERE crm.room_id = $1`,

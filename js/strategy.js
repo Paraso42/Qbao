@@ -13,12 +13,19 @@ function loadChapterStrategyToUI() {
   document.getElementById('ch-strategy-name').textContent = escapeHtml(ch.name);
   const s = getChStrategy(ch.id); if (!s) return;
   initTypeCountPickers();
-  document.getElementById('tc-single').value = s.typeCounts.single || 10;
+  document.getElementById('tc-single').value = s.typeCounts.single || 5;
   document.getElementById('tc-judge').value = s.typeCounts.judge || 5;
-  document.getElementById('tc-term').value = s.typeCounts.term || 1;
-  document.getElementById('tc-short').value = s.typeCounts.short || 1;
+  document.getElementById('tc-term').value = s.typeCounts.term || 3;
+  document.getElementById('tc-short').value = s.typeCounts.short || 2;
   document.getElementById('s-err').value = s.errPct || 0;
   document.getElementById('s-review').value = (s.errPct || 0) + (s.reviewPct || 0);
+  // Sync number inputs
+  var dvErrInp = document.getElementById('dv-err-inp');
+  if (dvErrInp) dvErrInp.value = s.errPct || 0;
+  var dvReviewInp = document.getElementById('dv-review-inp');
+  if (dvReviewInp) dvReviewInp.value = s.reviewPct || 0;
+  var dvNewInp = document.getElementById('dv-new-inp');
+  if (dvNewInp) dvNewInp.value = s.newPct || 0;
   updateChapterDualSliderUI(s.errPct || 0, s.reviewPct || 0, s.newPct || 0);
   renderTagColumns(); updateChapterPromptTemplate(); applyAiModeUi();
 }
@@ -28,9 +35,82 @@ function onChapterDualSlider() {
   if (v1 > v2) { if (document.activeElement === document.getElementById('s-err')) { v2 = v1; document.getElementById('s-review').value = v2; } else { v1 = v2; document.getElementById('s-err').value = v1; } }
   const rPct = v2 - v1, nPct = 100 - v2;
   const ch = getCh(); if (ch) { const s = getChStrategy(ch.id); if (s) { s.errPct = v1; s.reviewPct = rPct; s.newPct = nPct; saveState(); } }
+  // Sync number inputs
+  var dvErrInp = document.getElementById('dv-err-inp'); if (dvErrInp) dvErrInp.value = v1;
+  var dvReviewInp = document.getElementById('dv-review-inp'); if (dvReviewInp) dvReviewInp.value = rPct;
+  var dvNewInp = document.getElementById('dv-new-inp'); if (dvNewInp) dvNewInp.value = nPct;
   updateChapterDualSliderUI(v1, rPct, nPct); updateChapterPromptTemplate();
 }
-function updateChapterDualSliderUI(err, rev, newP) { ['dv-err','sn-err'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = err; }); ['dv-review','sn-review'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = rev; }); ['dv-new','sn-new'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = newP; }); const fe = document.getElementById('fill-err'); if (fe) fe.style.width = err + '%'; const fr = document.getElementById('fill-review'); if (fr) { fr.style.width = rev + '%'; fr.style.left = err + '%'; } const fn = document.getElementById('fill-new'); if (fn) { fn.style.width = newP + '%'; fn.style.left = (err + rev) + '%'; }
+
+// ---- 章节策略占比直接输入：向右增减 ----
+function onChapterStrategyPctInput(idx) {
+  const ch = getCh(); if (!ch) return;
+  const s = getChStrategy(ch.id); if (!s) return;
+  var pcts = [s.errPct || 0, s.reviewPct || 0, s.newPct || 0];
+  var newVal = parseInt(document.getElementById(['dv-err-inp','dv-review-inp','dv-new-inp'][idx])?.value) || 0;
+  newVal = Math.max(0, Math.min(100, newVal));
+
+  var delta = newVal - pcts[idx];
+  if (delta === 0) return;
+
+  // 向右增减：增加idx则减少idx+1；最右边(idx=2)向左增减
+  if (idx === 2) {
+    // 最右边，调整左边(idx=1)
+    pcts[1] -= delta;
+    pcts[2] += delta;
+  } else {
+    // 调整右边
+    pcts[idx + 1] -= delta;
+    pcts[idx] += delta;
+  }
+
+  // 确保合法
+  for (var i = 0; i < 3; i++) {
+    if (pcts[i] < 0) {
+      if (i < 2) { pcts[i+1] += pcts[i]; pcts[i] = 0; }
+      else { pcts[i-1] += pcts[i]; pcts[i] = 0; }
+    }
+    if (pcts[i] > 100) pcts[i] = 100;
+  }
+  // 归一化确保和为100
+  var sum = pcts[0] + pcts[1] + pcts[2];
+  if (sum !== 100) {
+    // 调整中间值
+    pcts[1] = Math.max(0, 100 - pcts[0] - pcts[2]);
+    if (pcts[0] + pcts[1] + pcts[2] !== 100) {
+      pcts[0] = Math.round(pcts[0] / sum * 100);
+      pcts[1] = Math.round(pcts[1] / sum * 100);
+      pcts[2] = 100 - pcts[0] - pcts[1];
+    }
+  }
+
+  s.errPct = pcts[0]; s.reviewPct = pcts[1]; s.newPct = pcts[2];
+  saveState();
+
+  // 更新UI
+  document.getElementById('s-err').value = pcts[0];
+  document.getElementById('s-review').value = pcts[0] + pcts[1];
+  var numInps = ['dv-err-inp','dv-review-inp','dv-new-inp'];
+  for (var j = 0; j < 3; j++) { var inp = document.getElementById(numInps[j]); if (inp) inp.value = pcts[j]; }
+  updateChapterDualSliderUI(pcts[0], pcts[1], pcts[2]);
+  updateChapterPromptTemplate();
+}
+
+function updateChapterDualSliderUI(err, rev, newP) {
+  // Update slider-based displays (backward compat)
+  var dvErr = document.getElementById('dv-err'); if (dvErr) dvErr.textContent = err;
+  var dvReview = document.getElementById('dv-review'); if (dvReview) dvReview.textContent = rev;
+  var dvNew = document.getElementById('dv-new'); if (dvNew) dvNew.textContent = newP;
+  ['sn-err'].forEach(function(id) { var el = document.getElementById(id); if (el) el.textContent = err; });
+  ['sn-review'].forEach(function(id) { var el = document.getElementById(id); if (el) el.textContent = rev; });
+  ['sn-new'].forEach(function(id) { var el = document.getElementById(id); if (el) el.textContent = newP; });
+  // Update number inputs
+  var inpErr = document.getElementById('dv-err-inp'); if (inpErr) inpErr.value = err;
+  var inpReview = document.getElementById('dv-review-inp'); if (inpReview) inpReview.value = rev;
+  var inpNew = document.getElementById('dv-new-inp'); if (inpNew) inpNew.value = newP;
+  const fe = document.getElementById('fill-err'); if (fe) fe.style.width = err + '%';
+  const fr = document.getElementById('fill-review'); if (fr) { fr.style.width = rev + '%'; fr.style.left = err + '%'; }
+  const fn = document.getElementById('fill-new'); if (fn) { fn.style.width = newP + '%'; fn.style.left = (err + rev) + '%'; }
 }
 // ===== Tag Management v2: Three-Column Layout =====
 function _tagArr(s, cat) { return cat === 'new' ? (s.newTopicTags || []) : (s[cat + 'Tags'] || []); }
@@ -288,6 +368,7 @@ function updateQuickActions() {
 
   // 流式注入中：以 streamQuestionCount 为准，>= threshold 才显示按钮
   if (runningStreamTask) {
+    document.getElementById('chapter-quick-title').textContent = '📖 当前：' + escapeHtml(ch.name);
     var totalQ = Math.max(streamSc, (runningStreamTask.streamSetRef ? runningStreamTask.streamSetRef.questions.length : 0));
     var answered = runningStreamTask.streamSetRef
       ? runningStreamTask.streamSetRef.userAnswers.filter(function(a) { return a !== undefined && a !== -1; }).length

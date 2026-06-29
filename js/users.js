@@ -130,7 +130,10 @@ async function init(){ try{
 		if(sids.length===0){const sid='subj_'+Date.now().toString(36);state.subjects[sid]={id:sid,name:'默认科目',chapterIds:[]};state.currentSubjectId=sid;if(!state.subjectOrder)state.subjectOrder=[];state.subjectOrder.push(sid);}
 		else if(!state.currentSubjectId||!state.subjects[state.currentSubjectId]) state.currentSubjectId=sids[0];
 		const s=getSubj();
-		if(s&&(!state.currentChapterId||!state.chapters[state.currentChapterId])) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;
+			// 只在需要章节的屏幕才自动选第一个章节，避免覆盖用户上次退出时的状态
+			// 仅在无有效章节时才自动选第一个（新用户/数据损坏）
+			if(s&&!state.currentChapterId) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;
+			else if(s&&state.currentChapterId&&!state.chapters[state.currentChapterId]) state.currentChapterId=s.chapterIds.length>0?s.chapterIds[0]:null;
 		renderSubjectList();
 		const saved=state.lastScreen||'start';
 		// 静默恢复答题进度（不弹窗，保持"开始答题"入口可用）
@@ -231,8 +234,8 @@ function openUserCenterModal(initialTab) {
   document.getElementById('ucm-name').textContent = name;
   document.getElementById('ucm-username').textContent = '@' + (authUser.username || '');
   var avatarEl = document.getElementById('ucm-avatar');
-  if (authUser.avatar) {
-    avatarEl.innerHTML = '<img src="' + authUser.avatar + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+  if (authUser.avatar || authUser.avatarUrl) {
+    avatarEl.innerHTML = '<img src="' + (authUser.avatarUrl || authUser.avatar) + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
   } else {
     avatarEl.innerHTML = '';
     avatarEl.textContent = name.charAt(0).toUpperCase();
@@ -274,8 +277,8 @@ async function renderAccountPage() {
   html += '<h4>&#128247; 头像</h4>';
   html += '<div class="avatar-upload-area">';
   html += '<div class="avatar-preview" id="acc-avatar-preview">';
-  if (authUser.avatar) {
-    html += '<img src="' + authUser.avatar + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+  if (authUser.avatar || authUser.avatarUrl) {
+    html += '<img src="' + (authUser.avatarUrl || authUser.avatar) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
   } else {
     html += '<span style="font-size:24px;color:var(--text-muted);line-height:60px;">' + (authUser.displayName || authUser.username).charAt(0).toUpperCase() + '</span>';
   }
@@ -1127,7 +1130,7 @@ async function loadAdminUsers() {
 }
 
 function closeUcAndOpenNoticeEditor() {
-  ucClose();
+  closeUserCenterModal();
   openNoticeEditor();
 }
 
@@ -1182,7 +1185,7 @@ function renderNoticeListInUc(notices) {
 }
 
 function editNoticeInUc(id) {
-  ucClose();
+  closeUserCenterModal();
   openNoticeEditor(id);
 }
 
