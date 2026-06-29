@@ -18,6 +18,10 @@ function showScreen(name){
   state.lastScreen = name;
   updateBreadcrumb(name);
   saveState();
+  // 切回主页时确保章节信息已刷新
+  if (name === "start" && typeof updateQuickActions === "function") {
+    updateQuickActions();
+  }
 }
 
 function closeAllModals() {

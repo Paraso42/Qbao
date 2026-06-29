@@ -51,7 +51,7 @@ function deleteSubject(id) {
 function switchSubject(id) {
   if (!state.subjects[id]) return;
   state.currentSubjectId = id;
-  state.currentChapterId = null;
+  // 保留 currentChapterId，不清除 — 切换回主页时恢复上次章节
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount();
   showSubjectDashboard(id);
 }
@@ -69,11 +69,11 @@ function createChapter(subjId, name) {
 function _doCreateChapter(subjId, name) {
   var s = state.subjects[subjId]; if (!s) return;
   var id = 'ch_' + Date.now().toString(36) + Math.random().toString(36).slice(2,4);
-  state.chapters[id] = { id: id, name: name, questions: [], userAnswers: [], currentIdx: 0, createdAt: Date.now(), strategy: { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, weakTags: [] } };
+  state.chapters[id] = { id: id, name: name, questions: [], userAnswers: [], currentIdx: 0, createdAt: Date.now(), strategy: { errPct: 20, reviewPct: 50, newPct: 30, typeCounts: { single: 5, judge: 5, term: 3, short: 2 }, weakTags: [] } };
   s.chapterIds.push(id); state.currentChapterId = id;
   saveState(); renderSubjectList(); updateQuickActions(); loadChapterStrategyToUI(); checkAchievements();
 }
-function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; if (state.subjects[sid].collapsed) { state.subjects[sid].collapsed = false; } break; } } saveState(); renderSubjectList(); updateQuickActions(); showScreen('start'); restoreQuizFromServer(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); }
+function switchChapter(chId) { if (!state.chapters[chId]) return; state.currentChapterId = chId; for (var sid in state.subjects) { if (state.subjects[sid].chapterIds.indexOf(chId) !== -1) { state.currentSubjectId = sid; if (state.subjects[sid].collapsed) { state.subjects[sid].collapsed = false; } break; } } saveState(); renderSubjectList(); showScreen('start'); setTimeout(function(){ updateQuickActions(); updateChapterProgress(); loadChapterStrategyToUI(); renderAiMaterialList(); updateAiMaterialCount(); }, 10); restoreQuizFromServer().then(function() { updateQuickActions(); renderSubjectList(); }); }
 function renameChapter(chId, newName) { const ch = state.chapters[chId]; if (!ch || !newName || !newName.trim()) return; ch.name = newName.trim(); saveState(); renderSubjectList(); }
 function deleteChapter(chId) {
   if (!confirm('删除该章节？')) return;

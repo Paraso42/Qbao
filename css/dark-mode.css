@@ -391,3 +391,7 @@ body.dark-mode .chat-quiz-select-item:hover { background: #22222a; }
 /* Quiz Share Target Selector (v3.11.9) */
 body.dark-mode .quiz-share-target-dialog-box { background: #1a1a1f; }
 body.dark-mode .quiz-share-target-item:hover { background: #252530; }
+
+/* Strategy & Chapter pct inputs (v3.19) */
+body.dark-mode .strategy-pct-input { background: #1e1e22; border-color: #383840; color: #e4e4e8; }
+body.dark-mode .chapter-pct-input { background: #1e1e22; border-color: #383840; color: #e4e4e8; }

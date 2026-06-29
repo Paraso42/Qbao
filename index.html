@@ -109,27 +109,27 @@
         <h3>🎓 准备新的一轮 — <span id="ch-strategy-name">当前章节</span></h3>
         <h4>📐 第一步：各题型数量</h4>
         <div class="type-counts">
-          <div class="type-count-item"><label>📝 单选</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-single" class="num-input" value="10" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
+          <div class="type-count-item"><label>📝 单选</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-single" class="num-input" value="5" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
           <div class="type-count-item"><label>⚖️ 判断</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-judge" class="num-input" value="5" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
-          <div class="type-count-item"><label>📖 名词解释</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-term" class="num-input" value="1" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
-          <div class="type-count-item"><label>✍️ 简答</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-short" class="num-input" value="1" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
+          <div class="type-count-item"><label>📖 名词解释</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-term" class="num-input" value="3" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
+          <div class="type-count-item"><label>✍️ 简答</label><div class="num-picker"><button class="num-btn num-dec" onclick="numPickerStep(this,-1)">−</button><input type="number" id="tc-short" class="num-input" value="2" min="0" max="50" onchange="onChapterStrategyChange()" oninput="numPickerClamp(this)"><button class="num-btn num-inc" onclick="numPickerStep(this,1)">+</button></div></div>
         </div>
         <h4>📐 第二步：出题策略</h4>
-        <p style="color:#666;font-size:13px;margin-bottom:3px;">三比例之和 = 100%：</p>
+        <p style="color:#666;font-size:13px;margin-bottom:3px;">三比例之和 = 100%（可直接输入百分比，向右自动补偿，末位向左）：</p>
         <div class="strategy-group">
-          <div class="strategy-labels"><span>🔴 针对错题 <span class="val" id="dv-err">60</span>%</span><span>🟡 滚动复习 <span class="val" id="dv-review">20</span>%</span><span>🟢 新考点 <span class="val" id="dv-new">20</span>%</span></div>
+          <div class="strategy-labels"><span>🔴 针对错题 <input type="number" id="dv-err-inp" class="strategy-pct-input" value="20" min="0" max="100" onchange="onChapterStrategyPctInput(0)" style="width:45px;">%</span><span>🟡 滚动复习 <input type="number" id="dv-review-inp" class="strategy-pct-input" value="50" min="0" max="100" onchange="onChapterStrategyPctInput(1)" style="width:45px;">%</span><span>🟢 新考点 <input type="number" id="dv-new-inp" class="strategy-pct-input" value="30" min="0" max="100" onchange="onChapterStrategyPctInput(2)" style="width:45px;">%</span></div>
           <div class="dual-range-wrap">
             <div class="dual-track-bg"></div>
-            <div class="dual-track-fill err" id="fill-err" style="width:60%"></div>
-            <div class="dual-track-fill review" id="fill-review" style="width:20%;left:60%"></div>
-            <div class="dual-track-fill new" id="fill-new" style="width:20%;left:80%"></div>
-            <input type="range" id="s-err" min="0" max="100" value="60" step="1" oninput="onChapterDualSlider()">
-            <input type="range" id="s-review" min="0" max="100" value="80" step="1" oninput="onChapterDualSlider()">
+            <div class="dual-track-fill err" id="fill-err" style="width:20%"></div>
+            <div class="dual-track-fill review" id="fill-review" style="width:50%;left:20%"></div>
+            <div class="dual-track-fill new" id="fill-new" style="width:30%;left:70%"></div>
+            <input type="range" id="s-err" min="0" max="100" value="20" step="1" oninput="onChapterDualSlider()">
+            <input type="range" id="s-review" min="0" max="100" value="70" step="1" oninput="onChapterDualSlider()">
           </div>
           <div class="strategy-values">
-            <div class="sv-item err"><div class="sv-num" id="sn-err">60</div><div class="sv-label">🔴 针对错题</div></div>
-            <div class="sv-item review"><div class="sv-num" id="sn-review">20</div><div class="sv-label">🟡 滚动复习</div></div>
-            <div class="sv-item new"><div class="sv-num" id="sn-new">20</div><div class="sv-label">🟢 新考点</div></div>
+            <div class="sv-item err"><div class="sv-num" id="sn-err">20</div><div class="sv-label">🔴 针对错题</div></div>
+            <div class="sv-item review"><div class="sv-num" id="sn-review">50</div><div class="sv-label">🟡 滚动复习</div></div>
+            <div class="sv-item new"><div class="sv-num" id="sn-new">30</div><div class="sv-label">🟢 新考点</div></div>
           </div>
         </div>
         <h4>🏷️ 第三步：知识点标签管理</h4>

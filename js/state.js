@@ -40,20 +40,12 @@ async function DataStoreInit() {
     const cloud = await res.json();
     if (cloud && cloud.state_json && cloud.synced_at) {
       const cloudState = migrateState(cloud.state_json);
-      // 尝试读取本地该账号的缓存
+      // 本地状态始终优先（用户最近操作保存于此），云端仅作新设备回退
       const localSaved = localStorage.getItem(cloudKey);
       if (localSaved) {
-        const localTime = localStorage.getItem('qbao_lastSync');
-        if (localTime && new Date(localTime) >= new Date(cloud.synced_at)) {
-          // 本地更新，保留本地
-          loadState();
-        } else {
-          // 云端更新，用云端覆盖
-          state = cloudState;
-          localStorage.setItem(cloudKey, JSON.stringify(state));
-        }
+        loadState();
       } else {
-        // 首次拉取云端，直接使用
+        // 首次使用（新设备/清缓存），从云端恢复
         state = cloudState;
         localStorage.setItem(cloudKey, JSON.stringify(state));
       }
@@ -320,7 +312,7 @@ function renderMarkdown(text) {
 function getChStrategy(cid) {
   const ch = state.chapters[cid];
   if (!ch) return null;
-  if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {} };
+  if (!ch.strategy) ch.strategy = { errPct: 20, reviewPct: 50, newPct: 30, typeCounts: { single: 5, judge: 5, term: 3, short: 2 }, errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {} };
   if (!ch.strategy.errorTags) ch.strategy.errorTags = [];
   if (!ch.strategy.reviewTags) ch.strategy.reviewTags = [];
   if (!ch.strategy.newTopicTags) ch.strategy.newTopicTags = [];
@@ -337,7 +329,7 @@ function migrateState(s) {
   if (!s.chapters) s.chapters = {};
   for (const cid in s.chapters) {
     const ch = s.chapters[cid];
-    if (!ch.strategy) ch.strategy = { errPct: 60, reviewPct: 20, newPct: 20, typeCounts: { single: 10, judge: 5, term: 1, short: 1 }, errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {} };
+    if (!ch.strategy) ch.strategy = { errPct: 20, reviewPct: 50, newPct: 30, typeCounts: { single: 5, judge: 5, term: 3, short: 2 }, errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {} };
     if (!ch.quizSets && ch.questions && ch.questions.length > 0) ch.quizSets = [{ questions: ch.questions.slice(), userAnswers: (ch.userAnswers||[]).slice(), currentIdx: 0, createdAt: Date.now() }];
     // Ensure new tag fields exist
     if (!ch.strategy.errorTags) ch.strategy.errorTags = [];
