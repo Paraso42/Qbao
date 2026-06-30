@@ -187,7 +187,13 @@ function setupQuizKeyboard() {
   _quizKeyHandler = function(e) {
     var quizModal = document.getElementById('quiz-modal');
     if (!quizModal || !quizModal.classList.contains('active')) return;
-    // Don't intercept when typing in textarea
+    // Subjective textarea: Enter submits, Shift+Enter for newline
+    if (e.target.id === 'subjective-answer' && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitAnswer();
+      return;
+    }
+    // Don't intercept when typing in other textarea/input
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
     var as = getActiveSet();
     if (!as) return;
@@ -250,6 +256,9 @@ function renderQuestion() {
   if (nx) { if (hasAns&&as.currentIdx<as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='下一题 ➡️'; nx.onclick=nextQuestion; } else if (hasAns&&as.currentIdx>=as.questions.length-1) { nx.style.display='inline-block'; nx.textContent='结束 📊'; nx.onclick=endExam; } else nx.style.display='none'; }
 
   applyQuizFontSize();
+  // Auto-focus subjective answer textarea
+  var subTa = document.getElementById("subjective-answer");
+  if (subTa && !subTa.disabled) { setTimeout(function() { subTa.focus(); }, 50); }
 }
 function selectOption(idx) { const as=getActiveSet(); if (!as||(as.userAnswers[as.currentIdx]!==undefined&&as.userAnswers[as.currentIdx]!==null)) return; as.userAnswers[as.currentIdx]=idx; var ch3=getCh(); if(ch3&&as._isSet){if(!as._tagSynced)as._tagSynced=[];if(!as._tagSynced[as.currentIdx]){_syncSingleAnswerToTagMeta(ch3.id,as.questions[as.currentIdx],idx);as._tagSynced[as.currentIdx]=true;}} saveState(); renderQuestion(); syncAnswerToServer(); }
 function submitAnswer() {
