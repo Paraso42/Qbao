@@ -32,6 +32,111 @@ function switchSettingsTab(tab) {
   var el = document.getElementById('settings-tab-' + tab);
   if (el) el.classList.add('active');
   if (tab === 'aiconfig') loadAiConfig();
+  else if (tab === 'desktop') renderDesktopSettings();
+}
+
+/* ===== 桌面端设置（仅 Electron 打包/开发模式；网页版自动隐藏） ===== */
+var desktopInfo = { version: '', apiBase: '', serverLabel: '', autoStart: false, loaded: false };
+var desktopUpdate = { state: 'idle', message: '', percent: 0 };
+
+function initDesktopSettings() {
+  if (typeof IS_DESKTOP === 'undefined' || !IS_DESKTOP) return;
+  if (!(window.__qbaoDesktop && window.__qbaoDesktop.getAppInfo)) return;
+  var nav = document.getElementById('settings-desktop-nav');
+  if (nav) nav.style.display = 'flex';
+  // 订阅主进程推送的更新状态（检查/下载进度/完成/错误）
+  window.__qbaoDesktop.onUpdateStatus(function(s) {
+    if (!s) return;
+    desktopUpdate.state = s.state || 'idle';
+    desktopUpdate.message = s.message || '';
+    desktopUpdate.percent = s.percent || 0;
+    renderDesktopUpdateStatus();
+  });
+}
+
+function renderDesktopSettings() {
+  var body = document.getElementById('settings-tab-desktop');
+  if (!body) return;
+  var d = window.__qbaoDesktop;
+  if (!d || !d.getAppInfo) { body.innerHTML = ''; return; }
+  body.innerHTML = [
+    '<div class="card">',
+    '  <div class="settings-section">',
+    '    <h4>🖥️ 应用信息</h4>',
+    '    <div class="settings-row"><label>当前版本</label><span id="desktop-version" style="color:var(--text-secondary);">加载中...</span></div>',
+    '    <div class="settings-row"><label>服务器地址</label><span id="desktop-apibase" style="color:var(--text-secondary);word-break:break-all;">...</span></div>',
+    '    <div class="settings-row"><label>开机自启</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="desktop-auto-start" onchange="desktopToggleAutoStart(this.checked)"> 登录系统时启动 Qbao</label></div>',
+    '    <div class="settings-row"><label>服务器设置</label><button class="btn btn-secondary btn-small" onclick="showServerSetupDialog()">修改服务器地址</button></div>',
+    '  </div>',
+    '  <div class="settings-section">',
+    '    <h4>🔄 软件更新</h4>',
+    '    <div id="desktop-update-status" style="font-size:13px;color:#888;margin-bottom:10px;">...</div>',
+    '    <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" id="desktop-check-update-btn" onclick="desktopCheckUpdates()">检查更新</button></div>',
+    '  </div>',
+    '</div>'
+  ].join('\n');
+  if (desktopInfo.loaded) fillDesktopInfo();
+  else {
+    d.getAppInfo().then(function(info) {
+      desktopInfo = Object.assign({}, info || {}, { loaded: true });
+      fillDesktopInfo();
+    }).catch(function() {});
+  }
+  renderDesktopUpdateStatus();
+}
+
+function fillDesktopInfo() {
+  var v = document.getElementById('desktop-version');
+  if (v) v.textContent = 'v' + (desktopInfo.version || '?');
+  var a = document.getElementById('desktop-apibase');
+  if (a) a.textContent = desktopInfo.apiBase || '未配置';
+  var c = document.getElementById('desktop-auto-start');
+  if (c) c.checked = !!desktopInfo.autoStart;
+}
+
+function renderDesktopUpdateStatus() {
+  var el = document.getElementById('desktop-update-status');
+  if (!el) return;
+  if (desktopUpdate.state === 'progress') el.innerHTML = '⬇️ 正在下载更新 ' + desktopUpdate.percent + '%';
+  else if (desktopUpdate.state === 'downloaded') el.innerHTML = '✅ 更新已下载完成，重启应用即可安装';
+  else if (desktopUpdate.state === 'error') el.innerHTML = '❌ ' + escapeHtml(desktopUpdate.message || '检查失败');
+  else el.innerHTML = '启动应用后会自动检查更新；有新版本时会提示下载。';
+}
+
+function desktopCheckUpdates() {
+  var btn = document.getElementById('desktop-check-update-btn');
+  var el = document.getElementById('desktop-update-status');
+  if (el) el.innerHTML = '⏳ 正在检查更新...';
+  if (btn) btn.disabled = true;
+  var d = window.__qbaoDesktop;
+  if (!d || !d.checkForUpdates) {
+    if (el) el.innerHTML = '❌ 当前环境不支持自动更新';
+    if (btn) btn.disabled = false;
+    return;
+  }
+  d.checkForUpdates().then(function(r) {
+    if (btn) btn.disabled = false;
+    if (!r) return;
+    if (r.error) { if (el) el.innerHTML = '❌ ' + escapeHtml(r.error); return; }
+    if (!r.hasUpdate && el) el.innerHTML = '✅ 已是最新版本';
+    // hasUpdate → 主进程弹窗询问下载；进度经 onUpdateStatus 推送到本页
+  }).catch(function(e) {
+    if (btn) btn.disabled = false;
+    if (el) el.innerHTML = '❌ ' + escapeHtml((e && e.message) || '检查失败');
+  });
+}
+
+function desktopToggleAutoStart(checked) {
+  var d = window.__qbaoDesktop;
+  if (!d || !d.setAutoStart) return;
+  d.setAutoStart(!!checked).then(function(r) {
+    if (r && r.ok !== false) {
+      desktopInfo.autoStart = !!r.autoStart;
+      if (typeof showToast === 'function') showToast(r.autoStart ? '已开启开机自启' : '已关闭开机自启');
+    } else if (typeof showToast === 'function') {
+      showToast('设置失败: ' + ((r && r.error) || '未知错误'));
+    }
+  }).catch(function() {});
 }
 function refreshDataMgmtTab() { const cs=document.getElementById('cloud-sync-status'); if(cs){ if(isOnlineMode&&getToken()){ const last=localStorage.getItem('qbao_lastSync'); cs.innerHTML=last?'✅ 云端已同步 '+new Date(last).toLocaleString('zh-CN'):'☁️ 已登录，修改将自动同步'; cs.style.color='#2ed573'; }else{ cs.innerHTML='🔴 离线模式 — 数据仅保存在本地'; cs.style.color='#888'; } } const bs=document.getElementById('backup-current-status'); if(bs){ if(backupDirHandle){ bs.innerHTML='✅ 备份文件夹: <strong>'+backupDirHandle.name+'</strong> ('+(backupMeta?backupMeta.length:0)+' 份备份)'; bs.style.color='#2ed573'; }else{ bs.innerHTML='📂 尚未设置备份文件夹'; bs.style.color='#888'; } } }
 function loadAiConfig() {
@@ -273,6 +378,7 @@ async function testAiConfig() {
 function saveAiTaskInterval() {} // removed - no longer used; var el=document.getElementById('ai-task-interval'); if(!el)return; var v=parseInt(el.value)||30; if(v<0)v=0; if(v>300)v=300; state.aiConfig.taskInterval=v; saveState(); var valEl=document.getElementById('ai-task-interval-val'); if(valEl)valEl.textContent=v+'s'; }
 
 function openSettingsModal() {
+  initDesktopSettings();
   switchSettingsTab('personalize');
   renderSettings();
   document.getElementById('settings-modal').classList.add('active');
