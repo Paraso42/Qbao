@@ -18,3 +18,14 @@ Version/
 ai_qbao_key01.pem
 dumb/
 *.lnk
+
+# 2026-07 整理新增 — 敏感/本地文件
+wg-*.conf
+analysis/
+console/
+backend/diagnose_ai.js
+backend/diagnose_api.js
+.env
+*.bundle
+.filter-tools/
+.tmp/
