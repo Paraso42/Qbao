@@ -64,8 +64,8 @@ server/  Node.js + Express API（端口 3000）
 1. **CORS 全开**：`cors({ origin: true })` 反射任意 Origin。同源部署场景应改为白名单或直接关闭。
 2. **上传安全**：有大小上限但缺 MIME 白名单与图片重编码（防伪造类型/恶意内容）。
 3. **全量同步冲突**：~~`user_data` 单行 JSONB 全量覆盖是 last-write-wins~~ **（v3.25 已加 rev 乐观锁 + 409 冲突实体级合并，见 js/sync.js）**。遗留：合并粒度仍为实体级并集（同 id 本地优先），按字段时间戳的精确裁决、以及按实体拆表，留待后续。同步放大写问题仍在（每次全量 PUT）。
-4. **统一错误处理**：路由内大量手工 try/catch + 直接 `res.status(...)`。抽 `ApiError` + errorHandler 中间件，统一响应格式。
-5. **请求校验缺失**：大部分端点直接信任入参。引入 zod/joi 做 schema 校验。
+4. **统一错误处理**：~~路由内大量手工 try/catch~~ **（v3.26 已完成核心部分：`src/lib/` ApiError + errorHandler + asyncHandler，全局兜底 404/400/413/500，auth/data/quiz 已迁移）**。其余路由（ai/share/files/issues/chat/users/backup/notices）仍为手工 try/catch，逐步迁移。
+5. **请求校验缺失**：~~大部分端点直接信任入参~~ **（v3.26 已引入 zod：`src/lib/validate.js` + `src/schemas/`，auth/data/quiz 已接入）**。其余路由待接入。
 6. **上传目录不一致**：统一 `server/uploads/`（或独立数据卷），static 服务与 multer 指向同一处。
 
 ### P1 — 可维护性
@@ -74,7 +74,7 @@ server/  Node.js + Express API（端口 3000）
 8. **index.html 单文件 DOM**：按页面拆分模板（`<template>` 或 JS 模板函数），弹窗组件化。
 9. **前端模块化**：迁移 ES Modules（`type=module` 或轻量构建 esbuild/vite 打包压缩），消除全局变量依赖与脚本顺序耦合。
 10. **后端分层**：routes → services → repositories，SQL 集中到数据访问层（当前散落各路由）。
-11. **测试骨架**：前端 Vitest + jsdom 先覆盖 quiz-engine/srs 等纯逻辑；后端 supertest 覆盖 auth/data/quiz 主流程；接入 CI。
+11. **测试骨架**：~~后端 supertest 覆盖 auth/data/quiz 主流程；接入 CI~~ **（v3.26 已完成：`server/test/` 22 个用例，CI 后端 job 跑 `vitest run`）**。前端纯逻辑（quiz-engine/srs）的 Vitest + jsdom 测试仍待补。
 12. **配置集中**：散落的路径常量（uploads、pool）收敛到 server/src/config.js。
 
 ### P2 — 工程化与正式软件化

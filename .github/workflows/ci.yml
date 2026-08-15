@@ -22,9 +22,13 @@ jobs:
         working-directory: server
         run: |
           node --check server.js
-          for f in src/*.js src/routes/*.js src/providers/*.js scripts/*.js; do
+          node --check app.js
+          for f in src/*.js src/routes/*.js src/providers/*.js src/lib/*.js src/schemas/*.js scripts/*.js; do
             node --check "$f"
           done
+      - name: 后端测试（Vitest + supertest）
+        working-directory: server
+        run: npx vitest run
 
   frontend:
     runs-on: ubuntu-latest
