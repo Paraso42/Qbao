@@ -1,6 +1,6 @@
 // Qbao 桌面端主进程
 // 职责：窗口管理、单实例、运行时配置注入、系统级操作（打开外链/更新）。
-const { app, BrowserWindow, ipcMain, shell, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { setupUpdater } = require('./updater');
@@ -63,6 +63,7 @@ if (!gotLock) {
   });
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null); // 隐藏默认 File/Edit 菜单（应用内自带导航）
+    app.setAppUserModelId('com.paraso42.qbao'); // Windows 通知/任务栏分组所需的 AppUserModelID
     createWindow();
     setupUpdater(() => mainWindow);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
@@ -90,4 +91,20 @@ ipcMain.handle('qbao:save-server', async (_e, url, label) => {
 ipcMain.handle('qbao:open-external', (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
   return true;
+});
+// 应用信息（版本/服务器/自启状态），供「设置 → 桌面端」页展示
+ipcMain.handle('qbao:get-app-info', () => {
+  const runtime = loadRuntimeConfig();
+  let autoStart = false;
+  try { autoStart = app.getLoginItemSettings().openAtLogin; } catch (e) { /* 忽略 */ }
+  return { version: app.getVersion(), apiBase: runtime.apiBase, serverLabel: runtime.serverLabel, autoStart };
+});
+// 开机自启开关（Windows 写入注册表 Run 键；仅打包版有意义，开发模式同样可切换）
+ipcMain.handle('qbao:set-auto-start', (_e, enabled) => {
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!enabled, path: process.execPath });
+    return { ok: true, autoStart: app.getLoginItemSettings().openAtLogin };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 });
