@@ -104,6 +104,29 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 4. `pm2 restart qbao-api`。
 5. 前端静态文件为覆盖式发布，必要时刷新浏览器缓存。
 
+## 8.5 服务器恢复（2026-07 归档下线后重建）
+
+服务器曾于 2026-07-06 完整卸载运行环境（Node/PM2/PostgreSQL/Nginx 均 purge，社交类数据表已删除、uploads 已清空）。重新上线流程：
+
+1. 重装基础环境：Node.js ≥ 18、PostgreSQL ≥ 13、Nginx、certbot（如需公网 HTTPS）、**WireGuard**（内网访问模式）。
+2. 按 §3-4 完成建库与部署（init.sql + migration_v*.sql 顺序执行）。
+3. **恢复数据库**：将本地存档 `local/Version/server_archive_20260706/qbao_full_20260706.sql` 导入（含用户账号与题库数据；聊天等已删除表不可恢复，以空库开始）。
+4. 执行新增迁移（如 migration_v3.25.sql 乐观锁 rev 列）。
+5. 验证四用户凭原账号密码登录、数据完整。
+
+### 防火墙端口矩阵（内网 VPN 模式，推荐）
+
+| 端口 | 协议 | 用途 | 开放范围 |
+|------|------|------|----------|
+| 22 | TCP | SSH 管理 | 仅管理员固定 IP |
+| 51820 | UDP | WireGuard 入口 | 公网 |
+| 9178 | TCP | nginx HTTP 生产入口 | 仅 VPN 网段（10.0.0.0/24） |
+| 8080 | TCP | nginx 测试入口（可选） | 仅 VPN 网段 |
+| 3000 | TCP | Node 后端 | **永不对外**（仅 127.0.0.1） |
+| 5432 | TCP | PostgreSQL | **永不对外**（仅 localhost） |
+
+> 公网开放模式（无 VPN）时另需 80/443，且强烈建议 HTTPS（certbot 免费签发）；后端与数据库端口规则不变。
+
 ## 9. 安全清单
 
 - 修改数据库默认口令；`.env` 权限 600，JWT_SECRET 使用强随机值。
