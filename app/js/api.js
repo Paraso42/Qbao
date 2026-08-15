@@ -18,11 +18,21 @@ async function fetchWithAuth(path, options = {}) {
 
 function clearAuth() { authToken = null; authUser = null; isOnlineMode = false; setToken(null); setUser(null); }
 
+function netErrorMessage() {
+  var tip = (typeof IS_DESKTOP !== 'undefined' && IS_DESKTOP)
+    ? '无法连接服务器 (' + API_BASE + ') — 请检查网络连接或 VPN'
+    : '无法连接服务器 (' + API_BASE + ') — 请检查网络';
+  return tip;
+}
+
 async function apiLogin(username, password) {
-  const res = await fetch(API_BASE + '/auth/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
+  var res;
+  try {
+    res = await fetch(API_BASE + '/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+  } catch(e) { throw new Error(netErrorMessage()); }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || '登录失败'); }
   const data = await res.json();
   authToken = data.token; authUser = data.user; isOnlineMode = true;
@@ -31,10 +41,13 @@ async function apiLogin(username, password) {
 }
 
 async function apiRegister(username, displayName, password) {
-  const res = await fetch(API_BASE + '/auth/register', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, displayName: displayName || username, password })
-  });
+  var res;
+  try {
+    res = await fetch(API_BASE + '/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, displayName: displayName || username, password })
+    });
+  } catch(e) { throw new Error(netErrorMessage()); }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || '注册失败'); }
   const data = await res.json();
   authToken = data.token; authUser = data.user; isOnlineMode = true;
