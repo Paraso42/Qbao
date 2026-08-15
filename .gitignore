@@ -29,6 +29,20 @@ server/uploads/
 .DS_Store
 Thumbs.db
 
+# ---- 临时文件 ----
+.tmp/
+
+# ---- 桌面安装器误装进仓库时的产物（软件应装到独立目录）----
+/Qbao.exe
+/Uninstall*.exe
+/resources/
+/locales/
+/*.pak
+/*.dll
+/*.dat
+/LICENSE.electron.txt
+/LICENSES.chromium.html
+
 # ---- tools/：默认忽略其中的一次性脚本，仅保留说明 ----
 tools/*
 !tools/README.md

@@ -1,6 +1,6 @@
 {
   "name": "qbao-desktop",
-  "version": "3.25.0",
+  "version": "3.25.1",
   "description": "Qbao 全能互动做题引擎 — Windows 桌面客户端",
   "main": "main.js",
   "author": "Paraso42",
@@ -9,10 +9,12 @@
     "dev": "electron .",
     "dist": "electron-builder --win nsis"
   },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
-    "electron-updater": "^6.3.9"
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.paraso42.qbao",
