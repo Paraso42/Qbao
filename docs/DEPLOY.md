@@ -114,6 +114,17 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 4. 执行新增迁移（如 migration_v3.25.sql 乐观锁 rev 列）。
 5. 验证四用户凭原账号密码登录、数据完整。
 
+### 桌面版发布与自动更新
+
+桌面端（desktop/）通过 GitHub Releases 自动更新，不依赖服务器：
+
+1. 更新版本号（desktop/package.json → version，与前端版本一致）。
+2. 打 tag 并推送：`git tag v3.25.0 && git push origin v3.25.0`。
+3. CI（.github/workflows/release.yml）自动构建 NSIS 安装包并发布到 GitHub Release（含 latest.yml 与 blockmap）。
+4. 桌面端启动后自动检测新版本，提示下载并重启安装（electron-updater）。
+
+> 更新源国内下载慢时，用户可在桌面设置里切换镜像源（Phase 6）。安装包默认不含服务器地址，用户首次使用时在 desktop/config.local.json 或应用设置里填写。
+
 ### 防火墙端口矩阵（内网 VPN 模式，推荐）
 
 | 端口 | 协议 | 用途 | 开放范围 |
