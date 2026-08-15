@@ -1,4 +1,5 @@
-const bcrypt = require('bcrypt');
+// bcryptjs：纯 JS 实现，与 bcrypt 的 $2b$ 哈希格式互通，免原生编译（本地/CI/服务器一致）。
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const SALT_ROUNDS = 10;
