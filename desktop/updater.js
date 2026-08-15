@@ -6,36 +6,39 @@ const { autoUpdater } = require('electron-updater');
 
 let getWindowFn = null;
 
+// 检查 + 提示 + 下载（启动自动检查与手动检查共用）
+async function checkAndPrompt() {
+  const r = await autoUpdater.checkForUpdates();
+  const hasUpdate = !!(r && r.updateInfo && r.updateInfo.version && r.updateInfo.version !== app.getVersion());
+  if (!hasUpdate) return { hasUpdate: false };
+  const w = getWindowFn && getWindowFn();
+  const detail = '当前版本 ' + app.getVersion() + ' → ' + r.updateInfo.version + '。是否现在下载？';
+  const res = await dialog.showMessageBox(w || undefined, {
+    type: 'info',
+    buttons: ['下载更新', '稍后'],
+    defaultId: 0,
+    cancelId: 1,
+    title: '发现新版本',
+    message: 'Qbao 新版本 ' + r.updateInfo.version,
+    detail
+  });
+  if (res.response === 0) await autoUpdater.downloadUpdate();
+  return { hasUpdate: true, version: r.updateInfo.version };
+}
+
 function setupUpdater(getWindow) {
   getWindowFn = getWindow;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  // 启动后延迟检查（静默：有新版本时提示）
+  // 启动后延迟检查（有新版本时弹窗提示）
   setTimeout(() => {
-    if (app.isPackaged) autoUpdater.checkForUpdates().catch(e => console.warn('[updater] 检查失败:', e.message));
+    if (app.isPackaged) checkAndPrompt().catch(e => console.warn('[updater] 检查失败:', e.message));
   }, 8000);
 
   ipcMain.handle('qbao:check-updates', async () => {
     try {
-      const r = await autoUpdater.checkForUpdates();
-      const hasUpdate = !!(r && r.updateInfo && r.updateInfo.version && r.updateInfo.version !== app.getVersion());
-      if (hasUpdate) {
-        const w = getWindowFn && getWindowFn();
-        const detail = '当前版本 ' + app.getVersion() + ' → ' + r.updateInfo.version + '。是否现在下载？';
-        const res = await dialog.showMessageBox(w || undefined, {
-          type: 'info',
-          buttons: ['下载更新', '稍后'],
-          defaultId: 0,
-          cancelId: 1,
-          title: '发现新版本',
-          message: 'Qbao 新版本 ' + r.updateInfo.version,
-          detail
-        });
-        if (res.response === 0) await autoUpdater.downloadUpdate();
-        return { hasUpdate: true, version: r.updateInfo.version };
-      }
-      return { hasUpdate: false };
+      return await checkAndPrompt();
     } catch (e) {
       console.error('[updater] error:', e.message);
       return { hasUpdate: false, error: e.message };
