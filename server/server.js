@@ -8,7 +8,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
-app.use(cors({ origin: true }));
+// CORS 白名单：同源请求与桌面端 file://（Origin: null）放行；
+// 其余来源需匹配 CORS_ORIGIN 环境变量（逗号分隔）。同源请求无需 ACAO 头，不受影响。
+const corsWhitelist = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin: function (origin, cb) {
+    if (!origin || origin === 'null') return cb(null, true);
+    if (corsWhitelist.includes(origin)) return cb(null, true);
+    cb(null, false);
+  }
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
