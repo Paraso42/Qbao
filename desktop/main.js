@@ -1,6 +1,6 @@
 // Qbao 桌面端主进程
 // 职责：窗口管理、单实例、运行时配置注入、系统级操作（打开外链/更新）。
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { setupUpdater } = require('./updater');
@@ -35,7 +35,19 @@ function createWindow() {
       sandbox: true
     }
   });
-  mainWindow.loadFile(path.join(__dirname, '..', 'app', 'index.html'));
+  // 开发模式: __dirname=desktop/ → ../app；打包后: __dirname=resources/app.asar → asar 内 app/
+  const indexHtml = app.isPackaged
+    ? path.join(__dirname, 'app', 'index.html')
+    : path.join(__dirname, '..', 'app', 'index.html');
+  mainWindow.loadFile(indexHtml);
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc) => {
+    console.error('[desktop] 页面加载失败:', code, desc, indexHtml);
+    if (process.env.QBAO_SMOKE) { app.exit(1); return; }
+    dialog.showErrorBox('Qbao 加载失败', '页面加载失败 (' + code + '): ' + desc);
+  });
+  if (process.env.QBAO_SMOKE) {
+    mainWindow.webContents.on('did-finish-load', () => { console.log('[desktop] SMOKE_OK'); setTimeout(() => app.exit(0), 1500); });
+  }
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -48,6 +60,7 @@ if (!gotLock) {
     if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus(); }
   });
   app.whenReady().then(() => {
+    Menu.setApplicationMenu(null); // 隐藏默认 File/Edit 菜单（应用内自带导航）
     createWindow();
     setupUpdater(() => mainWindow);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
