@@ -15,6 +15,7 @@ runtime.isDesktop = true;
 contextBridge.exposeInMainWorld('__QBAO_RUNTIME__', Object.freeze(runtime));
 contextBridge.exposeInMainWorld('__qbaoDesktop', Object.freeze({
   getVersion: () => ipcRenderer.invoke('qbao:get-version'),
+  setServer: (url, label) => ipcRenderer.invoke('qbao:save-server', url, label),
   checkForUpdates: () => ipcRenderer.invoke('qbao:check-updates'),
   quitAndInstall: () => ipcRenderer.invoke('qbao:quit-and-install'),
   openExternal: (url) => ipcRenderer.invoke('qbao:open-external', url),
