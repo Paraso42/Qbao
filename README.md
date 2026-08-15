@@ -1,151 +1,66 @@
 # Qbao — 全能互动做题引擎
 
-在线题库学习平台，支持 AI 智能出题、间隔重复复习、考试模拟。
+在线题库学习平台：AI 智能出题、间隔重复复习、考试模拟、好友协作学习。
 
-## 功能概览
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-f7df1e)
+![Backend](https://img.shields.io/badge/Backend-Node.js%2FExpress-339933)
+![DB](https://img.shields.io/badge/DB-PostgreSQL-4169E1)
 
-### 📚 科目与章节管理
-- 创建科目（如"计算机基础"、"英语词汇"），每科下分多个章节
-- 章节支持重命名（双击或 ✏️ 按钮）、删除、查看答题历史
-- **科目章节折叠**：点击科目标题左侧箭头（▼/▶）收起/展开章节列表，科目多时快速定位
-- 空状态时自动显示引导，一键创建章节或导入题目
+## 📚 功能概览
 
-### 🧠 AI 智能出题
-- 上传学习资料（PDF/文本/图片），AI 自动提取知识点生成题目
-- 支持选择题、判断题、名词解释、简答题四种题型
-- 多 Provider 支持：DeepSeek / ECNU / Gemini / OpenAI
-- 流式出题实时查看生成进度
-- 可指定题目数量和出题方向（标签引导）
+- **科目与章节**：多科目多章节管理、折叠定位、答题历史、章节策略强弱分析
+- **AI 智能出题**：上传 PDF/文本/图片自动生成选择题/判断题/名词解释/简答题；支持 DeepSeek / ECNU / Gemini / OpenAI 多 Provider；流式出题实时可见；LaTeX/KaTeX 公式渲染
+- **答题引擎**：普通练习、限时考试、间隔重复（SRS）、大考卷薄弱点组卷；键盘快捷键与「我会了」两段式防误触
+- **数据回顾**：仪表盘（总题数/掌握率/到期复习/连续天数）、答题历史、单次答题报告
+- **账号与同步**：注册登录、头像裁剪、成就系统、云端同步与本地备份还原
+- **好友与群聊**：好友申请/群聊/文字图片文件消息、Ctrl+V 粘贴图、题目与题库分享、聊天内直接答题、消息撤回
+- **用户反馈**：右下角悬浮反馈入口，工单全流程状态追踪，处理结果用户确认
+- **移动端**：响应式适配，弹窗全屏化、侧栏转顶部标签
+- **个性化**：暗色模式、AI Provider/流式/严格格式配置、API Key 自管
 
-### ✍️ 答题引擎
-- **普通模式**：逐题练习，即时反馈
-- **考试模式**：限时作答，模拟真实考试
-- **间隔重复 (SRS)**：智能调度复习，到期题目自动提醒
-- **大考卷**：从薄弱知识点组卷，针对性强化
-- **LaTeX 公式渲染**：题目/选项/解析均支持 `$...$` 行内公式和 `$$...$$` 块级公式（KaTeX），AI 出题自动使用 LaTeX 格式
-
-#### 答题快捷键
-| 键 | 功能 |
-|----|------|
-| ↑ ↓ ← → | 导航选项 |
-| 1-4 或 A-D | 选择对应选项 |
-| Enter | 提交答案 / 下一题 |
-
-#### "我会了"两段式操作
-- 第一击：标记正确答案，展示解析，按钮变为「👉 下一题」
-- 第二击：跳转下一题
-- 防止误操作跳过学习
-
-### 📊 数据与回顾
-- **首页仪表盘**：总题数、掌握率、到期复习数、连续天数
-- **答题历史**：按时间线查看每次答题记录
-- **答题报告**：单次答题结束后展示成绩、对错分布、知识点覆盖
-- **章节策略**：每个章节的知识标签强弱分析，一键针对薄弱点出题
-
-### 👤 用户中心
-- 账号注册/登录，头像上传（支持裁剪）
-- 成就系统：连续答题、掌握题目数等里程碑
-- 数据云端同步 / 本地备份还原
-
-### ⚙️ 个性化设置
-- **暗色模式**：全局暗色主题
-- **AI 配置**：Provider 选择、流式开关、严格格式、出题阈值
-- **API Key 管理**：自行配置各 Provider 的 API Key
-
-### 💬 好友聊天
-- **好友管理**：搜索用户 → 发送申请 → 接受/拒绝 → 删除好友
-- **聊天消息**：文字、图片、文件，支持 Ctrl+V 粘贴图片
-- **群聊**：创建群聊 → 拉人入群 → 退出群聊
-- **题目分享**：答题弹窗内一键分享单题，题库批量分享，聊天内四级钻取选择器分享，报告分享整组
-- **聊天答题**：好友发来的选择题/判断题可直接在聊天中作答，即时反馈
-- **消息撤回**：2 分钟内可撤回已发消息
-- **消息提醒**：顶栏消息图标红点提示未读消息数
-
-### 📱 移动端
-- 响应式适配，手机/平板均可使用
-- 弹窗全屏化，侧栏转为顶部标签
-
-### 🐛 用户反馈
-- **快捷入口**：右下角气泡悬浮窗，hover 展开反馈卡片
-- **提交反馈**：输入问题描述，一键发送给开发者
-- **实时沟通**：Issue 弹窗内文字+图片聊天，支持 Ctrl+V 粘贴图片
-- **状态追踪**：未读 → 已读 → 处理完毕 → 已关闭，全程透明
-- **修复验证**：处理完毕后用户可确认"已修复"或反馈"未修复"
-- **消息提醒**：气泡右上角红点显示未读消息数
-- **折叠管理**：已完成/处理中反馈分组折叠，界面清爽
-
----
-
-## 技术架构
-
-纯前端 Vanilla JS SPA + Node.js 后端 API，无框架依赖。
-
-## 🚀 部署运行
-
-### 环境要求
-
-- Node.js ≥ 18
-- PostgreSQL ≥ 13
-
-### 后端
+## 🚀 快速开始
 
 ```bash
-cd backend
+git clone git@github.com:Paraso42/Qbao.git
+cd Qbao/server
 npm install
-
-# 1. 初始化数据库（创建表结构）
-psql -U postgres -c "CREATE DATABASE qbao"
-psql -U postgres -d qbao -f init.sql
-# 后续版本迁移按需执行 backend/sql/migration_v*.sql
-
-# 2. 配置环境变量
-cp .env.example .env   # 填写数据库密码、JWT_SECRET、AI API Key 等
-
-# 3. 启动（默认端口 3000）
-npm start              # 或 npm run dev（文件变更自动重启）
+cp .env.example .env   # 配置数据库、JWT_SECRET、AI Key
+npm run dev            # 后端默认 3000 端口
 ```
 
-生产环境可用 PM2 守护（参考 `backend/ecosystem.config.js`，注意按实际部署路径修改 script 路径）。
+前端是 app/ 目录下的纯静态文件，任意静态服务器托管即可（完整 nginx 配置与生产部署见 docs/DEPLOY.md）。
 
-### 前端
+## 📖 文档
 
-前端为纯静态文件（`index.html` + `css/` + `js/`），无需构建，直接由任意静态服务器托管即可，例如 nginx：
+| 文档 | 内容 |
+|------|------|
+| docs/ARCHITECTURE.md | 架构、模块清单、**代码级重构方向** |
+| docs/DEPLOY.md | 部署：nginx / PM2 / 数据库 / 备份 / 升级 |
+| docs/DEVELOPMENT.md | 开发工作流、隐私分离规则、诊断脚本 |
+| CHANGELOG.md | 版本发布记录 |
+| CONTRIBUTING.md | 贡献指南 |
+| SECURITY.md | 安全政策与漏洞上报 |
 
-```nginx
-server {
-    listen 80;
-    server_name your.domain.com;
-    root /path/to/Qbao;
-    index index.html;
-
-    # API 反代到本机后端
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    # 上传文件（头像、资料）
-    location /uploads/ {
-        proxy_pass http://127.0.0.1:3000;
-    }
-}
-```
-
-### 目录结构
+## 🗂 目录结构
 
 ```
-index.html          # SPA 入口（所有页面/弹窗 DOM）
-css/                # 样式（按模块拆分）
-js/                 # 前端逻辑（按模块拆分，无框架）
-backend/
-  server.js         # Express 入口
-  src/              # 路由、鉴权、AI Provider 封装
-  init.sql          # 数据库初始化脚本
-  sql/              # 历史版本迁移脚本
-  .env.example      # 环境变量模板
+Qbao/
+├── app/          # 前端 SPA：index.html + css/ + js/（无框架、无构建）
+├── server/       # Node.js 后端：Express + PostgreSQL
+│   ├── src/      # 路由、鉴权中间件、AI Provider 适配器
+│   ├── sql/      # 数据库迁移脚本
+│   ├── scripts/  # AI 出题诊断脚本
+│   └── init.sql  # 建库脚本
+├── docs/         # 架构/部署/开发文档
+├── tools/        # 维护脚本（默认不上传）
+└── local/        # 【本地专用】密钥/日志/数据快照，永不上传（.gitignore）
 ```
+
+## 🛠 技术架构
+
+纯前端 Vanilla JS SPA（无框架依赖）+ Node.js/Express 后端 API + PostgreSQL。AI 请求由后端代理到各 Provider，支持流式输出与严格 JSON 校验。
 
 ## 📄 许可证
 
-[MIT](./LICENSE)
+[MIT](LICENSE)

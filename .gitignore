@@ -1,31 +1,34 @@
+# ================= Qbao .gitignore =================
+# 策略：GitHub 只管理 app/（前端）、server/（后端）、docs/、tools/ 四部分；
+# 一切隐私/本地内容统一放 local/（密钥、用户数据、日志、历史快照）。
+
+# ---- Node 依赖 ----
 node_modules/
-Backup/
-compact/
-dumb/
-.DS_Store
-*.log
-*.pem
-backend/node_modules/
-backend/uploads/
+server/node_modules/
 
-# 敏感/非主体文件 — 不上传 GitHub
-log.md
-my_data/
-wechat_pic.jpg
-.claude/
-split-js.js
-Version/
-ai_qbao_key01.pem
-dumb/
-*.lnk
-
-# 2026-07 整理新增 — 敏感/本地文件
-wg-*.conf
-analysis/
-console/
-backend/diagnose_ai.js
-backend/diagnose_api.js
+# ---- 环境变量与密钥（任何位置都不上传）----
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.lnk
 *.bundle
-.filter-tools/
-.tmp/
+
+# ---- 本地专用目录：隐私数据/密钥/日志/版本快照，永不上传 GitHub ----
+local/
+
+# ---- 运行时上传文件（含用户数据，生产环境实时生成）----
+uploads/
+server/uploads/
+
+# ---- 日志 ----
+*.log
+
+# ---- 系统文件 ----
+.DS_Store
+Thumbs.db
+
+# ---- tools/：默认忽略其中的一次性脚本，仅保留说明 ----
+tools/*
+!tools/README.md
