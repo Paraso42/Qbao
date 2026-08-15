@@ -35,7 +35,8 @@
     ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "artifactName": "Qbao-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
