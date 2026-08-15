@@ -111,6 +111,7 @@ function updateAuthUI() {
   updateSyncStatus();
 }
 async function init(){ try{
+		if (typeof IS_DESKTOP !== 'undefined' && IS_DESKTOP && !(RUNTIME && RUNTIME.apiBase)) { showServerSetupDialog(); }
 		document.getElementById('app').style.display='flex';
 		/* 恢复登录状态 */
 		if (getToken()) {
