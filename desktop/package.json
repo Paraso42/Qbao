@@ -31,7 +31,7 @@
       { "from": "../app", "to": "app", "filter": ["**/*", "!**/*.map"] }
     ],
     "publish": [
-      { "provider": "github", "owner": "Paraso42", "repo": "Qbao" }
+      { "provider": "github", "owner": "Paraso42", "repo": "Qbao", "releaseType": "release" }
     ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
