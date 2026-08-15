@@ -6,6 +6,7 @@ const fs = require('fs');
 const { setupUpdater } = require('./updater');
 
 let mainWindow = null;
+let recreatingWindow = false; // save-server 重建窗口期间阻止 window-all-closed 退出应用
 
 function loadRuntimeConfig() {
   // 优先级：环境变量 > config.local.json（开发者） > 用户设置（应用内配置） > config.json（仓库默认）
@@ -48,6 +49,7 @@ function createWindow() {
   if (process.env.QBAO_SMOKE) {
     mainWindow.webContents.on('did-finish-load', () => { console.log('[desktop] SMOKE_OK'); setTimeout(() => app.exit(0), 1500); });
   }
+  recreatingWindow = false;
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -65,7 +67,7 @@ if (!gotLock) {
     setupUpdater(() => mainWindow);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
-  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+  app.on('window-all-closed', () => { if (recreatingWindow) return; if (process.platform !== 'darwin') app.quit(); });
 }
 
 // 系统级 IPC
@@ -79,6 +81,7 @@ ipcMain.handle('qbao:save-server', async (_e, url, label) => {
   try {
     fs.writeFileSync(path.join(app.getPath('userData'), 'settings.json'), JSON.stringify(settings, null, 2));
   } catch (e) { return { ok: false, error: e.message }; }
+  recreatingWindow = true;
   const win = BrowserWindow.getAllWindows()[0];
   if (win) win.destroy();
   setTimeout(() => { if (!BrowserWindow.getAllWindows().length) createWindow(); }, 300);

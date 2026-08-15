@@ -55,15 +55,18 @@ async function flushSync() {
           if (typeof cloud.rev === 'number') _syncRev = cloud.rev;
           if (typeof showToast === 'function') showToast('检测到其他设备的数据，已自动合并');
         }
-        var body2 = { state_json: state, rev: _syncRev };
-        var res2 = await fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body2) });
-        if (res2 && res2.ok) {
-          var d2 = await res2.json().catch(function() { return {}; });
-          if (typeof d2.rev === 'number') _syncRev = d2.rev;
-          setSyncPending(false);
-          localStorage.setItem('qbao_lastSync', new Date().toISOString());
-          updateSyncStatus();
-          return;
+        // 仅在拿到有效 rev 时重试，避免退化为无锁覆盖云端数据
+        if (typeof _syncRev === 'number' && _syncRev > 0) {
+          var body2 = { state_json: state, rev: _syncRev };
+          var res2 = await fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body2) });
+          if (res2 && res2.ok) {
+            var d2 = await res2.json().catch(function() { return {}; });
+            if (typeof d2.rev === 'number') _syncRev = d2.rev;
+            setSyncPending(false);
+            localStorage.setItem('qbao_lastSync', new Date().toISOString());
+            updateSyncStatus();
+            return;
+          }
         }
       }
       setSyncPending(true);
