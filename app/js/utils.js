@@ -7,5 +7,6 @@ function getCi(q, answer) {
   return null;
 }
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function isDesktopEnv() { return (typeof IS_DESKTOP !== 'undefined') ? IS_DESKTOP : false; }
 function formatFileSize(bytes) { if(bytes<1024)return bytes+' B'; if(bytes<1048576)return (bytes/1024).toFixed(1)+' KB'; return (bytes/1048576).toFixed(1)+' MB'; }
 function generateMaterialId() { return 'mat_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6); }

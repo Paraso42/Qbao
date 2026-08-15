@@ -38,6 +38,7 @@ async function DataStoreInit() {
       return;
     }
     const cloud = await res.json();
+    if (cloud && typeof cloud.rev === 'number') _syncRev = cloud.rev;
     if (cloud && cloud.state_json && cloud.synced_at) {
       const cloudState = migrateState(cloud.state_json);
       // 本地状态始终优先（用户最近操作保存于此），云端仅作新设备回退
@@ -57,31 +58,19 @@ async function DataStoreInit() {
     console.warn('cloud load err', e);
     loadState();
   }
+  if (typeof resumePendingSync === 'function') resumePendingSync();
 }
 
-function saveState() { try { const qs=state.quizSession; state.quizSession=null; if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t._ssr=t.streamSetRef; delete t.streamSetRef;}); var origCm=state.chapterMaterials; if(origCm){ var cleanCm={}; Object.keys(origCm).forEach(function(cid){ cleanCm[cid]=origCm[cid].map(function(m){ var copy={}; for(var k in m){ if(k!=='data') copy[k]=m[k]; } return copy; }); }); state.chapterMaterials=cleanCm; } localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); var user=getUser(); if(user&&user.id) localStorage.setItem(CLOUD_STORAGE_PREFIX+user.id, JSON.stringify(state)); if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t.streamSetRef=t._ssr; delete t._ssr;}); state.quizSession=qs; state.chapterMaterials=origCm; scheduleCloudSync(); } catch(e) {} }
+function saveState() { try { const qs=state.quizSession; state.quizSession=null; if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t._ssr=t.streamSetRef; delete t.streamSetRef;}); var origCm=state.chapterMaterials; if(origCm){ var cleanCm={}; Object.keys(origCm).forEach(function(cid){ cleanCm[cid]=origCm[cid].map(function(m){ var copy={}; for(var k in m){ if(k!=='data') copy[k]=m[k]; } return copy; }); }); state.chapterMaterials=cleanCm; } localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); var user=getUser(); if(user&&user.id) localStorage.setItem(CLOUD_STORAGE_PREFIX+user.id, JSON.stringify(state)); if(state.aiTaskQueue) state.aiTaskQueue.forEach(function(t){t.streamSetRef=t._ssr; delete t._ssr;}); state.quizSession=qs; state.chapterMaterials=origCm; scheduleSync(); } catch(e) { console.error('[state] saveState error:', e); if (typeof showToast === 'function') showToast('本地保存失败: ' + (e && e.message)); } }
 
-function scheduleCloudSync() {
-  if (!isOnlineMode || !getToken()) return;
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(async () => {
-    try {
-      const res = await fetchWithAuth('/data', {
-        method: 'PUT',
-        body: JSON.stringify({ state_json: state })
-      });
-      if (res && res.ok) {
-        localStorage.setItem('qbao_lastSync', new Date().toISOString());
-        updateSyncStatus();
-      }
-    } catch(e) { console.warn('cloud sync err', e); }
-  }, 2000);
-}
+// 兼容入口：同步逻辑已迁移到 sync.js（乐观锁 + 冲突合并 + 失败重试）
+function scheduleCloudSync() { if (typeof scheduleSync === 'function') scheduleSync(); }
 
 function updateSyncStatus() {
   const el = document.getElementById('sync-status');
   if (!el) return;
   if (!isOnlineMode || !getToken()) { el.textContent = '🔴 离线'; el.style.color = '#555'; return; }
+  if (typeof getSyncPending === 'function' && getSyncPending()) { el.textContent = '⏳ 同步中…'; el.style.color = '#f59e0b'; return; }
   const last = localStorage.getItem('qbao_lastSync');
   if (last) { el.textContent = '☁️ 已同步 ' + new Date(last).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); el.style.color = '#2ed573'; }
   else { el.textContent = '☁️ 未同步'; el.style.color = '#f59e0b'; }

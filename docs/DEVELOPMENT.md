@@ -19,7 +19,8 @@
 
 ```
 Qbao/
-├── app/            # 前端 SPA（index.html + css/ + js/）
+├── app/            # 前端 SPA（index.html + css/ + js/，网页与桌面共用）
+├── desktop/        # Electron 桌面壳（main/preload/updater，配置见 desktop/README）
 ├── server/         # Node.js 后端
 │   ├── src/        # routes/ providers/ 中间件
 │   ├── sql/        # 数据库迁移

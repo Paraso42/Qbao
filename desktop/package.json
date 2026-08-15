@@ -1,0 +1,44 @@
+{
+  "name": "qbao-desktop",
+  "version": "3.25.0",
+  "description": "Qbao 全能互动做题引擎 — Windows 桌面客户端",
+  "main": "main.js",
+  "author": "Paraso42",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.paraso42.qbao",
+    "productName": "Qbao",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater.js",
+      "config.json",
+      "!config.local.json",
+      { "from": "../app", "to": "app", "filter": ["**/*", "!**/*.map"] }
+    ],
+    "publish": [
+      { "provider": "github", "owner": "Paraso42", "repo": "Qbao" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Qbao"
+    }
+  }
+}

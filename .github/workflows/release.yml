@@ -1,0 +1,35 @@
+name: Release 桌面版构建
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: 安装依赖
+        working-directory: desktop
+        run: npm ci
+      - name: 全量语法检查
+        shell: bash
+        run: |
+          node --check desktop/main.js
+          node --check desktop/preload.js
+          node --check desktop/updater.js
+          for f in app/js/*.js; do node --check "$f"; done
+          for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/scripts/*.js; do node --check "$f"; done
+      - name: 构建 NSIS 并发布 GitHub Release
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win nsis --publish always
