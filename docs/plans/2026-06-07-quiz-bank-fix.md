@@ -1,5 +1,7 @@
 # 题库修复 — 实施计划
 
+> ⚠️ **归档说明（2026-07）**：本计划为历史实施记录，文中路径为旧目录结构（前端在仓库根、后端在 backend/）。当前结构见 docs/ARCHITECTURE.md（前端 app/、后端 server/）。
+
 > **给执行者:** 请使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 来逐任务执行本计划。每步使用 checkbox (`- [ ]`) 追踪进度。
 
 **目标:** 修复 Qbao 题库、聊天题目分享、实时同步的 7 个问题。
