@@ -3,6 +3,10 @@
 本文件面向 GitHub 访客，按版本记录公开发布的功能与修复。
 > 完整开发日记保留在本地 `local/log.md`（不公开）。
 
+## v3.25
+
+- 2026-08-15 — 双形态化第一阶段：API_BASE 运行时动态化（Electron 注入 `__QBAO_RUNTIME__`）、同步层 rev 乐观锁（409 冲突自动合并重试）、saveState 失败可见化、Electron 桌面壳（desktop/，electron-updater 自动更新）、CI Release 流水线、服务器恢复与防火墙端口矩阵文档
+
 ## v3.24.4
 
 - 2026-06-30 — 主观题自动聚焦 + Enter提交/Shift+Enter换行 + '我不会'题号红色修复

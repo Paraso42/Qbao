@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS user_data (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   state_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  rev INT NOT NULL DEFAULT 1,
   synced_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT user_data_unique_user UNIQUE (user_id)
 );

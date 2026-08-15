@@ -32,3 +32,9 @@ Thumbs.db
 # ---- tools/：默认忽略其中的一次性脚本，仅保留说明 ----
 tools/*
 !tools/README.md
+
+# ---- 桌面端（Electron）----
+desktop/node_modules/
+desktop/release/
+desktop/config.local.json
+desktop/dist/

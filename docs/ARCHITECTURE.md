@@ -4,6 +4,14 @@
 
 ## 1. 系统拓扑
 
+**双形态**（v3.25 起）：同一 SPA 既由 nginx 托管为在线网页，也被 Electron 桌面端（desktop/）内嵌加载；桌面端经 preload 注入 `window.__QBAO_RUNTIME__`（apiBase/isDesktop/updateChannel），API 地址动态化。
+
+```
+【形态一：网页】浏览器 → nginx → app/ 静态文件 + /api 反代 → server/
+【形态二：桌面】Electron(desktop/) → 加载本地 app/ → fetch RUNTIME.apiBase → 线上 server/
+                 └── electron-updater ← GitHub Releases 自动更新
+```
+
 ```
 浏览器 (app/ 纯静态 SPA，无构建)
    │ HTTPS  /api/v1/*   /uploads/*
@@ -35,6 +43,7 @@ server/  Node.js + Express API（端口 3000）
 | js/dashboard.js / strategy.js | 25KB | 仪表盘、章节策略分析 |
 | js/quiz-engine.js / exam.js | 20KB+ | 答题引擎、考试模式、主观题 |
 | js/state.js | 19KB | 全局状态与同步 |
+| js/sync.js（v3.25 新增） | — | 带 rev 乐观锁的同步队列、409 冲突合并、失败重试 |
 
 ## 3. 后端（server/）
 
@@ -54,7 +63,7 @@ server/  Node.js + Express API（端口 3000）
 
 1. **CORS 全开**：`cors({ origin: true })` 反射任意 Origin。同源部署场景应改为白名单或直接关闭。
 2. **上传安全**：有大小上限但缺 MIME 白名单与图片重编码（防伪造类型/恶意内容）。
-3. **全量同步冲突**：`user_data` 单行 JSONB 全量覆盖是 last-write-wins，多端并发会互相覆盖，且每次同步放大写。短期加版本号乐观锁，中期按实体拆表。
+3. **全量同步冲突**：~~`user_data` 单行 JSONB 全量覆盖是 last-write-wins~~ **（v3.25 已加 rev 乐观锁 + 409 冲突实体级合并，见 js/sync.js）**。遗留：合并粒度仍为实体级并集（同 id 本地优先），按字段时间戳的精确裁决、以及按实体拆表，留待后续。同步放大写问题仍在（每次全量 PUT）。
 4. **统一错误处理**：路由内大量手工 try/catch + 直接 `res.status(...)`。抽 `ApiError` + errorHandler 中间件，统一响应格式。
 5. **请求校验缺失**：大部分端点直接信任入参。引入 zod/joi 做 schema 校验。
 6. **上传目录不一致**：统一 `server/uploads/`（或独立数据卷），static 服务与 multer 指向同一处。
