@@ -79,3 +79,73 @@
 ## 技术架构
 
 纯前端 Vanilla JS SPA + Node.js 后端 API，无框架依赖。
+
+## 🚀 部署运行
+
+### 环境要求
+
+- Node.js ≥ 18
+- PostgreSQL ≥ 13
+
+### 后端
+
+```bash
+cd backend
+npm install
+
+# 1. 初始化数据库（创建表结构）
+psql -U postgres -c "CREATE DATABASE qbao"
+psql -U postgres -d qbao -f init.sql
+# 后续版本迁移按需执行 backend/sql/migration_v*.sql
+
+# 2. 配置环境变量
+cp .env.example .env   # 填写数据库密码、JWT_SECRET、AI API Key 等
+
+# 3. 启动（默认端口 3000）
+npm start              # 或 npm run dev（文件变更自动重启）
+```
+
+生产环境可用 PM2 守护（参考 `backend/ecosystem.config.js`，注意按实际部署路径修改 script 路径）。
+
+### 前端
+
+前端为纯静态文件（`index.html` + `css/` + `js/`），无需构建，直接由任意静态服务器托管即可，例如 nginx：
+
+```nginx
+server {
+    listen 80;
+    server_name your.domain.com;
+    root /path/to/Qbao;
+    index index.html;
+
+    # API 反代到本机后端
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # 上传文件（头像、资料）
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:3000;
+    }
+}
+```
+
+### 目录结构
+
+```
+index.html          # SPA 入口（所有页面/弹窗 DOM）
+css/                # 样式（按模块拆分）
+js/                 # 前端逻辑（按模块拆分，无框架）
+backend/
+  server.js         # Express 入口
+  src/              # 路由、鉴权、AI Provider 封装
+  init.sql          # 数据库初始化脚本
+  sql/              # 历史版本迁移脚本
+  .env.example      # 环境变量模板
+```
+
+## 📄 许可证
+
+[MIT](./LICENSE)
