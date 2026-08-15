@@ -28,8 +28,18 @@ jobs:
           node --check desktop/updater.js
           for f in app/js/*.js; do node --check "$f"; done
           for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/scripts/*.js; do node --check "$f"; done
-      - name: 构建 NSIS 并发布 GitHub Release
+      - name: 构建 NSIS 安装包
         working-directory: desktop
+        run: npx electron-builder --win nsis --publish never
+      - name: 发布 GitHub Release（gh CLI）
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis --publish always
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd desktop/release
+          EXE=$(ls Qbao*Setup*.exe | head -1)
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Qbao $GITHUB_REF_NAME" \
+            --generate-notes \
+            "$EXE" latest.yml *.blockmap
