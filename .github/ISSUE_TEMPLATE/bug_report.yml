@@ -1,0 +1,26 @@
+name: 🐛 Bug 报告
+description: 提交问题反馈，帮助改进 Qbao
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: describe
+    attributes:
+      label: 问题描述
+      description: 发生了什么？预期是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: 1. 打开… 2. 点击… 3. 出现…
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      placeholder: 浏览器及版本 / 设备（手机/电脑）/ 账号是否在线
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: 截图或录屏（可选）

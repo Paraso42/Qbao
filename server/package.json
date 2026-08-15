@@ -1,8 +1,16 @@
 {
   "name": "qbao-api",
-  "version": "1.0.0",
-  "description": "Qbao backend API",
+  "version": "3.24.4",
+  "description": "Qbao 全能互动做题引擎 — 后端 API（Express + PostgreSQL）",
   "main": "server.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Paraso42/Qbao.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
