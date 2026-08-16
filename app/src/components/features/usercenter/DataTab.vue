@@ -107,7 +107,7 @@ onMounted(() => users.loadBackupHistory())
 .ok { color: var(--color-success); font-weight: 500; }
 .off { color: var(--color-danger); font-weight: 500; }
 .empty { font-size: var(--fs-sm); color: var(--text-muted); }
-.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); max-height: 200px; overflow-y: auto; }
 .history-list li { display: flex; align-items: center; gap: var(--space-md); font-size: var(--fs-sm); }
 .history-kind {
   padding: 1px 8px;

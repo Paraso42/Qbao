@@ -157,9 +157,9 @@ const canGenerate = computed(() => {
   if (materials.value.length === 0) return false
   if (!user.isOnline) return false
   if (hasTask.value) return false
-  const tc = strategy.value ? strategy.value.typeCounts : null
+  const tc = (strategy.value && strategy.value.typeCounts) ? strategy.value.typeCounts : null
   if (!tc) return false
-  return (tc.single + tc.judge + tc.term + tc.short) > 0
+  return ((tc.single || 0) + (tc.judge || 0) + (tc.term || 0) + (tc.short || 0)) > 0
 })
 const genStatus = computed(() => {
   if (!ch.value) return '请先选择一个章节'

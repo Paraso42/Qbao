@@ -53,9 +53,7 @@ onBeforeUnmount(() => {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.32);
   z-index: var(--z-modal);
   display: flex;
   align-items: center;

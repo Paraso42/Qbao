@@ -117,7 +117,7 @@ async function assign(f) {
 
 <style scoped>
 .am-hint { color: var(--text-muted); font-size: var(--fs-xs); margin-bottom: var(--space-sm); }
-.am-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-sm); }
+.am-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-sm); max-height: 200px; overflow-y: auto; padding-right: 2px; }
 .am-file {
   display: flex;
   align-items: center;

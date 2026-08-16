@@ -40,8 +40,8 @@
       <div v-if="overview.chStats.length >= 2" class="card">
         <h4>最佳与待提升</h4>
         <div class="best-worst">
-          <div class="bw-card ok"><span class="bw-label">🥇 最佳章节</span><span class="bw-value">{{ best.name }} {{ best.rate }}%</span></div>
-          <div class="bw-card bad"><span class="bw-label">📌 待提升</span><span class="bw-value">{{ worst.name }} {{ worst.rate }}%</span></div>
+          <div class="bw-card ok"><span class="bw-label">最佳章节</span><span class="bw-value">{{ best.name }} {{ best.rate }}%</span></div>
+          <div class="bw-card bad"><span class="bw-label">待提升</span><span class="bw-value">{{ worst.name }} {{ worst.rate }}%</span></div>
         </div>
       </div>
 
@@ -63,12 +63,21 @@
         <div class="qb-search"><Icon name="search" :size="14" /><input v-model="qbKeyword" class="qb-input" type="text" placeholder="搜索题目/标签..."></div>
       </div>
       <div v-for="group in qbankGroups" :key="group.cid" class="card qb-group">
-        <h4 class="qb-header">{{ group.chName }} <span class="qb-meta">{{ group.ch.questions ? group.ch.questions.length : 0 }} 题 · {{ group.rounds }} 次答题</span></h4>
-        <div v-if="group.items.length === 0" class="qb-empty">无匹配题目</div>
-        <div v-for="item in group.items" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
-          <p class="qb-q"><span class="qb-icon">{{ item.ci === true ? '✅' : (item.ci === false ? '❌' : '⏳') }}</span>[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
-          <p v-if="item.q.explanation" class="qb-detail">{{ shortText(item.q.explanation, 80) }}</p>
-        </div>
+        <h4 class="qb-header" role="button" @click="toggleQbGroup(group.cid)">
+          <span class="qb-caret"><Icon name="chevron-down" :size="13" :class="{ rotated: !openQbGroups.has(group.cid) }" /></span>
+          {{ group.chName }}
+          <span class="qb-meta">{{ group.ch.questions ? group.ch.questions.length : 0 }} 题 · {{ group.rounds }} 次答题</span>
+        </h4>
+        <template v-if="openQbGroups.has(group.cid)">
+          <div v-if="group.items.length === 0" class="qb-empty">无匹配题目</div>
+          <div v-for="item in shownQbItems(group)" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
+            <p class="qb-q"><span class="qb-icon" :class="qbIconClass(item.ci)"></span>[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
+            <p v-if="item.q.explanation" class="qb-detail">{{ shortText(item.q.explanation, 80) }}</p>
+          </div>
+          <button v-if="group.items.length > (qbLimits[group.cid] || 50)" class="qb-more" @click="qbLimits[group.cid] = (qbLimits[group.cid] || 50) + 50">
+            显示更多（已显示 {{ qbLimits[group.cid] || 50 }} / {{ group.items.length }}）
+          </button>
+        </template>
       </div>
     </div>
 
@@ -79,7 +88,7 @@
         <p class="ce-hint">从本科目各章节中抽取题目，组成综合试卷。</p>
         <h4>1. 选择章节</h4>
         <div class="ce-chapters">
-          <label v-for="cid in subj.chapterIds" :key="cid" class="ce-ch" v-if="data.state.chapters[cid]">
+          <label v-for="cid in (subj ? subj.chapterIds : [])" :key="cid" class="ce-ch" v-if="data.state.chapters[cid]">
             <input type="checkbox" :value="cid" v-model="checkedCids" @change="resetWeights">
             <span class="ce-ch-name">{{ data.state.chapters[cid].name }}</span>
             <span class="ce-ch-count tabular-nums">{{ data.state.chapters[cid].questions ? data.state.chapters[cid].questions.length : 0 }} 题</span>
@@ -118,8 +127,8 @@
 
         <h4>4. 出题策略（不含新题）</h4>
         <div class="strategy-labels">
-          <span>🔴 针对错题 <input v-model.number="examErrPct" class="pct-input" type="number" min="0" max="100">%</span>
-          <span>🟡 滚动复习 {{ 100 - examErrPct }}%</span>
+          <span><i class="pct-dot err"></i>针对错题 <input v-model.number="examErrPct" class="pct-input" type="number" min="0" max="100">%</span>
+          <span><i class="pct-dot review"></i>滚动复习 {{ 100 - examErrPct }}%</span>
         </div>
         <div class="dual-range-wrap">
           <div class="dual-track-bg"></div>
@@ -137,12 +146,12 @@
         <h4>历史试卷</h4>
         <div v-if="examList.length === 0" class="qb-empty">暂无历史试卷</div>
         <div v-for="ex in examList" :key="ex.id" class="exam-item" @click="quiz.startExam(ex.id)">
-          <span class="exam-icon">📝</span>
+          <span class="exam-icon"><Icon name="file" :size="15" /></span>
           <div class="exam-main">
             <div class="exam-name">{{ ex.name }}</div>
             <div class="exam-meta">{{ ex.questions.length }} 题 · {{ new Date(ex.createdAt).toLocaleString('zh-CN') }}</div>
           </div>
-          <button class="btn btn-primary btn-small">开始答题</button>
+          <button class="btn btn-primary btn-small" @click.stop="quiz.startExam(ex.id)">开始答题</button>
         </div>
       </div>
     </div>
@@ -158,7 +167,7 @@
         </div>
         <div v-if="dueCount === 0" class="qb-empty">暂无待复习题目，继续保持！</div>
         <div v-for="item in dueItems" :key="item.qid" class="srs-item">
-          <span class="srs-icon">📅</span>
+          <span class="srs-icon"><Icon name="clock" :size="15" /></span>
           <div class="srs-main">
             <div class="srs-q">{{ shortText(item.q.question, 80) }}</div>
             <div class="srs-meta">{{ item.srs.repetitions }} 次复习 · 间隔 {{ item.srs.interval }} 天</div>
@@ -188,13 +197,13 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSubjectStore } from '../stores/subjects'
 import { useUiStore } from '../stores/ui'
 import { useQuizStore } from '../stores/quiz'
 import { isObjType, getCi } from '../services/utils'
-import { getQuestionId, calcStats } from '../services/questions'
+import { getQuestionId } from '../services/questions'
 import { getSrsDueQuestions } from '../services/srs'
 import { composeSubjExam, getExamSettings } from '../services/exam'
 import { renderMarkdown } from '../services/utils'
@@ -236,6 +245,11 @@ function rateColor(rate) {
 function shortText(t, n) {
   const s = String(t || '')
   return s.length > n ? s.substring(0, n) + '...' : s
+}
+function qbIconClass(ci) {
+  if (ci === true) return 'ok'
+  if (ci === false) return 'bad'
+  return 'pending'
 }
 
 // —— 总览 ——
@@ -283,9 +297,9 @@ const overview = computed(() => {
     const n = rates.length
     for (let i = 0; i < n; i++) { sumX += i; sumY += rates[i]; sumXY += i * rates[i]; sumXX += i * i }
     const slope = (n * sumXY - sumX * sumY) / ((n * sumXX - sumX * sumX) || 1)
-    if (slope > 2) out.trendText = '📈 实力提升中（每轮平均 +' + slope.toFixed(1) + '%）'
-    else if (slope < -2) out.trendText = '📉 实力下降中（每轮平均 ' + slope.toFixed(1) + '%）'
-    else out.trendText = '➡️ 实力稳定（每轮变化 ' + slope.toFixed(1) + '%）'
+    if (slope > 2) out.trendText = '实力提升中（每轮平均 +' + slope.toFixed(1) + '%）'
+    else if (slope < -2) out.trendText = '实力下降中（每轮平均 ' + slope.toFixed(1) + '%）'
+    else out.trendText = '实力稳定（每轮变化 ' + slope.toFixed(1) + '%）'
   }
   out.typeDist = typeDist
   return out
@@ -308,6 +322,16 @@ const typeSegs = computed(() => {
 // —— 题库 ——
 const qbOnlyWrong = ref(false)
 const qbKeyword = ref('')
+// 题库折叠：每个章节一个可折叠分组，默认只展开第一个；单组内最多先渲染 50 条
+const openQbGroups = reactive(new Set())
+const qbLimits = reactive({})
+function toggleQbGroup(cid) {
+  if (openQbGroups.has(cid)) openQbGroups.delete(cid)
+  else openQbGroups.add(cid)
+}
+function shownQbItems(group) {
+  return group.items.slice(0, qbLimits[group.cid] || 50)
+}
 const qbankGroups = computed(() => {
   const s = subj.value
   if (!s) return []
@@ -330,12 +354,21 @@ const qbankGroups = computed(() => {
   }).filter(Boolean)
 })
 
+// 题库分组默认折叠：只自动展开第一个有内容的分组，其余点击标题展开
+watch(qbankGroups, (groups) => {
+  if (!groups.length) return
+  if (!groups.some((g) => openQbGroups.has(g.cid))) {
+    groups.forEach((g) => openQbGroups.delete(g.cid))
+    openQbGroups.add(groups[0].cid)
+  }
+})
+
 // —— 大考卷 ——
 const examTypes = [
-  { key: 'single', label: '📝 单选' },
-  { key: 'judge', label: '⚖️ 判断' },
-  { key: 'term', label: '📖 名词解释' },
-  { key: 'short', label: '✍️ 简答' }
+  { key: 'single', label: '单选' },
+  { key: 'judge', label: '判断' },
+  { key: 'term', label: '名词解释' },
+  { key: 'short', label: '简答' }
 ]
 const es = computed(() => (subj.value ? getExamSettings(data.state, subj.value.id) : null))
 const checkedCids = ref([])
@@ -497,13 +530,29 @@ watch(() => ui.activeScreen, (screen) => {
 .qb-search { display: flex; align-items: center; gap: 6px; color: var(--text-muted); flex: 1; max-width: 320px; }
 .qb-input { border: none; background: transparent; flex: 1; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--surface-hover); font-size: var(--fs-sm); }
 .qb-input:focus { outline: 2px solid var(--color-primary); outline-offset: -2px; }
-.qb-header { display: flex; justify-content: space-between; align-items: center; }
-.qb-meta { font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); }
+.qb-header { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.qb-header:hover { color: var(--color-primary); }
+.qb-caret { display: flex; color: var(--text-muted); transition: transform var(--transition-fast); }
+.qb-caret .icon.rotated { transform: rotate(-90deg); }
+.qb-meta { margin-left: auto; font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); }
+.qb-more {
+  width: 100%;
+  padding: 8px;
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  margin-top: 2px;
+}
+.qb-more:hover { background: var(--color-primary-light); }
 .qb-item { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; transition: border-color var(--transition-fast), background var(--transition-fast); }
 .qb-item:hover { border-color: var(--color-primary); background: var(--surface-hover); }
 .qb-item.correct { background: var(--color-success-light); }
 .qb-item.wrong { background: var(--color-danger-light); }
-.qb-q { font-size: var(--fs-sm); line-height: 1.6; }
+.qb-q { font-size: var(--fs-sm); line-height: 1.6; display: flex; align-items: flex-start; gap: 6px; }
+.qb-icon { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; background: var(--text-faint); display: inline-block; }
+.qb-icon.ok { background: var(--color-success); }
+.qb-icon.bad { background: var(--color-danger); }
+.qb-icon.pending { background: var(--text-faint); }
 .qb-detail { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
 .qb-empty { color: var(--text-muted); font-size: var(--fs-sm); padding: var(--space-md); text-align: center; }
 
@@ -525,6 +574,10 @@ watch(() => ui.activeScreen, (screen) => {
 .cum-input { width: 52px; padding: 4px 6px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); text-align: center; }
 .pct-input { width: 48px; padding: 3px 6px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); text-align: center; font-size: var(--fs-sm); }
 .strategy-labels { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; font-size: var(--fs-sm); color: var(--text-secondary); }
+.strategy-labels span { display: inline-flex; align-items: center; gap: 4px; }
+.pct-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.pct-dot.err { background: #EF4444; }
+.pct-dot.review { background: #F59E0B; }
 .dual-range-wrap { position: relative; height: 44px; margin: 4px 0; touch-action: none; }
 .dual-track-bg { position: absolute; left: 0; right: 0; top: 19px; height: 6px; border-radius: 3px; background: var(--border-light); }
 .dual-track-fill { position: absolute; top: 19px; height: 6px; }
@@ -535,6 +588,7 @@ watch(() => ui.activeScreen, (screen) => {
 .ce-actions { margin-top: var(--space-lg); }
 .exam-item { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 6px; cursor: pointer; transition: border-color var(--transition-fast); }
 .exam-item:hover { border-color: var(--color-primary); }
+.exam-icon { flex-shrink: 0; color: var(--text-muted); display: flex; align-items: center; }
 .exam-main { flex: 1; min-width: 0; }
 .exam-name { font-size: var(--fs-sm); font-weight: 500; }
 .exam-meta { font-size: var(--fs-xs); color: var(--text-muted); }

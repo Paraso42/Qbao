@@ -57,16 +57,20 @@ export function sanitizeState(state) {
 export function getChStrategy(state, cid) {
   const ch = state.chapters[cid]
   if (!ch) return null
-  if (!ch.strategy) ch.strategy = {
-    errPct: 20, reviewPct: 50, newPct: 30,
-    typeCounts: { single: 5, judge: 5, term: 3, short: 2 },
-    errorTags: [], reviewTags: [], newTopicTags: [], tagMeta: {}
-  }
-  if (!ch.strategy.errorTags) ch.strategy.errorTags = []
-  if (!ch.strategy.reviewTags) ch.strategy.reviewTags = []
-  if (!ch.strategy.newTopicTags) ch.strategy.newTopicTags = []
-  if (!ch.strategy.tagMeta) ch.strategy.tagMeta = {}
-  return ch.strategy
+  if (!ch.strategy) ch.strategy = {}
+  const s = ch.strategy
+  if (!s.typeCounts || typeof s.typeCounts !== 'object') s.typeCounts = { single: 5, judge: 5, term: 3, short: 2 }
+  ;['single', 'judge', 'term', 'short'].forEach(function (k) {
+    if (typeof s.typeCounts[k] !== 'number') s.typeCounts[k] = 5
+  })
+  if (typeof s.errPct !== 'number') s.errPct = 20
+  if (typeof s.reviewPct !== 'number') s.reviewPct = 50
+  if (typeof s.newPct !== 'number') s.newPct = 30
+  if (!s.errorTags) s.errorTags = []
+  if (!s.reviewTags) s.reviewTags = []
+  if (!s.newTopicTags) s.newTopicTags = []
+  if (!s.tagMeta) s.tagMeta = {}
+  return s
 }
 
 // 持久化序列化：剥离瞬态引用与密钥字段后写入 localStorage（双键）。

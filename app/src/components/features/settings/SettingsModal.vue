@@ -4,20 +4,20 @@
     <div class="sm-body">
       <nav class="sm-nav">
         <div class="sm-nav-title">设置</div>
-        <div class="sm-nav-item" :class="{ active: ui.settingsTab === 'personalize' }" @click="ui.setSettingsTab('personalize')"><Icon name="settings" :size="15" />个性化</div>
-        <div class="sm-nav-item" :class="{ active: ui.settingsTab === 'aiconfig' }" @click="ui.setSettingsTab('aiconfig')"><Icon name="sparkle" :size="15" />AI 配置</div>
-        <div v-if="isDesktop" class="sm-nav-item" :class="{ active: ui.settingsTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />桌面端</div>
+        <div class="sm-nav-item" :class="{ active: activeTab === 'personalize' }" @click="ui.setSettingsTab('personalize')"><Icon name="settings" :size="15" />个性化</div>
+        <div class="sm-nav-item" :class="{ active: activeTab === 'aiconfig' }" @click="ui.setSettingsTab('aiconfig')"><Icon name="sparkle" :size="15" />AI 配置</div>
+        <div v-if="isDesktop" class="sm-nav-item" :class="{ active: activeTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />桌面端</div>
       </nav>
 
       <div class="sm-content">
         <!-- 个性化 -->
-        <section v-if="ui.settingsTab === 'personalize'" class="sm-tab">
+        <section v-if="activeTab === 'personalize'" class="sm-tab">
           <div class="card">
             <div class="settings-section">
               <h4>边栏</h4>
               <div class="settings-row">
                 <label>边栏字体大小</label>
-                <input type="range" min="11" max="16" step="1" :value="settings.sidebarFontSize" @input="onFont('sidebarFontSize', $event)">
+                <input type="range" min="11" max="16" step="1" :value="settings.sidebarFontSize" @input="onFont('sidebarFontSize', $event)" @change="data.saveState()">
                 <span class="settings-val">{{ settings.sidebarFontSize }}px</span>
               </div>
               <div class="font-preview" :style="{ fontSize: settings.sidebarFontSize + 'px' }"><strong>科目名称</strong><span>章节 1.1 — 3 题</span></div>
@@ -26,7 +26,7 @@
               <h4>顶栏</h4>
               <div class="settings-row">
                 <label>顶栏字体大小</label>
-                <input type="range" min="11" max="18" step="1" :value="settings.topbarFontSize" @input="onFont('topbarFontSize', $event)">
+                <input type="range" min="11" max="18" step="1" :value="settings.topbarFontSize" @input="onFont('topbarFontSize', $event)" @change="data.saveState()">
                 <span class="settings-val">{{ settings.topbarFontSize }}px</span>
               </div>
             </div>
@@ -34,7 +34,7 @@
               <h4>主页区域</h4>
               <div class="settings-row">
                 <label>主页字体大小</label>
-                <input type="range" min="15" max="22" step="1" :value="settings.mainFontSize" @input="onFont('mainFontSize', $event)">
+                <input type="range" min="15" max="22" step="1" :value="settings.mainFontSize" @input="onFont('mainFontSize', $event)" @change="data.saveState()">
                 <span class="settings-val">{{ settings.mainFontSize }}px</span>
               </div>
             </div>
@@ -42,7 +42,7 @@
               <h4>答题区域</h4>
               <div class="settings-row">
                 <label>题目字体大小</label>
-                <input type="range" min="14" max="28" step="1" :value="settings.quizFontSize" @input="onFont('quizFontSize', $event)">
+                <input type="range" min="14" max="28" step="1" :value="settings.quizFontSize" @input="onFont('quizFontSize', $event)" @change="data.saveState()">
                 <span class="settings-val">{{ settings.quizFontSize }}px</span>
               </div>
             </div>
@@ -67,7 +67,7 @@
         </section>
 
         <!-- AI 配置 -->
-        <section v-else-if="ui.settingsTab === 'aiconfig'" class="sm-tab">
+        <section v-else-if="activeTab === 'aiconfig'" class="sm-tab">
           <div class="card">
             <div class="settings-section">
               <h4>AI API 配置</h4>
@@ -150,7 +150,7 @@
         </section>
 
         <!-- 桌面端 -->
-        <section v-else-if="ui.settingsTab === 'desktop'" class="sm-tab">
+        <section v-else-if="activeTab === 'desktop'" class="sm-tab">
           <div class="card">
             <div class="settings-section">
               <h4>应用信息</h4>
@@ -198,6 +198,8 @@ const data = useDataStore()
 const ai = useAiStore()
 
 const settings = computed(() => data.state.settings)
+// 打开即渲染：任何未知 tab 都回退到「个性化」，保证设置弹窗永不空白
+const activeTab = computed(() => (['personalize', 'aiconfig', 'desktop'].includes(ui.settingsTab) ? ui.settingsTab : 'personalize'))
 
 // 个性化
 const darkMode = computed({
@@ -210,7 +212,7 @@ const showNoticeBar = computed({
 })
 function onFont(key, e) {
   settings.value[key] = parseInt(e.target.value) || 17
-  saveSettings()
+  applyFontSizes(settings.value)
 }
 function saveSettings() {
   data.saveState()
@@ -369,12 +371,12 @@ function bindUpdateStatus() {
 
 watch(() => ui.settingsOpen, (open) => {
   if (open) {
-    if (ui.settingsTab === 'aiconfig') {
+    if (activeTab.value === 'aiconfig') {
       ai.ensureProviders().then(loadAiForm)
     } else {
       loadAiForm()
     }
-    if (ui.settingsTab === 'desktop') loadDesktopInfo()
+    if (activeTab.value === 'desktop') loadDesktopInfo()
   }
 })
 watch(() => ui.settingsTab, (tab) => {

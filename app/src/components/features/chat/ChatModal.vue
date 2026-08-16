@@ -11,7 +11,7 @@
             <!-- 左侧列表 -->
             <div class="chat-sidebar">
               <div class="chat-sidebar-header">
-                <span class="chat-sidebar-title">💬 好友</span>
+                <span class="chat-sidebar-title"><Icon name="chat" :size="15" /> 好友</span>
                 <div class="chat-sidebar-actions">
                   <button class="chat-icon-btn" title="添加好友" @click="openAddFriend()"><Icon name="user" :size="16" /></button>
                   <button class="chat-icon-btn" title="创建群聊" @click="openCreateGroup()"><Icon name="users" :size="16" /></button>
@@ -52,7 +52,7 @@
                 <ChatInput />
               </template>
               <div v-else class="chat-placeholder">
-                <div class="chat-placeholder-icon">💬</div>
+                <div class="chat-placeholder-icon"><Icon name="chat" :size="40" /></div>
                 <div class="chat-placeholder-text">选择一个会话开始聊天</div>
               </div>
             </div>
@@ -67,7 +67,7 @@
 
   <!-- 添加好友 -->
   <Modal :open="addFriendOpen" @close="closeAddFriend()">
-    <h3 class="sub-title">➕ 添加好友</h3>
+    <h3 class="sub-title"><Icon name="user" :size="16" /> 添加好友</h3>
     <input v-model="addFriendQuery" class="chat-user-search-input" placeholder="搜索用户名或显示名..." @input="onSearchUsers" />
     <div class="add-friend-results">
       <div v-if="addFriendQuery.trim() === ''" class="chat-user-search-empty">输入关键词搜索用户</div>
@@ -88,7 +88,7 @@
 
   <!-- 创建群聊 -->
   <Modal :open="createGroupOpen" @close="closeCreateGroup()">
-    <h3 class="sub-title">👥 创建群聊</h3>
+    <h3 class="sub-title"><Icon name="users" :size="16" /> 创建群聊</h3>
     <input v-model="groupName" class="chat-user-search-input" placeholder="群聊名称（可选）" maxlength="128" />
     <div class="member-label">选择好友：</div>
     <div class="member-list">
@@ -106,7 +106,7 @@
 
   <!-- 邀请成员 -->
   <Modal :open="addMembersOpen" @close="closeAddMembers()">
-    <h3 class="sub-title">👥 邀请好友</h3>
+    <h3 class="sub-title"><Icon name="users" :size="16" /> 邀请好友</h3>
     <div class="member-list">
       <div v-for="f in store.friends" :key="f.id" class="chat-member-select-item" :class="{ selected: isSelected(f.id) }" @click="store.toggleSelectedMember(f.id)">
         <div class="chat-member-select-check">{{ isSelected(f.id) ? '✓' : '' }}</div>
@@ -227,10 +227,8 @@ watch(() => store.modalOpen, (open) => {
 .chat-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(23, 24, 28, 0.45);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  z-index: 9000;
+  background: rgba(23, 24, 28, 0.5);
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -287,7 +285,7 @@ watch(() => store.modalOpen, (open) => {
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
-.chat-sidebar-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.chat-sidebar-title { font-size: 15px; font-weight: 600; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; }
 .chat-sidebar-actions { display: flex; gap: 4px; }
 .chat-icon-btn {
   width: 30px;

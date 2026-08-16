@@ -1,7 +1,8 @@
 <!-- 对应 legacy chat.js：chatRenderMessage/chatLoadMessages/chatScrollToBottom（扁平消息：头像+名称+无气泡内容，DeepSeek 风格） -->
 <template>
   <div class="chat-messages" ref="container">
-    <template v-for="m in prepared" :key="m.id">
+    <div v-if="prepared.length > 200" class="chat-msg-cap">仅显示最近 200 条消息</div>
+    <template v-for="m in visibleMessages" :key="m.id">
       <!-- 撤回/系统消息 -->
       <div v-if="m.is_revoked" class="chat-msg-system">
         {{ m.isMine ? '你撤回了一条消息' : ((m.sender_name || '') + ' 撤回了一条消息') }}
@@ -157,6 +158,10 @@ function canRevoke(m) {
   return (Date.now() - new Date(m.created_at).getTime()) < 2 * 60 * 1000
 }
 
+const visibleMessages = computed(() => {
+  const all = prepared.value
+  return all.length > 200 ? all.slice(-200) : all
+})
 const prepared = computed(() => {
   return store.messages.map((m) => {
     const isMine = m.user_id === user.userId
@@ -257,6 +262,13 @@ onMounted(scrollToBottom)
 </script>
 
 <style scoped>
+.chat-msg-cap {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
 .chat-messages {
   flex: 1;
   overflow-y: auto;

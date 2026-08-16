@@ -23,7 +23,7 @@ export const useUiStore = defineStore('ui', {
     showScreen(name) { this.activeScreen = name; this.closeSidebar() },
     openAuth() { this.authOpen = true },
     closeAuth() { this.authOpen = false },
-    openSettings(tab) { this.settingsOpen = true; if (tab) this.settingsTab = tab },
+    openSettings(tab) { this.settingsOpen = true; this.settingsTab = tab || 'personalize' },
     closeSettings() { this.settingsOpen = false },
     setSettingsTab(tab) { this.settingsTab = tab },
     openUserCenter() { this.userCenterOpen = true },

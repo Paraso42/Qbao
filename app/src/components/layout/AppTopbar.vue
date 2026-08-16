@@ -10,10 +10,6 @@
       <span class="tb-pill-dot"></span><span class="tb-label">{{ syncShort }}</span>
     </span>
 
-    <button class="tb-item" aria-label="好友消息" @click="onChatClick">
-      <Icon name="chat" :size="15" /><span class="tb-label"> 好友</span>
-      <span v-if="chatBadge > 0" class="tb-badge">{{ chatBadge > 99 ? '99+' : chatBadge }}</span>
-    </button>
     <button v-if="!user.isOnline" class="tb-item" @click="ui.openAuth"><Icon name="user" :size="15" /><span class="tb-label"> 登录/注册</span></button>
     <button v-else class="tb-item" aria-label="用户中心" @click="ui.openUserCenter"><span class="tb-avatar">{{ user.shortName }}</span></button>
     <button class="tb-item" aria-label="设置" @click="ui.openSettings"><Icon name="settings" :size="15" /><span class="tb-label"> 设置</span></button>
@@ -30,7 +26,6 @@ import { useUserStore } from '../../stores/user'
 import { useSyncStore } from '../../stores/sync'
 import { useDataStore } from '../../stores/data'
 import { useAiStore } from '../../stores/ai'
-import { useChatStore } from '../../stores/chat'
 import Icon from '../ui/Icon.vue'
 import NoticeBar from '../features/notices/NoticeBar.vue'
 
@@ -39,17 +34,11 @@ const user = useUserStore()
 const sync = useSyncStore()
 const data = useDataStore()
 const ai = useAiStore()
-const chat = useChatStore()
 
 const aiRunning = computed(() => {
   const queue = data.state.aiTaskQueue || []
   return queue.filter((t) => t.status === 'pending' || t.status === 'running').length
 })
-const chatBadge = computed(() => (chat.totalUnread || 0) + (chat.pendingRequests || 0))
-function onChatClick() {
-  if (!user.isOnline) { ui.openAuth(); return }
-  chat.openChatModal()
-}
 const syncShort = computed(() => {
   if (!sync.online) return '离线'
   if (sync.syncing) return '同步中'
@@ -121,21 +110,6 @@ const syncClass = computed(() => ({ online: sync.online, syncing: sync.syncing }
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: var(--fs-sm); font-weight: 600;
-}
-.tb-badge {
-  position: absolute;
-  top: 1px;
-  right: 2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--radius-full);
-  background: var(--color-danger);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  text-align: center;
 }
 .tb-ai {
   display: inline-flex;

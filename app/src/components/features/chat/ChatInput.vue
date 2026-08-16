@@ -307,6 +307,8 @@ function focusInput() {
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 6px;
+  max-height: 120px;
+  overflow-y: auto;
 }
 .chat-cart-item {
   display: flex;

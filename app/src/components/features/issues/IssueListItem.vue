@@ -34,6 +34,7 @@ const hasNew = computed(() => (props.admin ? props.issue.has_new_for_admin : pro
 
 <style scoped>
 .fb-issue-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -68,13 +69,20 @@ const hasNew = computed(() => (props.admin ? props.issue.has_new_for_admin : pro
   flex-shrink: 0;
 }
 .fb-issue-item-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   flex-shrink: 0;
   display: flex;
   gap: 4px;
   opacity: 0;
+  pointer-events: none;
+  background: inherit;
+  padding-left: 10px;
   transition: opacity var(--transition-fast);
 }
-.fb-issue-item:hover .fb-issue-item-actions { opacity: 1; }
+.fb-issue-item:hover .fb-issue-item-actions { opacity: 1; pointer-events: auto; }
 .fb-action-btn {
   width: 26px;
   height: 26px;
