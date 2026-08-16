@@ -52,9 +52,13 @@
           <span class="lg-item"><span class="lg-dot bad"></span>答错</span>
         </div>
         <div v-if="as.questions.length > 1" class="quiz-nav">
-          <button v-for="(qq, i) in as.questions" :key="i" class="dot"
-            :aria-label="'跳转到第 ' + (i + 1) + ' 题'"
-            :class="dotClass(i)" @click="quiz.goToQuestion(i)">{{ i + 1 }}</button>
+          <span v-if="dotWindow[0] > 0" class="dots-ellipsis">…</span>
+          <template v-for="(qq, i) in as.questions" :key="i">
+            <button v-if="as.questions.length <= 40 || (i >= dotWindow[0] && i <= dotWindow[1])" class="dot"
+              :aria-label="'跳转到第 ' + (i + 1) + ' 题'"
+              :class="dotClass(i)" @click="quiz.goToQuestion(i)">{{ i + 1 }}</button>
+          </template>
+          <span v-if="dotWindow[1] < as.questions.length - 1" class="dots-ellipsis">…</span>
         </div>
 
         <!-- 操作栏 -->
@@ -98,7 +102,7 @@
 
         <div v-for="(qq, i) in reviewList" :key="i" class="review-item" :class="reviewClass(qq)">
           <div class="rv-q">
-            <span class="rv-icon">{{ reviewIcon(qq) }}</span>
+            <span class="rv-icon" :class="reviewIconClass(qq)" aria-hidden="true"></span>
             <span class="rv-type">{{ typeMap[qq.q.type] || qq.q.type }}</span>
             <span class="rv-text">第{{ qq.index + 1 }}题：<span v-html="renderMarkdown(qq.q.question)"></span></span>
           </div>
@@ -200,11 +204,23 @@ function reviewClass(item) {
   if (item.ans === undefined || item.ans === -1 || item.ans === null) return ''
   return item.ci === false ? 'is-wrong' : (item.ci === true ? 'is-correct' : '')
 }
-function reviewIcon(item) {
-  if (item.ans === undefined || item.ans === -1 || item.ans === null) return '⏳'
-  return item.ci === true ? '✅' : (item.ci === false ? '❌' : '✅（主观题）')
+function reviewIconClass(item) {
+  if (item.ans === undefined || item.ans === -1 || item.ans === null) return 'pending'
+  if (item.ci === true) return 'ok'
+  if (item.ci === false) return 'bad'
+  return 'subj'
 }
 function isObjQ(qq) { return isObjType(qq.type) }
+
+// 大题量时题号点开窗渲染，避免一次性生成数百个 DOM 节点
+const dotWindow = computed(() => {
+  const len = (as.value && as.value.questions) ? as.value.questions.length : 0
+  if (len <= 40) return [0, len - 1]
+  const cur = idx.value
+  const half = 12
+  const start = Math.max(0, Math.min(cur - half, len - 25))
+  return [start, start + 24]
+})
 
 function dotClass(i) {
   const cls = []
@@ -362,7 +378,8 @@ watch(() => quiz.session.modalOpen, (open) => {
 .lg-dot.current { background: var(--color-primary); border-color: var(--color-primary); }
 .lg-dot.ok { background: var(--color-success); border-color: var(--color-success); }
 .lg-dot.bad { background: var(--color-danger); border-color: var(--color-danger); }
-.quiz-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-sm) 0 var(--space-md); }
+.quiz-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-sm) 0 var(--space-md); align-items: center; }
+.dots-ellipsis { color: var(--text-muted); font-size: var(--fs-xs); padding: 0 2px; }
 .dot {
   width: 30px; height: 30px;
   border-radius: var(--radius-full);
@@ -399,7 +416,17 @@ watch(() => quiz.session.modalOpen, (open) => {
 .review-item.is-wrong { border-color: var(--color-danger-light); background: var(--color-danger-light); }
 .review-item.is-correct { border-color: var(--color-success-light); background: var(--color-success-light); }
 .rv-q { display: flex; align-items: flex-start; gap: 6px; font-size: var(--fs-base); line-height: 1.6; }
-.rv-icon { flex-shrink: 0; }
+.rv-icon {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 7px;
+  background: var(--text-faint);
+}
+.rv-icon.ok { background: var(--color-success); }
+.rv-icon.bad { background: var(--color-danger); }
+.rv-icon.subj { background: var(--color-primary); }
 .rv-type { flex-shrink: 0; font-size: var(--fs-xs); background: var(--surface-hover); padding: 1px 8px; border-radius: var(--radius-sm); color: var(--text-secondary); }
 .rv-detail { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; font-size: var(--fs-sm); }
 .rv-ans.ok { color: var(--color-success); }

@@ -10,13 +10,14 @@
       <EmptyState v-if="subjects.list.length === 0" icon="book" title="暂无科目" hint="点击「+ 科目」开始" />
       <div v-else class="subject-list">
         <div v-for="(s, sidx) in subjects.list" :key="s.id" class="subject-group" :class="{ collapsed: s.collapsed }">
-          <div class="subject-header" :class="{ active: s.id === data.state.currentSubjectId }" @click="selectSubject(s.id)">
-            <span class="subj-arrow" @click.stop="subjects.toggleCollapse(s.id)">
-              <Icon name="chevron-down" :size="12" :class="{ rotated: s.collapsed }" />
+          <div class="subject-header" :class="{ active: s.id === data.state.currentSubjectId }" @click="toggleExpand(s.id)">
+            <span class="subj-arrow" aria-hidden="true">
+              <Icon name="chevron-down" :size="13" :class="{ rotated: s.collapsed }" />
             </span>
             <span class="subj-name">{{ s.name }}</span>
-            <span class="subj-count tabular-nums">{{ s.chapterIds.length }}</span>
+            <span class="subj-count tabular-nums" title="查看科目总览" @click.stop="openDash(s.id)">{{ s.chapterIds.length }}</span>
             <span class="subj-actions" @click.stop>
+              <button class="subj-btn" title="科目总览" @click="openDash(s.id)"><Icon name="chart" :size="13" /></button>
               <button class="subj-btn" :disabled="sidx === 0" title="置顶" @click="subjects.moveToTop(s.id)"><Icon name="arrow-up" :size="13" /></button>
               <button class="subj-btn" title="重命名" @click="renameSubject(s)"><Icon name="edit" :size="13" /></button>
               <button class="subj-btn del" title="删除" @click="deleteSubject(s)"><Icon name="trash" :size="13" /></button>
@@ -155,9 +156,12 @@ async function deleteChapter(cid) {
   if (ok) subjects.deleteChapter(cid)
 }
 
-function selectSubject(id) {
+function openDash(id) {
   subjects.select(id)
   ui.showScreen('subject-dash')
+}
+function toggleExpand(id) {
+  subjects.toggleCollapse(id)
 }
 function selectChapter(cid) {
   subjects.switchChapter(cid)
@@ -200,10 +204,12 @@ function toggleAi(v) {
 .subject-list { display: flex; flex-direction: column; gap: 2px; }
 .subject-group { border-radius: var(--radius-md); }
 .subject-header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 10px;
+  min-height: 40px;
+  padding: 8px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
@@ -214,8 +220,24 @@ function toggleAi(v) {
 .subj-arrow { display: flex; color: var(--text-muted); transition: transform var(--transition-fast); }
 .subj-arrow .icon.rotated { transform: rotate(-90deg); }
 .subj-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.subj-count { font-size: var(--fs-xs); color: var(--text-muted); background: var(--surface-hover); border-radius: var(--radius-full); padding: 0 7px; line-height: 17px; }
-.subj-actions { display: none; gap: 2px; }
+.subj-count {
+  font-size: var(--fs-xs); color: var(--text-muted);
+  background: var(--surface-hover); border-radius: var(--radius-full);
+  padding: 0 7px; line-height: 17px; cursor: pointer; flex-shrink: 0;
+}
+.subj-count:hover { color: var(--color-primary); background: var(--color-primary-light); }
+/* 悬停操作按钮绝对定位覆盖右侧，不产生任何布局位移 */
+.subj-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  gap: 2px;
+  background: inherit;
+  padding-left: 10px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
 .subject-header:hover .subj-actions { display: inline-flex; }
 .subj-btn, .ch-btn {
   width: 26px; height: 26px;
@@ -228,10 +250,12 @@ function toggleAi(v) {
 .subj-btn:disabled, .ch-btn:disabled { opacity: 0.3; cursor: default; }
 .chapter-list { padding-left: var(--space-lg); display: flex; flex-direction: column; gap: 2px; }
 .chapter-item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-height: 40px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -246,11 +270,22 @@ function toggleAi(v) {
 .chapter-count { font-size: 11px; color: var(--text-muted); }
 .chapter-bar { height: 2px; background: var(--surface-hover); border-radius: var(--radius-full); overflow: hidden; }
 .chapter-bar-fill { display: block; height: 100%; background: var(--color-primary); opacity: 0.55; border-radius: var(--radius-full); transition: width 0.4s ease; }
-.ch-actions { display: none; gap: 2px; flex-shrink: 0; }
+.ch-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  gap: 2px;
+  flex-shrink: 0;
+  background: inherit;
+  padding-left: 10px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
 .chapter-item:hover .ch-actions { display: inline-flex; }
 .btn-add-chapter {
   width: 100%;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: var(--fs-xs);
@@ -275,7 +310,7 @@ function toggleAi(v) {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: var(--fs-sm);
@@ -298,15 +333,15 @@ function toggleAi(v) {
 }
 .nav-badge.run { background: var(--color-primary); }
 
-#sidebar-footer { border-top: 1px solid var(--border-light); padding: var(--space-md) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom)); }
-.ai-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
+#sidebar-footer { border-top: 1px solid var(--border-light); padding: var(--space-md) var(--space-sm) calc(var(--space-md) + env(safe-area-inset-bottom)); }
+.ai-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); padding: 0 10px; }
 .ai-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); }
 .user-row {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
   text-align: left;
@@ -359,7 +394,8 @@ function toggleAi(v) {
     transition: opacity 0.3s ease;
   }
   .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
-  .subj-actions, .ch-actions { display: inline-flex; }
+  .subj-actions, .ch-actions { position: static; transform: none; display: inline-flex; padding-left: 0; }
+  .subj-count { display: none; }
   .subj-btn, .ch-btn { width: 30px; height: 30px; }
 }
 </style>

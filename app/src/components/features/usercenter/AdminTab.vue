@@ -75,7 +75,7 @@
           <span class="col-type" :style="{ color: typeOf(n).color }">{{ typeOf(n).icon }} {{ n.type }}</span>
           <span class="col-dur">{{ durationOf(n) }}</span>
           <span class="col-status">
-            <button class="toggle-link" @click="users.toggleNoticeRow(n.id)">{{ n.enabled ? '启用' : '停用' }}</button>
+            <button class="toggle-link" @click="users.toggleNoticeRow(n.id)">{{ n.enabled ? '停用' : '启用' }}</button>
           </span>
           <span class="col-expire">{{ expireOf(n) }}</span>
           <span class="col-actions">

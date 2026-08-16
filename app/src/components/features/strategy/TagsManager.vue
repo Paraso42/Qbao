@@ -2,8 +2,8 @@
 <template>
   <div class="tags-manager-v2">
     <div v-for="cat in cats" :key="cat.key" class="tag-column" :data-cat="cat.key">
-      <div class="tag-col-header">{{ cat.label }}</div>
-      <div class="tag-col-list" :class="{ 'drag-over': dragOverCol === cat.key }"
+      <div class="tag-col-header"><i class="cat-dot"></i>{{ cat.label }}<span v-if="tagsOf(cat.key).length" class="tag-col-count">{{ tagsOf(cat.key).length }}</span></div>
+      <div class="tag-col-list" :class="{ 'drag-over': dragOverCol === cat.key, 'col-collapsed': !openCols.has(cat.key) && tagsOf(cat.key).length > 5 }"
         @dragover.prevent="onDragOver(cat.key)"
         @dragleave="dragOverCol = null"
         @drop="onDrop(cat.key, $event)">
@@ -22,6 +22,9 @@
           <span class="tag-del" @click.stop="removeTag(cat.key, t)">×</span>
         </span>
       </div>
+      <button v-if="tagsOf(cat.key).length > 5" class="tag-col-toggle" @click="toggleCol(cat.key)">
+        {{ openCols.has(cat.key) ? '收起' : '展开全部 ' + tagsOf(cat.key) + ' 个' }}
+      </button>
       <input class="tag-col-input" :placeholder="'＋ 添加' + cat.label.replace(/标签$/, '')" :data-cat="cat.key"
         @keydown.enter="addTag(cat.key, $event.target)">
     </div>
@@ -29,7 +32,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useDataStore } from '../../../stores/data'
 import { useUiStore } from '../../../stores/ui'
 import {
@@ -42,15 +45,21 @@ const data = useDataStore()
 const ui = useUiStore()
 
 const cats = [
-  { key: 'error', label: '🔴 错题标签', empty: '暂无错题标签' },
-  { key: 'review', label: '🟡 复习标签', empty: '暂无复习标签' },
-  { key: 'new', label: '🟢 新题标签', empty: '暂无新题标签' }
+  { key: 'error', label: '错题标签', empty: '暂无错题标签' },
+  { key: 'review', label: '复习标签', empty: '暂无复习标签' },
+  { key: 'new', label: '新题标签', empty: '暂无新题标签' }
 ]
 
 const strategy = computed(() => data.getChStrategy(props.chapterId))
 const dragTag = ref(null)
 const dragCat = ref(null)
 const dragOverCol = ref(null)
+// 长列表折叠：每列超过 5 个标签默认折叠为滚动区，可展开
+const openCols = reactive(new Set())
+function toggleCol(cat) {
+  if (openCols.has(cat)) openCols.delete(cat)
+  else openCols.add(cat)
+}
 
 function tagsOf(cat) { return strategy.value ? tagArr(strategy.value, cat) : [] }
 function tagMetaText(t) {
@@ -120,9 +129,26 @@ async function renameTag(cat, name) {
   border-radius: var(--radius-md);
   padding: var(--space-sm);
 }
-.tag-col-header { font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); padding: 4px 6px; }
+.tag-col-header { font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); padding: 4px 6px; display: flex; align-items: center; gap: 6px; }
+.tag-col-count { margin-left: auto; }
+.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tag-column[data-cat="error"] .cat-dot { background: #EF4444; }
+.tag-column[data-cat="review"] .cat-dot { background: #F59E0B; }
+.tag-column[data-cat="new"] .cat-dot { background: #10B981; }
+.tag-col-count { font-size: 11px; font-weight: 500; color: var(--text-muted); background: var(--surface-card); border-radius: var(--radius-full); padding: 0 7px; line-height: 17px; }
 .tag-col-list { min-height: 48px; display: flex; flex-direction: column; gap: 4px; }
+.tag-col-list.col-collapsed { max-height: 148px; overflow-y: auto; padding-right: 2px; }
 .tag-col-list.drag-over { outline: 2px dashed var(--color-primary); outline-offset: -2px; border-radius: var(--radius-sm); }
+.tag-col-toggle {
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 8px;
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.tag-col-toggle:hover { background: var(--color-primary-light); }
 .col-empty { color: var(--text-muted); font-size: var(--fs-xs); padding: 6px; }
 .tag-chip-v2 {
   display: inline-flex;

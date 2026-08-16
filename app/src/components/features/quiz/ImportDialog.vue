@@ -74,8 +74,10 @@ function parseQuestions() {
   }
 }
 
-// 实时校验状态
-const validateState = computed(() => {
+// 实时校验状态：防抖解析，避免大段粘贴时每键都整段 JSON.parse 卡顿
+const validateState = ref({ kind: 'idle' })
+let validateTimer = null
+function computeValidate() {
   if (!text.value.trim()) return { kind: 'idle' }
   try {
     const qs = parseQuestions()
@@ -83,6 +85,10 @@ const validateState = computed(() => {
   } catch (e) {
     return { kind: 'err', error: e.message }
   }
+}
+watch(text, () => {
+  if (validateTimer) clearTimeout(validateTimer)
+  validateTimer = setTimeout(() => { validateState.value = computeValidate() }, 250)
 })
 
 function truncate(s, n) {

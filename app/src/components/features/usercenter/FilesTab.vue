@@ -184,7 +184,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .loading { text-align: center; color: var(--text-muted); padding: var(--space-lg); font-size: var(--fs-sm); }
 .empty { font-size: var(--fs-sm); color: var(--text-muted); text-align: center; padding: var(--space-lg); }
 
-.files-list { display: flex; flex-direction: column; gap: var(--space-sm); }
+.files-list { display: flex; flex-direction: column; gap: var(--space-sm); max-height: 340px; overflow-y: auto; padding-right: 4px; }
 .file-item {
   display: flex;
   align-items: center;

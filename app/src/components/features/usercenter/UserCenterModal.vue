@@ -38,6 +38,7 @@
         <FilesTab v-else-if="users.activeTab === 'files'" />
         <AchievementsTab v-else-if="users.activeTab === 'achievements'" />
         <AdminTab v-else-if="users.activeTab === 'admin'" />
+        <AccountTab v-else />
       </section>
     </div>
   </Modal>
