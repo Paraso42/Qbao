@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware');
 const { asyncHandler, ApiError } = require('../lib/errorHandler');
 const { validate } = require('../lib/validate');
 const { putDataSchema, patchSectionSchema } = require('../schemas/data.schema');
+const { sanitizeStateJson, sanitizeAiConfigObject } = require('../lib/aiStateSanitizer');
 
 // v3.25: 乐观锁（rev）— 桌面/网页多端互通防覆盖。
 // 客户端 PUT/PATCH 可带 rev；不匹配返回 409 { error, current }。
@@ -12,7 +13,9 @@ const { putDataSchema, patchSectionSchema } = require('../schemas/data.schema');
 
 async function getRow(userId) {
   const r = await pool.query('SELECT state_json, synced_at, rev FROM user_data WHERE user_id = $1', [userId]);
-  return r.rows.length ? r.rows[0] : null;
+  const row = r.rows.length ? r.rows[0] : null;
+  if (row) row.state_json = sanitizeStateJson(row.state_json);
+  return row;
 }
 
 function validRev(v) {
@@ -29,7 +32,9 @@ module.exports = function (app) {
 
   // PUT /api/v1/data — 全量写入，可选乐观锁（校验先于鉴权：畸形请求直接 422）
   app.put('/api/v1/data', validate({ body: putDataSchema }), requireAuth, asyncHandler(async (req, res) => {
-    const { state_json, rev } = req.body;
+      // state_json 已在解构处完成 AI Key 脱敏。
+    const { rev } = req.body;
+      const state_json = sanitizeStateJson(req.body.state_json);
     const clientRev = validRev(rev);
     if (clientRev) {
       // 乐观锁路径：原子条件更新
@@ -59,11 +64,13 @@ module.exports = function (app) {
 
   // PATCH /api/v1/data/section — 部分更新（乐观锁 CAS）
   app.patch('/api/v1/data/section', validate({ body: patchSectionSchema }), requireAuth, asyncHandler(async (req, res) => {
+      var safeData = null;
     const { section, data, rev } = req.body;
+      safeData = section === 'aiConfig' ? sanitizeAiConfigObject(data) : data;
     const row = await getRow(req.userId);
     if (!row) {
       // 首写：构造只有该 section 的状态
-      const st = {}; st[section] = data;
+      const st = {}; st[section] = safeData;
       const r = await pool.query(
         'INSERT INTO user_data (user_id, state_json, rev) VALUES ($1, $2, 1) ON CONFLICT (user_id) DO NOTHING RETURNING rev',
         [req.userId, st]
@@ -77,10 +84,11 @@ module.exports = function (app) {
       throw new ApiError(409, '数据版本冲突', { current: { state_json: row.state_json, synced_at: row.synced_at, rev: row.rev } });
     }
     const state = row.state_json || {};
-    state[section] = { ...(state[section] || {}), ...data };
+    state[section] = { ...(state[section] || {}), ...safeData };
+      const safeState = sanitizeStateJson(state);
     const upd = await pool.query(
       'UPDATE user_data SET state_json = $2, rev = rev + 1, synced_at = NOW() WHERE user_id = $1 AND rev = $3 RETURNING rev',
-      [req.userId, state, row.rev]
+      [req.userId, safeState, row.rev]
     );
     if (upd.rows.length) return res.json({ ok: true, rev: upd.rows[0].rev });
     const cur = await getRow(req.userId);
