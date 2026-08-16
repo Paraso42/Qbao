@@ -332,7 +332,7 @@ module.exports = function (app) {
     if (roomResult.rows.length === 0) throw new ApiError(404, '会话不存在');
 
     const membersResult = await pool.query(
-      `SELECT u.id, u.username, u.display_name, u.last_seen_at, crm.joined_at
+      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.last_seen_at, crm.joined_at
        FROM chat_room_members crm
        JOIN users u ON crm.user_id = u.id
        WHERE crm.room_id = $1`,

@@ -10,6 +10,7 @@ import { createSyncEngine } from '../services/sync'
 import { fetchWithAuth, getToken } from '../services/api'
 import { migrateState, CLOUD_STORAGE_PREFIX } from '../services/persistence'
 import { useQuizStore } from '../stores/quiz'
+import { applyFontSizes } from './fontSizes'
 
 let engine = null
 
@@ -51,7 +52,9 @@ export function initApp(pinia) {
   quiz.bindLifecycle()
 
   applyDarkMode()
+  applyFontSizes(data.state.settings)
   watch(() => data.state.settings.darkMode, applyDarkMode)
+  watch(() => data.state.settings, () => applyFontSizes(data.state.settings), { deep: true })
 }
 
 // 登录/恢复后：新设备（无本地缓存）从云端恢复；本地优先语义同 legacy DataStoreInit。

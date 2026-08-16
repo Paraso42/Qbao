@@ -11,7 +11,10 @@ export const useUiStore = defineStore('ui', {
     settingsOpen: false,
     settingsTab: 'personalize',
     userCenterOpen: false,
-    toasts: []
+    importOpen: false,
+    toasts: [],
+    confirm: { open: false, title: '', message: '', okText: '', resolve: null },
+    prompt: { open: false, title: '', value: '', resolve: null }
   }),
   actions: {
     toggleSidebar() { this.sidebarOpen = !this.sidebarOpen },
@@ -24,6 +27,8 @@ export const useUiStore = defineStore('ui', {
     setSettingsTab(tab) { this.settingsTab = tab },
     openUserCenter() { this.userCenterOpen = true },
     closeUserCenter() { this.userCenterOpen = false },
+    openImport() { this.importOpen = true },
+    closeImport() { this.importOpen = false },
     toast(message, type = 'info', duration = 4000) {
       const id = ++toastSeq
       this.toasts.push({ id, message, type })
@@ -32,6 +37,20 @@ export const useUiStore = defineStore('ui', {
     dismissToast(id) {
       const idx = this.toasts.findIndex((t) => t.id === id)
       if (idx >= 0) this.toasts.splice(idx, 1)
-    }
+    },
+    // Promise 化的确认框（替代原生 confirm）
+    openConfirm(title, message, okText) {
+      return new Promise((resolve) => {
+        this.confirm = { open: true, title, message: message || '', okText: okText || '', resolve }
+      })
+    },
+    closeConfirm() { this.confirm.open = false },
+    // Promise 化的输入框（替代原生 prompt / showInlinePrompt）
+    openPrompt(title, value) {
+      return new Promise((resolve) => {
+        this.prompt = { open: true, title, value: value || '', resolve }
+      })
+    },
+    closePrompt() { this.prompt.open = false }
   }
 })
