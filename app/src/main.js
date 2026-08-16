@@ -3,6 +3,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
+import { initApp } from './core/boot'
 import './styles/tokens.css'
 import './styles/base.css'
 import './styles/components.css'
@@ -34,9 +35,11 @@ async function boot() {
     console.warn('[boot] KaTeX 加载失败，公式将退化为纯文本', e)
   }
 
+  const pinia = createPinia()
   const app = createApp(App)
-  app.use(createPinia())
+  app.use(pinia)
   app.mount('#app')
+  initApp(pinia)
 }
 
 boot()
