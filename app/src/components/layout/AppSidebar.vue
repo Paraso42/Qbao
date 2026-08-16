@@ -1,13 +1,13 @@
-<!-- 侧栏：科目/章节树 + AI 开关 + 同步状态（自 legacy renderSubjectList 迁移，DeepSeek 风格） -->
+<!-- 侧栏：科目树 + 导航区 + 账号区（DeepSeek 官方侧栏体系） -->
 <template>
   <aside id="sidebar" :class="{ 'mobile-open': ui.sidebarOpen }">
     <div id="sidebar-header">
       <h2>科目</h2>
-      <button class="btn btn-primary btn-small" @click="addSubject">＋ 科目</button>
+      <button class="btn btn-ghost btn-small" @click="addSubject"><Icon name="plus" :size="13" /> 科目</button>
     </div>
 
     <div id="sidebar-body">
-      <EmptyState v-if="subjects.list.length === 0" icon="book" title="暂无科目" hint="点击上方「＋ 科目」开始" />
+      <EmptyState v-if="subjects.list.length === 0" icon="book" title="暂无科目" hint="点击「+ 科目」开始" />
       <div v-else class="subject-list">
         <div v-for="(s, sidx) in subjects.list" :key="s.id" class="subject-group" :class="{ collapsed: s.collapsed }">
           <div class="subject-header" :class="{ active: s.id === data.state.currentSubjectId }" @click="selectSubject(s.id)">
@@ -17,9 +17,9 @@
             <span class="subj-name">{{ s.name }}</span>
             <span class="subj-count tabular-nums">{{ s.chapterIds.length }}</span>
             <span class="subj-actions" @click.stop>
-              <button class="subj-btn" :disabled="sidx === 0" title="置顶" @click="subjects.moveToTop(s.id)"><Icon name="arrow-up" :size="12" /></button>
-              <button class="subj-btn" title="重命名" @click="renameSubject(s)"><Icon name="edit" :size="12" /></button>
-              <button class="subj-btn del" title="删除" @click="deleteSubject(s)"><Icon name="trash" :size="12" /></button>
+              <button class="subj-btn" :disabled="sidx === 0" title="置顶" @click="subjects.moveToTop(s.id)"><Icon name="arrow-up" :size="13" /></button>
+              <button class="subj-btn" title="重命名" @click="renameSubject(s)"><Icon name="edit" :size="13" /></button>
+              <button class="subj-btn del" title="删除" @click="deleteSubject(s)"><Icon name="trash" :size="13" /></button>
             </span>
           </div>
 
@@ -28,18 +28,32 @@
               <div v-if="data.state.chapters[cid]" class="chapter-item" :class="{ active: cid === data.state.currentChapterId }" @click="selectChapter(cid)" @dblclick="renameChapter(cid)">
                 <div class="chapter-info">
                   <span class="chapter-name">{{ data.state.chapters[cid].name }}</span>
-                  <span class="chapter-count tabular-nums">{{ chapterAnswered(cid) }} 题已答</span>
+                  <span class="chapter-count tabular-nums">{{ chapterAnswered(cid) }}/{{ chapterTotal(cid) }} 题</span>
+                  <span class="chapter-bar"><span class="chapter-bar-fill" :style="{ width: chapterPct(cid) + '%' }"></span></span>
                 </div>
                 <span class="ch-actions" @click.stop>
-                  <button class="ch-btn" :disabled="cidx === 0" title="置顶" @click="subjects.moveChapterToTop(s.id, cid)"><Icon name="arrow-up" :size="11" /></button>
-                  <button class="ch-btn" title="重命名" @click="renameChapter(cid)"><Icon name="edit" :size="11" /></button>
-                  <button class="ch-btn del" title="删除" @click="deleteChapter(cid)"><Icon name="trash" :size="11" /></button>
+                  <button class="ch-btn" :disabled="cidx === 0" title="置顶" @click="subjects.moveChapterToTop(s.id, cid)"><Icon name="arrow-up" :size="12" /></button>
+                  <button class="ch-btn" title="重命名" @click="renameChapter(cid)"><Icon name="edit" :size="12" /></button>
+                  <button class="ch-btn del" title="删除" @click="deleteChapter(cid)"><Icon name="trash" :size="12" /></button>
                 </span>
               </div>
             </div>
-            <button class="btn-add-chapter" @click="addChapter(s.id)">＋ 新建章节</button>
+            <button class="btn-add-chapter" @click="addChapter(s.id)"><Icon name="plus" :size="11" /> 新建章节</button>
           </div>
         </div>
+      </div>
+
+      <!-- 导航区：高频功能入口 -->
+      <div class="side-nav">
+        <button class="nav-item" @click="ui.showScreen('history')"><Icon name="clock" :size="15" /> 答题历史</button>
+        <button class="nav-item" @click="onChatClick">
+          <Icon name="chat" :size="15" /> 好友消息
+          <span v-if="chatBadge > 0" class="nav-badge">{{ chatBadge > 99 ? '99+' : chatBadge }}</span>
+        </button>
+        <button class="nav-item" @click="ai.openQueueDialog">
+          <Icon name="sparkle" :size="15" /> AI 任务
+          <span v-if="aiRunning > 0" class="nav-badge run">{{ aiRunning }}</span>
+        </button>
       </div>
     </div>
 
@@ -48,17 +62,15 @@
         <span class="ai-label"><Icon name="sparkle" :size="14" /> AI 出题</span>
         <Toggle :model-value="data.state.aiEnabled" @change="toggleAi" />
       </div>
-      <div class="sync-status" :class="{ online: sync.online, syncing: sync.syncing }">
-        <span class="sync-dot"></span>{{ sync.label }}
-      </div>
       <div v-if="user.isOnline" class="user-row" @click="ui.openUserCenter">
         <span class="user-avatar">{{ user.shortName }}</span>
         <span class="user-name">{{ user.user.displayName || user.user.username }}</span>
+        <span class="user-sync" :class="{ online: sync.online, syncing: sync.syncing }"></span>
       </div>
-      <div v-else class="user-row" @click="ui.openAuth">
+      <button v-else class="user-row login-cta" @click="ui.openAuth">
         <span class="user-avatar ghost"><Icon name="user" :size="14" /></span>
-        <span class="user-name">未登录</span>
-      </div>
+        <span class="user-name">登录 / 注册</span>
+      </button>
     </div>
   </aside>
   <div class="sidebar-overlay" :class="{ active: ui.sidebarOpen }" @click="ui.toggleSidebar"></div>
@@ -72,6 +84,8 @@ import { useSubjectStore } from '../../stores/subjects'
 import { useUserStore } from '../../stores/user'
 import { useSyncStore } from '../../stores/sync'
 import { useQuizStore } from '../../stores/quiz'
+import { useAiStore } from '../../stores/ai'
+import { useChatStore } from '../../stores/chat'
 import Icon from '../ui/Icon.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import Toggle from '../ui/Toggle.vue'
@@ -82,7 +96,19 @@ const subjects = useSubjectStore()
 const user = useUserStore()
 const sync = useSyncStore()
 const quiz = useQuizStore()
+const ai = useAiStore()
+const chat = useChatStore()
 
+const chatBadge = computed(() => (chat.totalUnread || 0) + (chat.pendingRequests || 0))
+const aiRunning = computed(() => {
+  const queue = data.state.aiTaskQueue || []
+  return queue.filter((t) => t.status === 'pending' || t.status === 'running').length
+})
+
+function chapterTotal(cid) {
+  const ch = data.state.chapters[cid]
+  return ch && ch.questions ? ch.questions.length : 0
+}
 function chapterAnswered(cid) {
   const ch = data.state.chapters[cid]
   if (!ch) return 0
@@ -91,6 +117,11 @@ function chapterAnswered(cid) {
     if (set.userAnswers) answered += set.userAnswers.filter((a) => a !== undefined && a !== -1).length
   })
   return answered
+}
+function chapterPct(cid) {
+  const total = chapterTotal(cid)
+  if (!total) return 0
+  return Math.min(100, Math.round(chapterAnswered(cid) / total * 100))
 }
 
 async function addSubject() {
@@ -102,7 +133,7 @@ async function renameSubject(s) {
   if (name) subjects.rename(s.id, name)
 }
 async function deleteSubject(s) {
-  const ok = await ui.openConfirm('删除科目', '删除科目「' + s.name + '」及其所有章节？', '删除')
+  const ok = await ui.openConfirm('删除科目', '删除科目「' + s.name + '」？其下所有章节、题目与学习记录将一并移除，且无法恢复。', '删除', { danger: true })
   if (ok) subjects.remove(s.id)
 }
 async function addChapter(subjId) {
@@ -120,7 +151,7 @@ async function renameChapter(cid) {
 async function deleteChapter(cid) {
   const ch = data.state.chapters[cid]
   if (!ch) return
-  const ok = await ui.openConfirm('删除章节', '删除该章节？', '删除')
+  const ok = await ui.openConfirm('删除章节', '删除章节「' + ch.name + '」？该章节下的题目与学习记录将一并移除，且无法恢复。', '删除', { danger: true })
   if (ok) subjects.deleteChapter(cid)
 }
 
@@ -134,6 +165,11 @@ function selectChapter(cid) {
   quiz.restoreQuizFromServer(false)
 }
 
+function onChatClick() {
+  if (!user.isOnline) { ui.openAuth(); return }
+  chat.openChatModal()
+}
+
 function toggleAi(v) {
   data.state.aiEnabled = v
   data.saveState()
@@ -144,7 +180,7 @@ function toggleAi(v) {
 <style scoped>
 #sidebar {
   width: var(--sidebar-width);
-  background: var(--surface-card);
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
@@ -156,11 +192,11 @@ function toggleAi(v) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--border-light);
 }
-#sidebar-header h2 { font-size: var(--fs-md); }
-#sidebar-body { flex: 1; overflow-y: auto; padding: var(--space-sm); }
+#sidebar-header h2 { font-size: var(--fs-md); font-weight: 600; }
+#sidebar-body { flex: 1; overflow-y: auto; padding: var(--space-sm) var(--space-sm) var(--space-lg); }
 .subject-list { display: flex; flex-direction: column; gap: 2px; }
 .subject-group { border-radius: var(--radius-md); }
 .subject-header {
@@ -174,7 +210,7 @@ function toggleAi(v) {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .subject-header:hover { background: var(--surface-hover); color: var(--text-primary); }
-.subject-header.active { background: var(--color-primary-light); color: var(--color-primary); }
+.subject-header.active { background: var(--sidebar-active); color: var(--text-primary); }
 .subj-arrow { display: flex; color: var(--text-muted); transition: transform var(--transition-fast); }
 .subj-arrow .icon.rotated { transform: rotate(-90deg); }
 .subj-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
@@ -182,69 +218,104 @@ function toggleAi(v) {
 .subj-actions { display: none; gap: 2px; }
 .subject-header:hover .subj-actions { display: inline-flex; }
 .subj-btn, .ch-btn {
-  width: 24px; height: 24px;
+  width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
 }
 .subj-btn:hover, .ch-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .subj-btn.del:hover, .ch-btn.del:hover { color: var(--color-danger); background: var(--color-danger-light); }
-.subj-btn:disabled { opacity: 0.3; cursor: default; }
+.subj-btn:disabled, .ch-btn:disabled { opacity: 0.3; cursor: default; }
 .chapter-list { padding-left: var(--space-lg); display: flex; flex-direction: column; gap: 2px; }
 .chapter-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .chapter-item:hover { background: var(--surface-hover); color: var(--text-primary); }
-.chapter-item.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 500; }
-.chapter-info { display: flex; flex-direction: column; min-width: 0; }
+.chapter-item.active { background: var(--sidebar-active); color: var(--text-primary); }
+.chapter-item.active .chapter-name { color: var(--color-primary); font-weight: 500; }
+.chapter-info { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 3px; }
 .chapter-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chapter-count { font-size: 11px; color: var(--text-muted); }
+.chapter-bar { height: 2px; background: var(--surface-hover); border-radius: var(--radius-full); overflow: hidden; }
+.chapter-bar-fill { display: block; height: 100%; background: var(--color-primary); opacity: 0.55; border-radius: var(--radius-full); transition: width 0.4s ease; }
 .ch-actions { display: none; gap: 2px; flex-shrink: 0; }
 .chapter-item:hover .ch-actions { display: inline-flex; }
 .btn-add-chapter {
   width: 100%;
-  padding: 7px;
+  padding: 9px 10px;
   border-radius: var(--radius-md);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: var(--fs-xs);
   text-align: left;
-  padding-left: 22px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 .btn-add-chapter:hover { background: var(--surface-hover); color: var(--color-primary); }
-#sidebar-footer { border-top: 1px solid var(--border-light); padding: var(--space-md) var(--space-lg); }
-.ai-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
-.ai-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); }
-.sync-status {
+
+/* 导航区：与科目树分隔 */
+.side-nav {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  margin-bottom: var(--space-sm);
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-muted); }
-.sync-status.online .sync-dot { background: var(--status-ok); }
-.sync-status.syncing .sync-dot { background: var(--status-run); animation: pulse 1.2s infinite; }
-@keyframes pulse { 50% { opacity: 0.4; } }
+.nav-item:hover { background: var(--surface-hover); color: var(--text-primary); }
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+.nav-badge.run { background: var(--color-primary); }
+
+#sidebar-footer { border-top: 1px solid var(--border-light); padding: var(--space-md) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom)); }
+.ai-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
+.ai-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); }
 .user-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  width: 100%;
+  padding: 7px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
+  text-align: left;
 }
 .user-row:hover { background: var(--surface-hover); }
+.user-row.login-cta { color: var(--color-primary); }
+.user-row.login-cta:hover { background: var(--color-primary-light); }
 .user-avatar {
-  width: 30px; height: 30px;
+  width: 28px; height: 28px;
   border-radius: 50%;
   background: var(--gradient-primary);
   color: #fff;
@@ -253,7 +324,16 @@ function toggleAi(v) {
   flex-shrink: 0;
 }
 .user-avatar.ghost { background: var(--surface-hover); color: var(--text-muted); }
-.user-name { font-size: var(--fs-sm); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-name { font-size: var(--fs-sm); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.user-sync {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--status-muted);
+  flex-shrink: 0;
+}
+.user-sync.online { background: var(--status-ok); }
+.user-sync.syncing { background: var(--status-run); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
 
 .sidebar-overlay { display: none; }
 @media (max-width: 900px) {
@@ -261,23 +341,25 @@ function toggleAi(v) {
     position: fixed;
     left: 0;
     top: var(--topbar-height);
-    height: calc(100vh - var(--topbar-height));
-    z-index: 9500;
+    height: calc(100dvh - var(--topbar-height));
+    z-index: var(--z-sidebar);
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-lg);
   }
-  #sidebar.mobile-open { transform: translateX(0); box-shadow: var(--shadow-lg); }
+  #sidebar.mobile-open { transform: translateX(0); }
   .sidebar-overlay {
     display: block;
     position: fixed;
     inset: var(--topbar-height) 0 0 0;
-    background: rgba(23, 24, 28, 0.45);
-    z-index: 9400;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: var(--z-sidebar-overlay);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
   .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
   .subj-actions, .ch-actions { display: inline-flex; }
+  .subj-btn, .ch-btn { width: 30px; height: 30px; }
 }
 </style>

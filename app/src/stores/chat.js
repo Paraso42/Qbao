@@ -387,7 +387,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function deleteFriend(friendId, friendName) {
-    const ok = await ui.openConfirm('删除好友', '确定删除好友「' + (friendName || friendId) + '」？', '删除')
+    const ok = await ui.openConfirm('删除好友', '确定删除好友「' + (friendName || friendId) + '」？聊天记录将被移除，且无法恢复。', '删除', { danger: true })
     if (!ok) return
     try {
       await chatApi.deleteFriend(friendId)

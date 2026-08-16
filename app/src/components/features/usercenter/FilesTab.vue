@@ -128,7 +128,7 @@ function expiryText(f) {
 }
 
 async function onDelete(f) {
-  const ok = await ui.openConfirm('删除文件', '确定要删除此文件吗？此操作不可恢复。', '删除')
+  const ok = await ui.openConfirm('删除文件', '确定要删除此文件吗？此操作不可恢复。', '删除', { danger: true })
   if (!ok) return
   users.deleteFile(f.id)
 }

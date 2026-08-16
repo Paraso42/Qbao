@@ -88,7 +88,7 @@ async function onDrop(cat, e) {
   const targetChip = e.target && e.target.closest ? e.target.closest('.tag-chip-v2') : null
   if (targetChip && targetChip.dataset && targetChip.dataset.tag && targetChip.dataset.tag !== dragged && from === cat) {
     const target = targetChip.dataset.tag
-    const ok = await ui.openConfirm('合并标签', '合并标签「' + dragged + '」到「' + target + '」？被合并的标签将被移除，其关联的题目归入目标标签。', '合并')
+    const ok = await ui.openConfirm('合并标签', '合并标签「' + dragged + '」到「' + target + '」？被合并的标签将被移除，其关联的题目归入目标标签。', '合并', { danger: true })
     if (ok) {
       mergeTagInCategory(data.state, props.chapterId, dragged, target, cat)
       data.saveState()

@@ -1,7 +1,12 @@
-/* ===== 响应式（阶段 5 完整实现，此处先放基础断点） ===== */
+/* Responsive base breakpoints */
 @media (max-width: 900px) {
   #main { padding: var(--space-lg) var(--space-md); }
 }
 @media (max-width: 768px) {
   #main { padding: var(--space-md) var(--space-md) calc(48px + env(safe-area-inset-bottom)); }
+}
+/* Coarse pointer: keep interactive targets >= 40px */
+@media (pointer: coarse) {
+  .btn, .tb-item, .subj-btn, .ch-btn { min-height: 40px; }
+  .toast .toast-close { width: 36px; height: 36px; }
 }

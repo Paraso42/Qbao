@@ -28,7 +28,8 @@ function onChange(e) { emit('update:modelValue', e.target.checked); emit('change
 .toggle-slider {
   position: absolute;
   inset: 0;
-  background: var(--border-default);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-full);
   transition: background var(--transition-fast);
 }

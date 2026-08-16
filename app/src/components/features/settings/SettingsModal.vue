@@ -57,6 +57,12 @@
                 <Toggle v-model="showNoticeBar" @change="saveSettings" />
               </div>
             </div>
+            <div class="settings-section">
+              <div class="settings-row">
+                <label>恢复默认</label>
+                <button class="btn btn-secondary btn-small" @click="resetDefaults">恢复默认设置</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -106,12 +112,12 @@
 
               <div class="settings-row">
                 <label>AI 自动判定</label>
-                <span class="row-desc">生成后让 AI 二次审核并修正题目<em>（消耗一次额外调用）</em></span>
+                <span class="row-desc">生成后自动判定客观题（选择/判断）正误；主观题仍需你自行审核<em>（消耗一次额外调用）</em></span>
                 <Toggle v-model="selfCheck" />
               </div>
               <div class="settings-row">
                 <label>服务端任务队列</label>
-                <span class="row-desc">后台生成<em>（非流式，关闭页面后任务仍继续）</em></span>
+                <span class="row-desc">后台出题<em> · 关闭设置窗口后，AI 仍会继续生成题目</em></span>
                 <Toggle v-model="useServerQueue" />
               </div>
 
@@ -123,7 +129,7 @@
 
               <div class="ai-actions">
                 <button class="btn btn-primary btn-small" @click="saveConfig"><Icon name="check" :size="14" />保存配置</button>
-                <button class="btn btn-secondary btn-small" :disabled="testing" @click="testConfig">{{ testing ? '测试中…' : '🔍 测试连接' }}</button>
+                <button class="btn btn-secondary btn-small" :disabled="testing" @click="testConfig"><Icon name="search" :size="14" />{{ testing ? '测试中…' : '测试连接' }}</button>
               </div>
               <div class="ai-status" :class="'ai-status-' + statusType">
                 <span v-if="statusMsg">{{ statusMsg }}</span>
@@ -210,6 +216,13 @@ function saveSettings() {
   data.saveState()
   applyFontSizes(settings.value)
 }
+async function resetDefaults() {
+  const ok = await ui.openConfirm('恢复默认设置', '字体大小、外观与提醒将恢复为默认值，AI 配置不受影响。确定继续？', '恢复')
+  if (!ok) return
+  data.state.settings = { quizFontSize: 17, sidebarFontSize: 13, topbarFontSize: 14, mainFontSize: 17, darkMode: false, showNoticeBar: true }
+  saveSettings()
+  ui.toast('已恢复默认设置', 'ok')
+}
 
 // AI 配置
 const providerId = ref('ecnu')
@@ -258,12 +271,12 @@ async function saveConfig() {
     useServerQueue: useServerQueue.value
   })
   apiKeyInput.value = ''
-  statusMsg.value = '✅ 配置已保存'
+  statusMsg.value = '配置已保存'
   statusType.value = 'ok'
 }
 
 async function testConfig() {
-  statusMsg.value = '⏳ 通过后端测试连接...'
+  statusMsg.value = '正在通过后端测试连接…'
   statusType.value = 'info'
   testing.value = true
   try {
@@ -277,17 +290,19 @@ async function testConfig() {
     })
     apiKeyInput.value = ''
     const r = await ai.testConnection()
-    statusMsg.value = '✅ 连接成功 (' + r.provider + '/' + r.model + ')，耗时 ' + (r.latencyMs || '?') + 'ms'
+    statusMsg.value = '连接成功 (' + r.provider + '/' + r.model + ')，耗时 ' + (r.latencyMs || '?') + 'ms'
     statusType.value = 'ok'
   } catch (e) {
-    statusMsg.value = '❌ ' + (e.message || '测试失败')
+    statusMsg.value = (e.message || '测试失败')
     statusType.value = 'err'
   } finally {
     testing.value = false
   }
 }
 
-function clearKey() {
+async function clearKey() {
+  const ok = await ui.openConfirm('清除 API 密钥', '清除后将无法使用 AI 出题功能，需要重新配置密钥。确定清除？', '清除', { danger: true })
+  if (!ok) return
   ai.clearApiKey(providerId.value)
   ui.toast('已清除 ' + providerId.value + ' 的密钥', 'info')
 }
@@ -323,21 +338,21 @@ function checkUpdates() {
   const d = desktopBridge()
   if (!d || typeof d.checkForUpdates !== 'function') {
     updateState.value = 'err'
-    updateMessage.value = '❌ 当前环境不支持自动更新'
+    updateMessage.value = '当前环境不支持自动更新'
     return
   }
   updateChecking.value = true
   updateState.value = 'info'
-  updateMessage.value = '⏳ 正在检查更新...'
+  updateMessage.value = '正在检查更新…'
   d.checkForUpdates().then((r) => {
     updateChecking.value = false
     if (!r) return
-    if (r.error) { updateState.value = 'err'; updateMessage.value = '❌ ' + r.error; return }
-    if (!r.hasUpdate) { updateState.value = 'ok'; updateMessage.value = '✅ 已是最新版本' }
+    if (r.error) { updateState.value = 'err'; updateMessage.value = r.error; return }
+    if (!r.hasUpdate) { updateState.value = 'ok'; updateMessage.value = '已是最新版本' }
   }).catch((e) => {
     updateChecking.value = false
     updateState.value = 'err'
-    updateMessage.value = '❌ ' + ((e && e.message) || '检查失败')
+    updateMessage.value = (e && e.message) || '检查失败'
   })
 }
 function showServerSetup() { showServerSetupDialog() }
@@ -346,9 +361,9 @@ function bindUpdateStatus() {
   if (!d || typeof d.onUpdateStatus !== 'function') return
   d.onUpdateStatus((s) => {
     if (!s) return
-    if (s.state === 'progress') { updateState.value = 'info'; updateMessage.value = '⬇️ 正在下载更新 ' + (s.percent || 0) + '%' }
-    else if (s.state === 'downloaded') { updateState.value = 'ok'; updateMessage.value = '✅ 更新已下载完成，重启应用即可安装' }
-    else if (s.state === 'error') { updateState.value = 'err'; updateMessage.value = '❌ ' + (s.message || '检查失败') }
+    if (s.state === 'progress') { updateState.value = 'info'; updateMessage.value = '正在下载更新 ' + (s.percent || 0) + '%' }
+    else if (s.state === 'downloaded') { updateState.value = 'ok'; updateMessage.value = '更新已下载完成，重启应用即可安装' }
+    else if (s.state === 'error') { updateState.value = 'err'; updateMessage.value = (s.message || '检查失败') }
   })
 }
 
@@ -395,7 +410,7 @@ onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .sm-nav-item:hover { background: var(--surface-card); color: var(--text-primary); }
-.sm-nav-item.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 500; }
+.sm-nav-item.active { background: var(--sidebar-active); color: var(--color-primary); font-weight: 500; box-shadow: inset 2px 0 0 var(--color-primary); }
 .sm-content { flex: 1; min-width: 0; padding: var(--space-2xl); overflow-y: auto; max-height: 70vh; }
 .settings-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) 0; border-bottom: 1px solid var(--border-light); }
 .settings-row label { min-width: 110px; font-size: var(--fs-base); color: var(--text-primary); flex-shrink: 0; }

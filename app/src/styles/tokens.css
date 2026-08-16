@@ -1,57 +1,70 @@
 /* ============================================================
-   Qbao Design Tokens v4 — DeepSeek 官方同款色板
-   参考：chat.deepseek.com / sbgumen/deepseek-webui 高保真克隆
+   Qbao Design Tokens v5 — 对齐 DeepSeek 官方 --dsw-* 色板
+   参考：deepseek-ai/deepseek-harness packages/client/ui-theme design-platform.css
    ============================================================ */
 :root {
-  /* === Primary（DeepSeek Blue） === */
-  --color-primary: #4D6BFE;
-  --color-primary-hover: #3D5AFE;
-  --color-primary-active: #2E4BD9;
-  --color-primary-light: #E8EEFF;
-  --color-primary-focus: rgba(77, 107, 254, 0.35);
-  --gradient-primary: linear-gradient(135deg, #4D6BFE 0%, #6E87FF 100%);
+  /* === Primary（DeepSeek Blue 官方色阶） === */
+  --color-primary: #4176E6;
+  --color-primary-hover: #679EFE;
+  --color-primary-active: #4868B2;
+  --color-primary-light: #EDF3FE;
+  --color-primary-focus: rgba(65, 118, 230, 0.28);
+  --gradient-primary: linear-gradient(135deg, #4176E6 0%, #679EFE 100%);
 
-  /* === Neutrals（亮色） === */
-  --surface-bg: #F8F9FB;
+  /* === Neutrals（亮色：官方 neutral-bluish 系） === */
+  --surface-bg: #FFFFFF;
   --surface-card: #FFFFFF;
-  --surface-hover: #F0F2F5;
+  --surface-hover: #F1F3F5;
   --surface-raised: #FFFFFF;
-  --border-light: #E5E7EB;
-  --border-default: #D5D8DF;
+  --surface-panel: #F9FAFB;
+
+  /* === Border（alpha 黑，克制） === */
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.16);
 
   /* === Text（亮色） === */
-  --text-primary: #1E293B;
-  --text-secondary: #64748B;
-  --text-muted: #94A3B8;
+  --text-primary: #0F1115;
+  --text-secondary: #61666B;
+  --text-muted: #818588;
+  --text-faint: #ADB2B8;
   --text-inverse: #FFFFFF;
 
-  /* === Semantic === */
-  --color-success: #10B981;
-  --color-success-light: #E6F9F1;
+  /* === Semantic（官方语义色） === */
+  --color-success: #22C55E;
+  --color-success-light: #E6FAED;
   --color-danger: #EF4444;
-  --color-danger-light: #FEF0EF;
+  --color-danger-light: #FEF2F2;
   --color-warning: #F59E0B;
-  --color-warning-light: #FEF7EC;
-  --color-info: #4D6BFE;
+  --color-warning-light: #FEF5E7;
+  --color-info: #4176E6;
 
-  /* === Status（任务/同步） === */
-  --status-ok: #10B981;
-  --status-run: #4D6BFE;
+  /* === Status === */
+  --status-ok: #22C55E;
+  --status-run: #4176E6;
   --status-fail: #EF4444;
-  --status-muted: #94A3B8;
+  --status-muted: #ADB2B8;
   --status-queued: #F59E0B;
 
-  /* === Radius === */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-full: 9999px;
+  /* === Sidebar（官方侧栏体系） === */
+  --sidebar-bg: #F9FAFB;
+  --sidebar-active: #EBEEF2;
+  --sidebar-accent: #E4EDFD;
 
-  /* === Shadows === */
-  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08);
-  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
-  --shadow-lg: 0 10px 28px rgba(16, 24, 40, 0.12);
+  /* === Radius（4-6-8-12 体系） === */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  --radius-btn: 6px;
+  --radius-card: 8px;
+  --radius-modal: 12px;
+
+  /* === Shadows（轻、克制） === */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
   --shadow-glow: 0 0 0 3px var(--color-primary-focus);
 
   /* === Motion === */
@@ -59,23 +72,24 @@
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
 
-  /* === Typography === */
+  /* === Typography（官方字号体系：14/16/20/24） === */
   --font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace;
   --fs-xs: 12px;
   --fs-sm: 13px;
   --fs-base: 14px;
   --fs-md: 16px;
   --fs-lg: 18px;
-  --fs-xl: 22px;
-  --fs-2xl: 28px;
-  --lh-tight: 1.35;
-  --lh-normal: 1.5;
-  --lh-relaxed: 1.7;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --lh-tight: 1.4;
+  --lh-normal: 1.6;
+  --lh-relaxed: 1.8;
 
   /* === Layout === */
   --topbar-height: 52px;
-  --sidebar-width: 260px;
+  --sidebar-width: 264px;
   --main-max-width: 960px;
   --space-xs: 4px;
   --space-sm: 8px;
@@ -85,11 +99,17 @@
   --space-2xl: 24px;
   --space-3xl: 32px;
 
+  /* === Z-Index 层级规范（浮层治理） === */
+  --z-sidebar: 9500;
+  --z-sidebar-overlay: 9400;
+  --z-modal: 9800;
+  --z-toast: 10000;
+
   /* === Exam/Chart Colors === */
   --exam-color-0: #EF4444;
   --exam-color-1: #F59E0B;
-  --exam-color-2: #10B981;
-  --exam-color-3: #4D6BFE;
+  --exam-color-2: #22C55E;
+  --exam-color-3: #4176E6;
   --exam-color-4: #8B5CF6;
   --exam-color-5: #EC4899;
   --exam-color-6: #14B8A6;
@@ -99,32 +119,40 @@
 }
 
 /* ============================================================
-   暗色（DeepSeek 暗色系定标）
+   暗色（DeepSeek 官方暗色系：bg 151517 / 卡片 232324-2C2C2E）
    ============================================================ */
 html.dark-mode {
-  --surface-bg: #17181C;
-  --surface-card: #212327;
-  --surface-hover: #2A2C31;
-  --surface-raised: #26282E;
-  --border-light: #30333A;
-  --border-default: #3A3D45;
+  --color-primary: #679EFE;
+  --color-primary-hover: #5686FE;
+  --color-primary-active: #4176E6;
+  --color-primary-light: rgba(103, 158, 254, 0.16);
+  --color-primary-focus: rgba(103, 158, 254, 0.35);
 
-  --text-primary: #F2F3F5;
-  --text-secondary: #A8ABB3;
-  --text-muted: #6F7379;
-  --text-inverse: #17181C;
+  --surface-bg: #151517;
+  --surface-card: #232324;
+  --surface-hover: #2C2C2E;
+  --surface-raised: #2C2C2E;
+  --surface-panel: #1B1B1C;
 
-  --color-primary: #6E87FF;
-  --color-primary-hover: #8399FF;
-  --color-primary-active: #5A74F5;
-  --color-primary-light: rgba(77, 107, 254, 0.16);
-  --color-primary-focus: rgba(110, 135, 255, 0.4);
+  --border-light: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.16);
 
-  --color-success-light: rgba(16, 185, 129, 0.14);
+  --text-primary: #FAFAFB;
+  --text-secondary: #CFD3D6;
+  --text-muted: #ADB2B8;
+  --text-faint: #818588;
+  --text-inverse: #151517;
+
+  --color-success-light: rgba(34, 197, 94, 0.14);
   --color-danger-light: rgba(239, 68, 68, 0.14);
   --color-warning-light: rgba(245, 158, 11, 0.14);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --sidebar-bg: #1B1B1C;
+  --sidebar-active: #232324;
+  --sidebar-accent: #34415B;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
 }

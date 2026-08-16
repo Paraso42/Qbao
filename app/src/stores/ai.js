@@ -48,10 +48,19 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   // —— Provider 目录 ——
+  const providersError = ref('')
   async function ensureProviders(force = false) {
     if (providersLoaded.value && !force) return providers.value
-    providers.value = await fetchProvidersList()
-    providersLoaded.value = true
+    try {
+      providers.value = await fetchProvidersList()
+      providersError.value = ''
+    } catch (e) {
+      providers.value = []
+      providersError.value = (e && e.message) || '无法连接 AI 服务'
+      console.warn('[ai] fetchProviders failed:', e && e.message)
+    } finally {
+      providersLoaded.value = true
+    }
     return providers.value
   }
 
@@ -701,7 +710,7 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   return {
-    providers, providersLoaded, runnerActive, abortController,
+    providers, providersLoaded, providersError, runnerActive, abortController,
     queueDialogOpen, serverTasks, serverTasksLoading,
     aiConfig,
     getChapterMaterials, saveChapterMaterials,
