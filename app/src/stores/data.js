@@ -4,18 +4,22 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import * as persistence from '../services/persistence'
 
+let syncHook = null
+
 export const useDataStore = defineStore('data', () => {
   const state = reactive(persistence.migrateState(persistence.loadState()))
 
   function saveState() {
     persistence.saveState(state)
-    scheduleSync()
+    if (typeof syncHook === 'function') syncHook()
   }
 
-  function scheduleSync() {
-    // 阶段 2 接入 sync 服务（乐观锁 + 409 合并重试）；
-    // sync 服务注册钩子后接管。
-    if (typeof _syncHook === 'function') _syncHook()
+  function setSyncHook(fn) { syncHook = fn }
+
+  // 合并后整体替换 state（保持响应性；供同步 409 合并使用）
+  function replaceState(merged) {
+    Object.keys(state).forEach((k) => { delete state[k] })
+    Object.assign(state, merged)
   }
 
   // —— 访问器（同 legacy state.js） ——
@@ -89,7 +93,7 @@ export const useDataStore = defineStore('data', () => {
   }
 
   return {
-    state, saveState,
+    state, saveState, setSyncHook, replaceState,
     getCh, getSubj, getExam, getActiveSet, getCurrentQuizSet,
     getChStrategy, createQuizSetForChapter
   }
