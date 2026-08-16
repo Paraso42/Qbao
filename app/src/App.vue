@@ -17,6 +17,7 @@
     <QuizView />
     <ImportDialog />
     <ChatModal />
+    <ShareQuizDialog />
     <UserCenterModal />
     <FeedbackBubble />
     <ToastHost />
@@ -40,6 +41,7 @@ import SettingsModal from './components/features/settings/SettingsModal.vue'
 import AiTaskQueueDialog from './components/features/ai/AiTaskQueueDialog.vue'
 import ImportDialog from './components/features/quiz/ImportDialog.vue'
 import ChatModal from './components/features/chat/ChatModal.vue'
+import ShareQuizDialog from './components/features/chat/ShareQuizDialog.vue'
 import UserCenterModal from './components/features/usercenter/UserCenterModal.vue'
 import FeedbackBubble from './components/features/issues/FeedbackBubble.vue'
 import ToastHost from './components/ui/ToastHost.vue'

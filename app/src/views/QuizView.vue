@@ -6,6 +6,8 @@
       <div class="quiz-header">
         <span class="quiz-ch-name">{{ setName }}</span>
         <span class="cap-chip" v-if="q">{{ typeMap[q.type] || q.type }}</span>
+        <span class="quiz-header-spacer"></span>
+        <button class="btn btn-ghost btn-small" @click="shareCurrent" title="分享当前题目给好友"><Icon name="share" :size="14" /> 分享</button>
       </div>
 
       <div v-if="!as || !q" class="quiz-body">
@@ -107,6 +109,7 @@
       <EmptyState v-else icon="chart" title="暂无数据" />
 
       <div class="dialog-actions rp-actions">
+        <button class="btn btn-primary btn-small" @click="shareSet"><Icon name="share" :size="14" /> 分享给好友</button>
         <button class="btn btn-secondary" @click="close">关闭</button>
       </div>
     </div>
@@ -117,12 +120,17 @@
 import { computed, ref, watch } from 'vue'
 import { useQuizStore } from '../stores/quiz'
 import { useDataStore } from '../stores/data'
+import { useUiStore } from '../stores/ui'
+import { useUserStore } from '../stores/user'
 import { renderMarkdown, isObjType, getCi } from '../services/utils'
 import Modal from '../components/ui/Modal.vue'
+import Icon from '../components/ui/Icon.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 const quiz = useQuizStore()
 const data = useDataStore()
+const ui = useUiStore()
+const user = useUserStore()
 
 const subjective = ref('')
 const wrongOnly = ref(false)
@@ -220,6 +228,34 @@ function close() {
   wrongOnly.value = false
 }
 
+// —— 分享（同 legacy shareCurrentQuestion / chatShareCurrentQuizSet） ——
+function shareCurrent() {
+  const s = as.value
+  const qq = q.value
+  if (!s || !qq) { ui.toast('当前没有题目', 'err'); return }
+  if (!user.isOnline) { ui.toast('请先登录', 'err'); return }
+  const ch = data.getCh()
+  ui.openQuizShare({
+    questions: [qq],
+    setName: s.setName || '',
+    chapterName: ch ? ch.name : '',
+    fromUserName: user.user.displayName || user.user.username,
+    fromUserId: user.userId
+  })
+}
+function shareSet() {
+  const s = as.value
+  if (!s || !s.questions || s.questions.length === 0) { ui.toast('暂无题目可分享', 'err'); return }
+  if (!user.isOnline) { ui.toast('请先登录', 'err'); return }
+  ui.openQuizShare({
+    questions: s.questions,
+    setName: s.setName || '题目分享',
+    chapterName: '',
+    fromUserName: user.user.displayName || user.user.username,
+    fromUserId: user.userId
+  })
+}
+
 watch(() => quiz.session.view, (v) => {
   if (v === 'quiz') { subjective.value = ''; wrongOnly.value = false }
 })
@@ -268,6 +304,7 @@ watch(() => quiz.session.modalOpen, (open) => {
 .quiz-shell { display: flex; flex-direction: column; min-height: 60vh; }
 .quiz-header { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .quiz-ch-name { font-size: var(--fs-md); font-weight: 600; }
+.quiz-header-spacer { flex: 1; }
 .quiz-body { flex: 1; display: flex; flex-direction: column; }
 .quiz-question { font-size: 17px; line-height: 1.7; margin-bottom: var(--space-lg); }
 .quiz-options { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-lg); }

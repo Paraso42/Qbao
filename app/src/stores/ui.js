@@ -14,7 +14,8 @@ export const useUiStore = defineStore('ui', {
     importOpen: false,
     toasts: [],
     confirm: { open: false, title: '', message: '', okText: '', resolve: null },
-    prompt: { open: false, title: '', value: '', resolve: null }
+    prompt: { open: false, title: '', value: '', resolve: null },
+    quizShare: { open: false, data: null }
   }),
   actions: {
     toggleSidebar() { this.sidebarOpen = !this.sidebarOpen },
@@ -51,6 +52,8 @@ export const useUiStore = defineStore('ui', {
         this.prompt = { open: true, title, value: value || '', resolve }
       })
     },
-    closePrompt() { this.prompt.open = false }
+    closePrompt() { this.prompt.open = false },
+    openQuizShare(data) { this.quizShare = { open: true, data } },
+    closeQuizShare() { this.quizShare = { open: false, data: null } }
   }
 })

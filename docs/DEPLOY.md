@@ -102,7 +102,7 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 2. 执行 `server/sql/` 中新增的迁移脚本。
 3. `cd server && npm ci --omit=dev`（依赖有变化时）。
 4. `pm2 restart qbao-api`。
-5. 前端静态文件为覆盖式发布，必要时刷新浏览器缓存。
+5. 前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后，用 `app/dist/`（含 index.html + vendor/katex/）覆盖式发布到 nginx 静态目录，必要时刷新浏览器缓存。
 
 ## 8.5 服务器恢复（2026-07 归档下线后重建）
 

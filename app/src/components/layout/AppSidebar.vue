@@ -126,7 +126,7 @@ async function deleteChapter(cid) {
 
 function selectSubject(id) {
   subjects.select(id)
-  ui.showScreen('start')
+  ui.showScreen('subject-dash')
 }
 function selectChapter(cid) {
   subjects.switchChapter(cid)

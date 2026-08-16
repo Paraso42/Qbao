@@ -19,7 +19,7 @@
 
 ```
 Qbao/
-├── app/            # 前端 SPA（index.html + css/ + js/，网页与桌面共用）
+├── app/            # 前端 SPA（Vue 3 + Vite + Pinia，源码 src/，构建产物 dist/，网页与桌面共用）
 ├── desktop/        # Electron 桌面壳（main/preload/updater，配置见 desktop/README）
 ├── server/         # Node.js 后端
 │   ├── src/        # routes/ providers/ 中间件
@@ -42,9 +42,17 @@ npm install
 cp .env.example .env     # 配置数据库与 JWT_SECRET
 npm run dev              # node --watch，改动自动重启
 
-# 前端：任选其一
-npx serve app                        # 简单静态服务
-# 或完整 nginx 配置见 docs/DEPLOY.md
+# 前端（Vue 3 + Vite 工程）
+cd app
+npm install
+npm run dev                          # Vite dev server（HMR，默认 http://localhost:5173）
+npm run build                        # 构建 singlefile 产物到 app/dist/
+
+# 桌面端（Electron）
+cd desktop
+npm install
+npm run dev                          # 加载 Vite dev server；未启动时自动回退 app/dist/index.html
+# 生产静态服务（nginx 指向 app/dist/，配置见 docs/DEPLOY.md）
 ```
 
 ## 4. 版本与发布流程
