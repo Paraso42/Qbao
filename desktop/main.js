@@ -36,16 +36,27 @@ function createWindow() {
       sandbox: true
     }
   });
-  // 开发模式: __dirname=desktop/ → ../app；打包后: __dirname=resources/app.asar → asar 内 app/
-  const indexHtml = app.isPackaged
-    ? path.join(__dirname, 'app', 'index.html')
-    : path.join(__dirname, '..', 'app', 'index.html');
-  mainWindow.loadFile(indexHtml);
-  mainWindow.webContents.on('did-fail-load', (_e, code, desc) => {
-    console.error('[desktop] 页面加载失败:', code, desc, indexHtml);
+  // 开发模式: 加载 Vite dev server（app/ 为 Vue+Vite 工程，ES modules 需要 HTTP 服务）；
+  // 打包后: __dirname=resources/app.asar → asar 内 app/（builder 将 ../app/dist 映射为 app/）。
+  const indexHtml = path.join(__dirname, 'app', 'index.html');
+  let devFallbackTried = false;
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    // 开发模式：vite dev server 未启动时回退到本地构建产物（app/dist/index.html）
+    if (!app.isPackaged && !devFallbackTried && typeof url === 'string' && url.startsWith('http')) {
+      devFallbackTried = true;
+      mainWindow.loadFile(path.join(__dirname, '..', 'app', 'dist', 'index.html')).catch(() => {});
+      return;
+    }
+    console.error('[desktop] 页面加载失败:', code, desc, url || indexHtml);
     if (process.env.QBAO_SMOKE) { app.exit(1); return; }
     dialog.showErrorBox('Qbao 加载失败', '页面加载失败 (' + code + '): ' + desc);
   });
+  if (app.isPackaged) {
+    mainWindow.loadFile(indexHtml);
+  } else {
+    const devUrl = process.env.QBAO_DEV_URL || 'http://localhost:5173';
+    mainWindow.loadURL(devUrl).catch(() => { /* did-fail-load 统一处理回退 */ });
+  }
   if (process.env.QBAO_SMOKE) {
     mainWindow.webContents.on('did-finish-load', () => { console.log('[desktop] SMOKE_OK'); setTimeout(() => app.exit(0), 1500); });
   }

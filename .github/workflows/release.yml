@@ -17,7 +17,13 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: desktop/package-lock.json
-      - name: 安装依赖
+      - name: 安装前端依赖
+        working-directory: app
+        run: npm ci
+      - name: 构建前端（Vite singlefile → app/dist）
+        working-directory: app
+        run: npm run build
+      - name: 安装桌面端依赖
         working-directory: desktop
         run: npm ci
       - name: 全量语法检查
@@ -26,7 +32,6 @@ jobs:
           node --check desktop/main.js
           node --check desktop/preload.js
           node --check desktop/updater.js
-          for f in app/js/*.js; do node --check "$f"; done
           for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/src/lib/*.js server/src/schemas/*.js server/src/services/*.js server/scripts/*.js; do node --check "$f"; done
       - name: 构建 NSIS 安装包
         working-directory: desktop

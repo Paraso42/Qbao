@@ -1,0 +1,56 @@
+/* ===== Reset & Base（DeepSeek 风格） ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font-family);
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+}
+
+input, select, textarea { font-family: inherit; color: inherit; }
+
+a { color: var(--color-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1 { font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.3px; line-height: var(--lh-tight); }
+h2 { font-size: var(--fs-xl); font-weight: 600; }
+h3 { font-size: var(--fs-lg); font-weight: 600; }
+h4 { font-size: var(--fs-base); font-weight: 600; }
+
+::selection { background: var(--color-primary-light); color: var(--color-primary); }
+
+/* 全局聚焦环 */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* KaTeX 内联公式与行内对齐 */
+.katex { font-size: 1em !important; }
+.katex-display { margin: 0.3em 0 !important; }
+
+/* 数字等宽 */
+.tabular-nums { font-variant-numeric: tabular-nums; }
