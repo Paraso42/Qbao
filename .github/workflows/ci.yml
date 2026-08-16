@@ -37,8 +37,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: 前端语法检查
-        run: |
-          for f in app/js/*.js; do
-            node --check "$f"
-          done
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: 安装依赖
+        working-directory: app
+        run: npm ci
+      - name: 前端构建（Vite 构建即语法门禁）
+        working-directory: app
+        run: npm run build
+      - name: 前端服务层单测
+        working-directory: app
+        run: npx vitest run

@@ -1,0 +1,7 @@
+/* ===== 响应式（阶段 5 完整实现，此处先放基础断点） ===== */
+@media (max-width: 900px) {
+  #main { padding: var(--space-lg) var(--space-md); }
+}
+@media (max-width: 768px) {
+  #main { padding: var(--space-md) var(--space-md) calc(48px + env(safe-area-inset-bottom)); }
+}
