@@ -100,6 +100,88 @@ function aiTaskCancelAll() {
   cancelAiGenerate();
   renderAiTaskQueueDialog(); updateGenerateButtonState();
 }
+async function _aiExecuteServerTask(task, opts) {
+  var ac = opts.ac;
+  var ch = opts.ch;
+  var apiKey = getAiApiKey(ac.provider || 'ecnu');
+
+  var createRes = await fetch(API_BASE + '/ai/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + getToken(),
+      'x-ai-api-key': apiKey,
+      'x-ai-model': ac.model || 'ecnu-plus',
+      'x-ai-provider': ac.provider || 'ecnu'
+    },
+    body: JSON.stringify({
+      textContent: opts.uploadData.text,
+      typeCounts: task.strategySnapshot ? task.strategySnapshot.typeCounts : { single: 10, judge: 5, term: 2, short: 1 },
+      prompt: opts.finalPrompt,
+      chapterHistory: {
+        totalQuestions: opts.totalQuestions || 0,
+        totalAnswered: opts.totalAnswered || 0,
+        totalWrong: opts.totalWrong || 0,
+        tagStats: opts.tagStats || {},
+        topWrongTags: opts.topWrongTags || []
+      },
+      chapterId: task.chapterId,
+      selfCheck: ac.selfCheck === true
+    })
+  });
+
+  if (!createRes.ok) {
+    var createErr = await createRes.json().catch(function() { return {}; });
+    throw new Error(createErr.error || '创建服务端任务失败: ' + createRes.status);
+  }
+
+  var createData = await createRes.json();
+  task.serverTaskId = createData.task.id;
+  saveState();
+
+  var startedAt = Date.now();
+  while (true) {
+    await sleep(2000);
+    var statusRes = await fetchWithAuth('/ai/tasks/' + task.serverTaskId);
+    if (!statusRes || !statusRes.ok) throw new Error('查询服务端任务失败');
+
+    var statusData = await statusRes.json();
+    var serverTask = statusData.task;
+
+    if (serverTask.status === 'completed') {
+      var result = serverTask.result || {};
+      var questions = Array.isArray(result.questions) ? result.questions : [];
+      questions.forEach(function(q, i) { if (!q.id) q.id = i + 1; });
+      questions = questions.filter(function(q) { return q.question && q.question.trim().length > 2; });
+      createQuizSetForChapter(questions, task.chapterId);
+      task.questionCount = questions.length;
+      task.status = 'completed';
+      task.completedAt = Date.now();
+      if (ch && ch._hasNewFilesSinceLastGen) {
+        ch._hasNewFilesSinceLastGen = false;
+        ch._lastGenTime = Date.now();
+      }
+      aiTaskAbortController = null;
+      saveState();
+      renderSubjectList();
+      updateQuickActions();
+      renderAiTaskQueueDialog();
+      updateAiTaskStatusBar();
+      updateGenerateButtonState();
+      showAiTaskNotification('completed', task.chapterName + ' 完成，生成 ' + questions.length + ' 题');
+      return;
+    }
+
+    if (serverTask.status === 'failed' || serverTask.status === 'canceled') {
+      throw new Error(serverTask.error || '服务端任务未完成');
+    }
+
+    if (Date.now() - startedAt > 20 * 60 * 1000) {
+      throw new Error('服务端任务超时，请稍后在任务列表中查看');
+    }
+  }
+}
+
 async function _aiExecuteTask(task) {
   task.status = 'running';
   saveState(); renderAiTaskQueueDialog(); updateAiTaskStatusBar();
@@ -137,6 +219,20 @@ async function _aiExecuteTask(task) {
     var topWrongTags = Object.entries(tagStats).sort(function(a,b){return b[1].wrong-a[1].wrong;}).slice(0,10).map(function(e){return e[0];});
     var ac = state.aiConfig || {};
     var envPrompt = ac.systemPrompt ? (ac.systemPrompt.trim() + '\n\n') : '';
+      if (ac.useServerQueue === true) {
+        await _aiExecuteServerTask(task, {
+          uploadData: uploadData,
+          tagStats: tagStats,
+          totalQuestions: totalQuestions,
+          totalAnswered: totalAnswered,
+          totalWrong: totalWrong,
+          topWrongTags: topWrongTags,
+          finalPrompt: finalPrompt,
+          ac: ac,
+          ch: ch
+        });
+        return;
+      }
 
     // Pre-generation: extract knowledge point tags if new files exist
     var finalPrompt = envPrompt + task.promptText;
@@ -154,7 +250,7 @@ async function _aiExecuteTask(task) {
         for (var attempt2 = 1; attempt2 <= maxAttempts && !questions; attempt2++) {
           if (attempt2 > 1) { await sleep(2000*(attempt2-1)); }
           var retry2 = attempt2 > 1 ? task.promptText + '\n\n重要：你上次返回了无效JSON，错误是：'+lastJson+'。请修正后重新输出纯JSON数组。' : task.promptText;
-          var genRes2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':ac.apiKey||'', 'x-ai-model':ac.model||'ecnu-plus' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retry2, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
+          var genRes2 = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key':getAiApiKey(ac.provider || 'ecnu'), 'x-ai-model':ac.model||'ecnu-plus' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retry2, selfCheck: ac.selfCheck === true, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
           var genData2 = await genRes2.json();
           if (genData2.poolFilesStatus) task._poolFilesStatus = genData2.poolFilesStatus;
           var raw2 = genData2.questions; if(!raw2&&genData2.output) raw2=genData2.output; if(!raw2&&typeof genData2==='object') raw2=Object.values(genData2).find(function(v){return Array.isArray(v)||typeof v==='string';});
@@ -171,7 +267,8 @@ async function _aiExecuteTask(task) {
       if (attempt > 1) { await sleep(2000*(attempt-1)); }
       var retryPrompt = attempt > 1 ? task.promptText + '\n\n重要：你上次返回了无效JSON，错误是：'+lastJson+'。请修正后重新输出纯JSON数组。' : task.promptText;
       var apiKey = (ac.providerKeys && ac.providerKeys[ac.provider||'ecnu']) || ac.apiKey || '';
-      var genRes = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key': apiKey, 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-provider': ac.provider||'ecnu' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retryPrompt, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
+        var apiKey = getAiApiKey(ac.provider || 'ecnu');
+      var genRes = await fetchWithRetry(API_BASE+'/ai/generate', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+getToken(), 'x-ai-api-key': apiKey, 'x-ai-model':ac.model||'ecnu-plus', 'x-ai-provider': ac.provider||'ecnu' }, body:JSON.stringify({ textContent:uploadData.text, imageUrls:uploadData.images, typeCounts:task.strategySnapshot ? task.strategySnapshot.typeCounts : {single:10,judge:5,term:2,short:1}, prompt:envPrompt+retryPrompt, selfCheck: ac.selfCheck === true, chapterHistory:{ totalQuestions:totalQuestions, totalAnswered:totalAnswered, totalWrong:totalWrong, tagStats:tagStats, topWrongTags:topWrongTags }, chapterId: task.chapterId }) }, 3, 5000);
       var genData = await genRes.json();
       if (genData.poolFilesStatus) task._poolFilesStatus = genData.poolFilesStatus;
       var raw = genData.questions; if(!raw&&genData.output) raw=genData.output; if(!raw&&typeof genData==='object') raw=Object.values(genData).find(function(v){return Array.isArray(v)||typeof v==='string';});
@@ -290,6 +387,7 @@ async function _aiStreamGenerate(task, opts) {
       : finalPrompt;
 
     var apiKey = (ac.providerKeys && ac.providerKeys[ac.provider||'ecnu']) || ac.apiKey || '';
+      var apiKey = getAiApiKey(ac.provider || 'ecnu');
     var res = await fetch(API_BASE + '/ai/generate', {
       method: 'POST',
       headers: {
@@ -303,7 +401,7 @@ async function _aiStreamGenerate(task, opts) {
       body: JSON.stringify({
         textContent: uploadData.text,
         typeCounts: task.strategySnapshot ? task.strategySnapshot.typeCounts : { single: 10, judge: 5, term: 2, short: 1 },
-        prompt: (ac.systemPrompt ? ac.systemPrompt.trim() + '\n\n' : '') + retryPrompt,
+        prompt: retryPrompt, selfCheck: ac.selfCheck === true,
         chapterId: task.chapterId,
         chapterHistory: {
           totalQuestions: totalQuestions || 0, totalAnswered: totalAnswered || 0, totalWrong: totalWrong || 0,

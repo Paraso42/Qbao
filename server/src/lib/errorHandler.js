@@ -34,6 +34,10 @@ function errorHandler(err, req, res, next) {
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ error: '请求体过大' });
   }
+    // 2.5) multer 上传错误（类型白名单/大小限制等）
+    if (err.name === 'MulterError' || err.status === 422) {
+      return res.status(422).json({ error: err.message || '上传失败' });
+    }
 
   // 3) PostgreSQL 错误（code 为 5 位字符，如 23505 唯一约束冲突）
   if (err.code && typeof err.code === 'string' && err.code.length === 5) {

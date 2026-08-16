@@ -423,6 +423,8 @@
                   <div class="settings-row"><label>API 地址</label><input type="text" id="ai-base-url" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" value="" readonly></div>
                   <div class="settings-row" id="ai-key-row"><label>API 密钥</label><input type="password" id="ai-api-key" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;" placeholder="粘贴你的 API Key"></div>
                   <div class="settings-row"><label>模型</label><select id="ai-model-select" style="flex:1;padding:6px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;"><option value="">请先选择提供商</option></select></div>
+                    <div class="settings-row"><label>AI 自动判定</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ai-self-check" style="width:18px;height:18px;accent-color:#8b5cf6;"> 生成后让 AI 二次审核并修正题目（消耗一次额外调用）</label></div>
+                    <div class="settings-row"><label>服务端任务队列</label><label style="min-width:auto;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ai-server-queue" style="width:18px;height:18px;accent-color:#8b5cf6;"> 后台生成（非流式，关闭页面后任务仍继续）</label></div>
                   <div class="settings-row" style="flex-direction:column;">
                     <label style="margin-bottom:4px;">环境提示词</label>
                     <p style="color:#666;font-size:12px;margin-bottom:6px;">这段提示词将作为所有 AI 对话的基础上下文，用于稳定规范大模型行为。<span id="ai-env-prompt-char-count" style="color:#999;font-size:11px;"></span></p>
@@ -499,7 +501,8 @@
   <script src="js/utils.js"></script>
   <script src="js/db.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/state.js"></script>
+  <script src="js/ai-keys.js"></script>
+<script src="js/state.js"></script>
 <script src="js/sync.js"></script>
   <script src="js/subjects.js"></script>
   <script src="js/strategy.js"></script>

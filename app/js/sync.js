@@ -30,6 +30,7 @@ async function flushSync() {
   if (_syncInFlight || !isOnlineMode || !getToken()) return;
   _syncInFlight = true;
   try {
+      if (typeof stripAiSecretsFromState === 'function') stripAiSecretsFromState(state);
     var body = { state_json: state };
     if (_syncRev) body.rev = _syncRev;
     var res = await fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body) });
@@ -57,6 +58,7 @@ async function flushSync() {
         }
         // 仅在拿到有效 rev 时重试，避免退化为无锁覆盖云端数据
         if (typeof _syncRev === 'number' && _syncRev > 0) {
+            if (typeof stripAiSecretsFromState === 'function') stripAiSecretsFromState(state);
           var body2 = { state_json: state, rev: _syncRev };
           var res2 = await fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body2) });
           if (res2 && res2.ok) {
