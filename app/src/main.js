@@ -40,6 +40,8 @@ async function boot() {
   app.use(pinia)
   app.mount('#app')
   initApp(pinia)
+  // 供 QA 脚本/调试使用
+  window.__pinia = pinia
 }
 
 boot()

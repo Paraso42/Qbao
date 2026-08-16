@@ -5,6 +5,9 @@
       <div class="hero-mark">Q</div>
       <h1 class="hero-title">Qbao</h1>
       <p class="hero-sub">全能互动做题引擎 — 按章节刷题 · AI 智能出题 · 间隔复习</p>
+      <div class="hero-actions">
+        <button v-if="hasSubject" class="btn btn-ghost btn-small" @click="ui.showScreen('history')"><Icon name="clock" :size="14" /> 答题历史</button>
+      </div>
       <div class="hero-actions" v-if="!hasSubject">
         <button class="btn btn-primary" @click="createFirstSubject">＋ 新建科目</button>
         <button class="btn btn-secondary" @click="ui.openImport">📥 导入题目</button>

@@ -70,9 +70,9 @@ server/  Node.js + Express API（端口 3000）
 
 ### P1 — 可维护性
 
-7. **chat.js（90KB）拆分**：消息渲染 / 增量轮询 / 分享选择器 / 撤回各自独立模块。
-8. **index.html 单文件 DOM**：按页面拆分模板（`<template>` 或 JS 模板函数），弹窗组件化。
-9. **前端模块化**：迁移 ES Modules（`type=module` 或轻量构建 esbuild/vite 打包压缩），消除全局变量依赖与脚本顺序耦合。
+7. **chat.js（90KB）拆分**：~~消息渲染 / 增量轮询 / 分享选择器 / 撤回各自独立模块~~ **（v3.27 已完成：聊天拆为 `app/src/components/features/chat/` 组件族 + `stores/chat.js` + `services/chatApi.js`）**。
+8. **index.html 单文件 DOM**：~~按页面拆分模板，弹窗组件化~~ **（v3.27 已完成：全部弹窗/页面组件化，见 `app/src/components/` 与 `app/src/views/`）**。
+9. **前端模块化**：~~迁移 ES Modules~~ **（v3.27 已完成：Vue 3 + Vite + Pinia 全量组件化重构 + Vite singlefile 打包，兼容桌面 file:// 加载）**。
 10. **后端分层**：routes → services → repositories，SQL 集中到数据访问层（当前散落各路由）。
 11. **测试骨架**：~~后端 supertest 覆盖 auth/data/quiz 主流程；接入 CI~~ **（v3.26 已完成：`server/test/` 22 个用例，CI 后端 job 跑 `vitest run`）**。前端纯逻辑（quiz-engine/srs）的 Vitest + jsdom 测试仍待补。
 12. **配置集中**：散落的路径常量（uploads、pool）收敛到 server/src/config.js。

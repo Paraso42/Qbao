@@ -5,6 +5,14 @@
 
 ## v3.27.0（开发中）
 
+- 前端大规模重构：Vue 3 + Vite + Pinia 全量组件化（JavaScript），27 个全局脚本（约 7800 行）迁入 `app/src/`（stores/services/components/views 分层），业务算法原样保留
+- DeepSeek 设计语言重设计：官方同款色板（主蓝 #4D6BFE / 背景 #F8F9FB / 暗色 #17181C）、SVG 线性图标、扁平无气泡聊天、全套组件库（按钮/输入/胶囊/状态 pill/Toast/空状态/弹窗），暗色模式从零重做
+- 移动端网页一等公民：≤900/768/480 断点、侧栏抽屉、全屏弹窗、触控 ≥44px、safe-area、答题页底部操作栏、聊天单栏切换
+- 工程化：Vite singlefile 打包（file:// 与 CSP 兼容、KaTeX 外部化）、桌面端 dev 加载 Vite dev server + 打包回退、CI 前端 job 改为构建门禁 + 服务层单测（10 例 vitest）
+- 服务端 AI 任务队列前端补全：任务弹窗「服务端任务」区（列表/轮询/取消/一键导入/刷新恢复），停止全部同步取消服务端排队任务
+- AI 配置对齐 provider 目录：baseUrl/能力徽章取自 /ai/providers，按 provider 记忆模型（消除 DeepSeek 残留 ecnu-plus 422），密钥可见性切换与清除按钮
+- 新增答题/报告「分享给好友」目标选择器（好友/群聊，复用聊天分享车）
+- 修复：chat v2 房间详情成员查询补回 avatar_url（直聊头像显示回归）
 - AI API Key 移出 `state.aiConfig`，改为按账号本机存储，不再随 `user_data` 同步
 - `GET/PUT/PATCH /api/v1/data` 服务端强制剥离 `aiConfig.apiKey/providerKeys`；备份创建/读取同样脱敏
 - 新增存量数据清洗：`npm run scrub:ai-keys -- --dry-run` 与 `server/sql/migration_v3.27_scrub_ai_keys.sql`
