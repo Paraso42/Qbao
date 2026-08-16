@@ -19,7 +19,8 @@ module.exports = function (app) {
   // POST /api/v1/auth/register
   app.post('/api/v1/auth/register', validate({ body: registerSchema }), asyncHandler(async (req, res) => {
     const { username, password, displayName } = req.body;
-    const role = isAdminUsername(username) ? 'admin' : 'user';
+    const adminResult = await pool.query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1");
+      const role = adminResult.rows.length === 0 ? 'admin' : 'user';
     const hash = await hashPassword(password);
     const name = (displayName || username).trim();
     let result;

@@ -14,7 +14,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "scrub:ai-keys": "node scripts/scrub_ai_keys.js",
+      "migrate": "node scripts/run_migration.js",
+      "cleanup:ai-routes": "node scripts/cleanup_ai_routes.js"
   },
   "dependencies": {
     "express": "^4.21.0",

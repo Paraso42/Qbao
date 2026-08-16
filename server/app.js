@@ -45,15 +45,16 @@ function createApp() {
 
   require('./src/routes/auth.routes')(app);
   require('./src/routes/data.routes')(app);
-  require('./src/routes/backup.routes')(app);
+  require('./src/routes/backup.routes.v2')(app);
   require('./src/routes/ai.routes')(app);
-  require('./src/routes/share.routes')(app);
-  require('./src/routes/notices.routes')(app);
-  require('./src/routes/users.routes')(app);
+    require('./src/routes/aiTasks.routes')(app);
+  require('./src/routes/share.routes.v2')(app);
+  require('./src/routes/notices.routes.v2')(app);
+  require('./src/routes/users.routes.v2')(app);
   require('./src/routes/quiz.routes')(app);
-  require('./src/routes/files.routes')(app);
-  require('./src/routes/issues.routes')(app);
-  require('./src/routes/chat.routes')(app);
+  require('./src/routes/files.routes.v2')(app);
+  require('./src/routes/issues.routes.v2')(app);
+  require('./src/routes/chat.routes.v2')(app);
 
   // 统一兜底：404 + 全局错误处理（必须最后注册）
   app.use(notFoundHandler);

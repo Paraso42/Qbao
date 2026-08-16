@@ -3,6 +3,53 @@
 本文件面向 GitHub 访客，按版本记录公开发布的功能与修复。
 > 完整开发日记保留在本地 `local/log.md`（不公开）。
 
+## v3.27.0（开发中）
+
+- AI API Key 移出 `state.aiConfig`，改为按账号本机存储，不再随 `user_data` 同步
+- `GET/PUT/PATCH /api/v1/data` 服务端强制剥离 `aiConfig.apiKey/providerKeys`；备份创建/读取同样脱敏
+- 新增存量数据清洗：`npm run scrub:ai-keys -- --dry-run` 与 `server/sql/migration_v3.27_scrub_ai_keys.sql`
+- AI Provider 能力目录：`providers/catalog.js` 统一描述 apiStyle/capabilities/defaults/models；`GET /ai/providers` 返回完整能力
+- `POST /ai/generate` 接入 zod 校验与严格 provider/model 匹配，未知供应商不再静默回退 ECNU
+- 新增 `POST /ai/test` 最小化连接测试，不再复用生成接口
+- 修复流式路径系统提示词重复拼接；移除 API Key 日志；max_tokens 受模型 maxOutput 约束
+- Provider 适配层：ECNU/DeepSeek/OpenAI 合并为 OpenAI-compatible 基座；新增跨 chunk 缓冲的 SSE 解析器
+- 文件提取缓存：`user_files` 增加 `extract_status/extracted_text/text_hash/source_mtime_ms/source_size`，相同文件不重复解析
+- 题目结构校验器：拦截 answer 越界、缺 tag、题干过短等硬错误，非流式响应附 `validation.warnings`
+- Node 版迁移执行器：`npm run migrate -- <sql文件>`，不再依赖 psql
+- AI 题目解析服务：`normalizeQuestions/repairJson/tryExtractCompletedObjects` 迁至 `src/services/aiQuestionParser.js`，路由改为薄包装
+- 流式生成结果接入题目校验器，SSE `done` 事件附 `validation.warnings`
+- AI 请求审计补齐：`started/ok/error/parse_error` 状态覆盖流式、非流式与失败路径
+- 部署与守护：`server/deploy/qbao-api.service` systemd 模板、`server/deploy/README.md`；本地一键脚本 `local/deploy-qbao.ps1`
+- 安全修复：封禁检查改为 `await` 后放行；首个注册用户作为管理员引导，禁止凭用户名注册提权；启动时强校验 `JWT_SECRET`
+- AI 自动判定开关：用户可配置 `selfCheck`，生成后由 AI 二次审核并修正题目，失败自动降级保留原始结果
+- 服务端 AI 任务队列 v1：`ai_tasks` 表 + `/api/v1/ai/tasks` 创建/查询/取消，进程内 worker 串行执行非流式生成；API Key 不落库
+- 前端接入服务端任务队列：设置项“服务端任务队列”，开启后 AI 出题改走 `/ai/tasks` 后台执行并轮询结果
+- 路由治理：`files` 迁至 `files.routes.v2.js`，接入 zod/asyncHandler/ApiError，上传增加扩展名白名单
+- 路由治理：`backup`、`share` 迁至 v2，接入 zod/asyncHandler/ApiError；分享码改用加密随机数
+- 路由治理：`notices` 迁至 v2，接入 zod/asyncHandler/ApiError
+- 路由治理：`users` 迁至 v2，接入 zod/asyncHandler/ApiError；头像 base64 限制 5MB，管理员角色枚举校验
+- 路由治理：`issues` 迁至 v2，接入 zod/asyncHandler/ApiError；修复图片文件名路径穿越；状态流转与事务保持原逻辑
+- 路由治理：`chat` 迁至 v2，接入 zod/asyncHandler/ApiError；修复 `update-quiz` 越权；撤回时清空附件；文件下载防路径穿越；房间列表消除 N+1 成员查询
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## v3.26.0
 
 - 2026-08-16 — 后端结构化重构（Phase 5）：统一错误处理（ApiError + errorHandler + asyncHandler，响应统一为 `{error,...}`，不再向客户端泄露内部异常）、zod 参数校验（auth/data/quiz 三组路由）、Vitest + supertest 测试骨架（25 个用例覆盖健康检查/校验/rev 乐观锁 409/错误处理）并接入 CI；bcrypt → bcryptjs（纯 JS，免原生编译，哈希格式互通）

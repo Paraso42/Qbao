@@ -27,7 +27,7 @@ jobs:
           node --check desktop/preload.js
           node --check desktop/updater.js
           for f in app/js/*.js; do node --check "$f"; done
-          for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/scripts/*.js; do node --check "$f"; done
+          for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/src/lib/*.js server/src/schemas/*.js server/src/services/*.js server/scripts/*.js; do node --check "$f"; done
       - name: 构建 NSIS 安装包
         working-directory: desktop
         run: npx electron-builder --win nsis --publish never

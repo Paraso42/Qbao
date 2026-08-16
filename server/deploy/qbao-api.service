@@ -1,0 +1,23 @@
+[Unit]
+Description=Qbao API (Node.js Express)
+Documentation=https://github.com/Paraso42/Qbao
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/qbao/qbao/server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+Environment=NODE_ENV=production
+
+# 日志统一到 journald：
+#   journalctl -u qbao-api -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

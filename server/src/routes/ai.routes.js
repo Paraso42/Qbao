@@ -4,6 +4,26 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const { getProvider, getProviderByModel, getAllProviders } = require('../providers');
+const { asyncHandler, ApiError } = require('../lib/errorHandler');
+const { validate } = require('../lib/validate');
+const { aiGenerateBodySchema, aiTestBodySchema } = require('../schemas/ai.schema');
+const { parseAiHeaders, resolveAiTarget, normalizeTypeCounts, calculateMaxTokens } = require('../lib/aiRequest');
+const { getCachedOrExtractFileText } = require('../services/aiMaterialCache');
+const { validateQuestionSet } = require('../services/aiQuestionValidator');
+const { finalizeAiQuestions } = require('../services/aiQuestionFinalizer');
+const aiQuestionParser = require('../services/aiQuestionParser');
+
+// AI 请求审计：所有路径都记录 status，失败也不影响主流程。
+async function logAiRequest(userId, model, status) {
+  try {
+    await pool.query(
+      'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
+      [userId, model, status]
+    );
+  } catch (e) {
+    console.warn('[ai-audit] log failed:', e.message);
+  }
+}
 
 const uploadDir = path.join(__dirname, '../../uploads');
 const POOL_BASE = path.join(__dirname, '../../../uploads'); // shared file pool root
@@ -135,17 +155,19 @@ module.exports = function (app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post('/api/v1/ai/generate', requireAuth, async (req, res) => {
+  app.post('/api/v1/ai/generate', validate({ body: aiGenerateBodySchema }), requireAuth, async (req, res) => {
     try {
-      const apiKey = req.headers['x-ai-api-key'];
-      const model = req.headers['x-ai-model'] || 'ecnu-plus';
-      const providerName = req.headers['x-ai-provider'] || getProviderByModel(model);
-      const { textContent, typeCounts, prompt, chapterHistory, chapterId } = req.body;
-      const useStream = req.headers['x-ai-stream'] === 'true';
+      const parsed = parseAiHeaders(req); const target = resolveAiTarget(parsed.providerName, parsed.model); const apiKey = parsed.apiKey;
+      const model = target.model;
+        req.aiModel = model;
+      const providerName = target.providerConfig.id;
+      const { textContent, typeCounts, prompt, chapterHistory, chapterId, selfCheck } = req.body;
+      const useStream = parsed.useStream;
 
-      const provider = getProvider(providerName);
+      const provider = target.provider;
+        await logAiRequest(req.userId, model, 'started');
       console.log('AI generate: provider=' + providerName + ', model=' + model +
-        ', apiKey=' + ((apiKey || '').substring(0, 10) + '...') +
+        '' +
         ', textContentLen=' + (textContent ? textContent.length : 0) +
         ', stream=' + useStream +
         ', typeCounts=', JSON.stringify(typeCounts) + ', chapterId=' + (chapterId || 'none'));
@@ -154,8 +176,8 @@ module.exports = function (app) {
         return res.status(401).json({ error: '缺少 AI API Key，请在设置中配置' });
       }
 
-      const tc = typeCounts || { single: 10, judge: 5, term: 2, short: 1 };
-      const safeTc = tc;
+      const tcSpec = normalizeTypeCounts(typeCounts);
+      const safeTc = tcSpec.counts;
       if ((safeTc.single || 0) + (safeTc.judge || 0) + (safeTc.term || 0) + (safeTc.short || 0) === 0) {
         safeTc.single = 1;
       }
@@ -179,7 +201,7 @@ let userText = textContent || '';
               statusEntry.found = true;
               try {
                 var ext = path.extname(frow.original_name).slice(1).toLowerCase();
-                var extracted = await extractText(absPath, ext);
+                var extracted = await getCachedOrExtractFileText(frow, absPath, ext, extractText);
                 statusEntry.extracted = extracted.extracted;
                 statusEntry.empty = extracted.empty;
                 statusEntry.error = extracted.error || null;
@@ -273,6 +295,13 @@ let userText = textContent || '';
       var perQuestionTokens = 300;
       var neededTokens = baseTokens + totalQ * perQuestionTokens;
       var maxTokens = Math.min(16384, Math.max(4096, neededTokens));
+        // v3.27: max_tokens 以 provider/model 目录的 maxOutput 为上限，防止过量消耗。
+        maxTokens = calculateMaxTokens(
+          typeof userText === 'string' ? userText.length : 0,
+          totalQ,
+          target.providerConfig,
+          target.modelConfig
+        );
 
       if (useStream) {
         const streamAborter = new AbortController();
@@ -339,8 +368,10 @@ let userText = textContent || '';
             typeDist[q.type || '?'] = (typeDist[q.type || '?'] || 0) + 1;
           });
           console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.slice(0, totalQ).length + ', types=' + JSON.stringify(typeDist));
+            await logAiRequest(req.userId, model, 'ok');
           try {
-            res.write('data: ' + JSON.stringify({ done: true, questions: normalizeQuestions(accumulatedQuestions.slice(0, totalQ)), usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            const finalized = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: accumulatedQuestions.slice(0, totalQ) });
+              res.write('data: ' + JSON.stringify({ done: true, questions: finalized.questions, validation: finalized.baseValidation, selfCheck: finalized.selfCheck, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           } catch(e) { /* connection already closed */ }
           return;
@@ -355,9 +386,14 @@ let userText = textContent || '';
 
         try {
           var questions = normalizeQuestions(JSON.parse(repairJson(finalClean)));
+            var finalizedFinal = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: questions }); questions = finalizedFinal.questions; var streamValidation = finalizedFinal.baseValidation;
           var typeDist3 = {};
           (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
           console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
+            await logAiRequest(req.userId, model, 'ok');
+            res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: streamValidation, selfCheck: finalizedFinal.selfCheck, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            res.end();
+            return;
           res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
           res.end();
         } catch (e) {
@@ -372,11 +408,16 @@ let userText = textContent || '';
             // Fallback: extract individual complete objects from partially malformed JSON
             var extracted = tryExtractCompletedObjects(finalFullContent, 0);
             if (extracted && extracted.length > 0) {
-              questions = normalizeQuestions(extracted);
+              var finalizedFallback = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: extracted }); questions = finalizedFallback.questions; var fallbackValidation = finalizedFallback.baseValidation;
               console.log('[stream] fallback extract: model=' + model + ', questions=' + questions.length);
+                await logAiRequest(req.userId, model, 'ok');
+                res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: fallbackValidation, selfCheck: finalizedFallback.selfCheck, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+                res.end();
+                return;
               res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
               res.end();
             } else {
+                await logAiRequest(req.userId, model, 'parse_error');
               res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent, poolFilesStatus: poolFilesStatus }) + '\n\n');
               res.end();
             }
@@ -398,20 +439,73 @@ let userText = textContent || '';
         const output = completion.choices[0].message.content;
         let questions;
         try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
-        questions = normalizeQuestions(questions);
+        const finalized = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: questions }); questions = finalized.questions; const validation = finalized.baseValidation;
 
         await pool.query(
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
           [req.userId, model, 'ok']
         );
-        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus });
+        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus, validation: validation, selfCheck: finalized.selfCheck });
       }
     } catch (e) {
+        if (req.aiModel) { await logAiRequest(req.userId, req.aiModel, 'error'); }
+        if (e instanceof ApiError) {
+          if (!res.headersSent) return res.status(e.status).json({ error: e.message });
+          console.error('AI generate ApiError after headers sent:', e.status, e.message);
+          return;
+          if (!res.headersSent) throw e;
+          console.error('AI generate ApiError after headers sent:', e.status, e.message);
+          return;
+        }
       console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);
-      if (!res.headersSent) res.status(500).json({ error: e.message, status: e ? e.status : undefined });
+        if (!res.headersSent) return res.status(500).json({ error: '服务器内部错误' });
+        console.error('AI generate error after headers sent:', e.message);
+        return;
+      if (!res.headersSent) throw e;
       else console.error('AI generate error after headers sent:', e.message);
     }
   });
+
+    // POST /api/v1/ai/test — 最小化连接测试，不生成题目、不污染业务日志语义。
+    app.post('/api/v1/ai/test', validate({ body: aiTestBodySchema }), requireAuth, asyncHandler(async (req, res) => {
+      const parsed = parseAiHeaders(req);
+      const target = resolveAiTarget(parsed.providerName, parsed.model);
+
+      const startedAt = Date.now();
+      const testMessages = [
+        { role: 'system', content: 'You are a connectivity test assistant. Reply with exactly: OK' },
+        { role: 'user', content: (req.body && req.body.message) || 'ping' },
+      ];
+
+      let completion;
+        try {
+          completion = await target.provider.chatCompletions(
+        parsed.apiKey,
+        target.model,
+        testMessages,
+        { temperature: 0, max_tokens: Math.min(16, Number(target.modelConfig.maxOutput) || 16) }
+      );
+        } catch (e) {
+          throw new ApiError(502, 'AI 连接测试失败：' + (e && e.message ? e.message : '未知错误'));
+        }
+
+      const content = completion && completion.choices && completion.choices[0]
+        ? completion.choices[0].message && completion.choices[0].message.content
+        : '';
+
+      await pool.query(
+        'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
+        [req.userId, target.model, 'test_ok']
+      );
+
+      res.json({
+        ok: true,
+        provider: target.providerConfig.id,
+        model: target.model,
+        latencyMs: Date.now() - startedAt,
+        content: typeof content === 'string' ? content.slice(0, 200) : '',
+      });
+    }));
 
   app.post('/api/v1/ai/analyze', requireAuth, async (req, res) => {
     res.status(501).json({ error: '功能开发中' });
@@ -423,160 +517,14 @@ let userText = textContent || '';
 // Handles various output formats: nested {multipleChoice: [...], trueFalse: [...]}
 // options as object {A:..., B:...} → array [...], answer letter A/B → index 0/1
 function normalizeQuestions(raw) {
-  if (!raw) return [];
-  // If plain object (not array), wrap for uniform processing
-  var items = Array.isArray(raw) ? raw : [raw];
-  // Flatten: if any item is a wrapper object with nested question arrays, extract them
-  var flat = [];
-  items.forEach(function(item) {
-    if (item && typeof item === 'object' && !item.question) {
-      var found = false;
-      // Check for wrapper objects — handles camelCase, snake_case, and other variants
-      ['multipleChoice', 'multiple_choice', 'multiplechoice', 'singleChoice', 'single_choice',
-       'trueFalse', 'true_false', 'truefalse', 'questions', 'topics', 'items', 'results'].forEach(function(k) {
-        if (Array.isArray(item[k])) {
-          // For 'topics'/'items'/'results', check if contents look like questions (have 'question' field)
-          var arr = item[k];
-          if (arr.length > 0 && arr[0].question) {
-            flat = flat.concat(arr); found = true;
-          }
-          // Only add if items have question field
-        }
-      });
-      if (!found) flat.push(item); // Not a recognizable wrapper, keep as-is
-    } else {
-      flat.push(item);
-    }
-  });
-  raw = flat;
-
-  raw = raw.map(function(q) {
-    if (!q || typeof q !== 'object') return null;
-    // Must have a question field
-    if (!q.question || typeof q.question !== 'string' || q.question.trim().length < 3) return null;
-
-    // Normalize options: object {A: "opt1", B: "opt2"} → array ["opt1", "opt2"]
-    // Also strip "A: ", "B: " etc. prefix from array options if present
-    if (q.options && typeof q.options === 'object' && !Array.isArray(q.options)) {
-      var keys = Object.keys(q.options).sort();
-      q.options = keys.map(function(k) { return q.options[k]; });
-    }
-    if (!q.options || !Array.isArray(q.options)) {
-      q.options = [];
-    }
-    // Strip "A: ", "B: " prefix from option strings
-    q.options = q.options.map(function(opt) {
-      if (typeof opt === 'string') return opt.replace(/^[A-D]:\s*/, '');
-      return opt;
-    });
-
-    // Normalize answer: letter "A"/"B"/"C"/"D" → index 0/1/2/3
-    if (typeof q.answer === 'string' && q.answer.length === 1) {
-      var code = q.answer.toUpperCase().charCodeAt(0);
-      if (code >= 65 && code <= 90) {
-        q.answer = code - 65;
-      } else if (q.answer === '对' || q.answer === '√' || q.answer.toLowerCase() === 'true') {
-        q.answer = 0; q.type = q.type || 'judge';
-      } else if (q.answer === '错' || q.answer === '×' || q.answer.toLowerCase() === 'false') {
-        q.answer = 1; q.type = q.type || 'judge';
-      }
-    }
-    if (typeof q.answer === 'boolean') {
-      q.answer = q.answer ? 0 : 1;
-      q.type = q.type || 'judge';
-    }
-
-    // Normalize type variants
-    if (q.type) {
-      var t = q.type.toLowerCase().replace(/[-_\s]/g, '');
-      if (t === 'singlechoice' || t === 'multiplechoice' || t === 'choice' || t === 'multichoice') q.type = 'single';
-      else if (t === 'truefalse' || t === 'bool' || t === 'boolean') q.type = 'judge';
-      else if (t === 'term' || t === 'definition' || t === 'explain') q.type = 'term';
-      else if (t === 'short' || t === 'shortanswer' || t === 'essay') q.type = 'short';
-      if (['single', 'judge', 'term', 'short'].indexOf(q.type) === -1) {
-        q.type = (q.options && q.options.length >= 2) ? 'single' : 'short';
-      }
-    } else {
-      q.type = (q.options && q.options.length >= 2) ? 'single' : 'short';
-    }
-
-    // Ensure required fields
-    if (!q.tag) q.tag = 'default';
-    if (!q.strategy) q.strategy = 'new';
-    if (!q.explanation) q.explanation = '';
-
-    return q;
-  }).filter(Boolean); // Remove null entries (invalid questions)
-
-  if (flat.length > 0 && raw.length === 0) {
-    console.log('[normalize] All ' + flat.length + ' items filtered out — no valid question objects found');
-  }
-  return raw;
+  return aiQuestionParser.normalizeQuestions(raw);
 }
-
 // Helper: repair common DeepSeek JSON syntax errors before parse
 function repairJson(text) {
-  // Fix missing colons between key and string value: "key" "value" → "key": "value"
-  text = text.replace(/"(\w+)"\s+"/g, '"$1": "');
-  // Fix missing colons before numeric/boolean/null values: "key" 123 → "key": 123
-  text = text.replace(/"(\w+)"\s+(-?\d+(?:\.\d+)?|true|false|null)/g, '"$1": $2');
-  return text;
+  return aiQuestionParser.repairJson(text);
 }
-
 // Helper: extract completed JSON objects from streaming accumulated text
 // JSON state machine — tracks both {} and [] nesting, handles json_object wrapper
 function tryExtractCompletedObjects(text, knownCount) {
-  var cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  var result = [];
-  var braceDepth = 0;       // {} nesting
-  var arrDepth = 0;         // [] nesting
-  var arrBaseBrace = 0;     // braceDepth when outermost [...] was entered
-  var inObj = false;        // tracking a potential question object
-  var objStart = -1;
-  var inString = false;
-  var escaped = false;
-  for (var i = 0; i < cleaned.length; i++) {
-    var ch = cleaned[i];
-    if (inString) {
-      if (escaped) { escaped = false; continue; }
-      if (ch === '\\') { escaped = true; continue; }
-      if (ch === '"') { inString = false; }
-      continue;
-    }
-    if (ch === '"') { inString = true; continue; }
-    if (ch === '{') {
-      // Start of a question object: inside an array at the element level
-      if (!inObj && arrDepth > 0 && braceDepth === arrBaseBrace) {
-        inObj = true;
-        objStart = i;
-      }
-      braceDepth++;
-    } else if (ch === '}') {
-      braceDepth--;
-      if (inObj && braceDepth === arrBaseBrace) {
-        // Question object completed
-        var candidate = repairJson(cleaned.substring(objStart, i + 1));
-        try {
-          var obj = JSON.parse(candidate);
-          if (obj && obj.question && typeof obj.question === 'string') {
-            var isDup = result.some(function(r) { return r.question === obj.question; });
-            if (!isDup) result.push(obj);
-          }
-        } catch (e) { /* skip malformed object */ }
-        inObj = false;
-        objStart = -1;
-      }
-    } else if (ch === '[') {
-      if (arrDepth === 0) arrBaseBrace = braceDepth;
-      arrDepth++;
-    } else if (ch === ']') {
-      arrDepth--;
-      if (arrDepth === 0) {
-        inObj = false;
-        objStart = -1;
-      }
-    }
-  }
-  if (result.length > knownCount) return result.slice(knownCount);
-  return null;
+  return aiQuestionParser.tryExtractCompletedObjects(text, knownCount);
 }

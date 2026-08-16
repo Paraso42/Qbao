@@ -55,7 +55,7 @@ function updateLastActive(userId) {
     .catch(() => {});
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: '未登录' });
@@ -72,6 +72,13 @@ function requireAuth(req, res, next) {
 
   req.userId = decoded.sub;
   req.userRole = decoded.role || 'user';
+    if (req.userRole !== 'admin') {
+      const banned = await isUserBanned(req.userId);
+      if (banned) return res.status(403).json({ error: '账号已被封禁' });
+      updateLastActive(req.userId);
+      next();
+      return;
+    }
 
   // 管理员豁免封禁检查
   if (req.userRole !== 'admin') {

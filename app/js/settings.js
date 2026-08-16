@@ -159,7 +159,7 @@ function loadAiConfig() {
   var keyInput = document.getElementById('ai-api-key');
   if (keyInput) {
     keyInput.value = '';
-    var savedKey = (ac.providerKeys && ac.providerKeys[provider]) || ac.apiKey || '';
+    var savedKey = getAiApiKey(provider);
     if (savedKey) {
       keyInput.placeholder = '已保存 (长度 ' + savedKey.length + ' 字符)';
     } else {
@@ -172,7 +172,7 @@ function loadAiConfig() {
   updateEnvPromptCharCount();
 
   var status = document.getElementById('ai-config-status');
-  if (status) status.textContent = ac.apiKeySet ? '✅ 已配置 AI API' : '⚠️ 尚未配置 API 密钥';
+  if (status) status.textContent = getAiApiKey(provider) ? '✅ 已配置 AI API' : '⚠️ 尚未配置 API 密钥';
 
   var intervalInput = document.getElementById('ai-task-interval');
   if (intervalInput) {
@@ -185,6 +185,10 @@ function loadAiConfig() {
   if (ac.streamMode === undefined) ac.streamMode = true;
   var st = document.getElementById('ai-stream-threshold');
   if (st) st.value = ac.streamThreshold || 3;
+    var selfCheckInput = document.getElementById('ai-self-check');
+    if (selfCheckInput) selfCheckInput.checked = ac.selfCheck === true;
+    var serverQueueInput = document.getElementById('ai-server-queue');
+    if (serverQueueInput) serverQueueInput.checked = ac.useServerQueue === true;
 }
 
 async function fetchProviders() {
@@ -255,7 +259,7 @@ function onAiProviderChange() {
   var keyInput = document.getElementById('ai-api-key');
   if (keyInput) {
     var ac = state.aiConfig || {};
-    var savedKey = (ac.providerKeys && ac.providerKeys[providerId]) || '';
+    var savedKey = getAiApiKey(providerId);
     if (savedKey) {
       keyInput.placeholder = '已保存 (长度 ' + savedKey.length + ' 字符)';
     } else {
@@ -298,17 +302,18 @@ function saveAiConfig() {
   state.aiConfig.model = modelSel ? modelSel.value : 'ecnu-plus';
 
   // Save API key to provider-specific slot
-  if (!state.aiConfig.providerKeys) state.aiConfig.providerKeys = {};
+  // API Key 仅写入本机 KeyStore，不写入 state.aiConfig。
   if (keyInput && keyInput.value.trim()) {
-    state.aiConfig.providerKeys[provider] = keyInput.value.trim();
+    setAiApiKey(provider, keyInput.value.trim());
     state.aiConfig.apiKeySet = true;
     keyInput.value = '';
-    keyInput.placeholder = '已保存 (长度 ' + state.aiConfig.providerKeys[provider].length + ' 字符)';
+    keyInput.placeholder = '已保存 (长度 ' + getAiApiKey(provider).length + ' 字符)';
   }
-  // Backward compat: keep apiKey for old code paths
-  if (state.aiConfig.providerKeys[provider]) {
-    state.aiConfig.apiKey = state.aiConfig.providerKeys[provider];
+  // apiKeySet 仅保留布尔标记（本机是否配置过任意 Key）。
+  if (hasAnyAiApiKey()) {
+    state.aiConfig.apiKeySet = true;
   }
+    if (!hasAnyAiApiKey()) state.aiConfig.apiKeySet = false;
 
   if (envPrompt) state.aiConfig.systemPrompt = envPrompt.value.trim();
 
@@ -323,6 +328,10 @@ function saveAiConfig() {
   state.aiConfig.streamMode = true;
   var st = document.getElementById('ai-stream-threshold');
   state.aiConfig.streamThreshold = st ? parseInt(st.value) || 3 : 3;
+    var selfCheckInput = document.getElementById('ai-self-check');
+    state.aiConfig.selfCheck = selfCheckInput ? selfCheckInput.checked === true : false;
+    var serverQueueInput = document.getElementById('ai-server-queue');
+    state.aiConfig.useServerQueue = serverQueueInput ? serverQueueInput.checked === true : false;
 
   saveState();
   var status = document.getElementById('ai-config-status');
@@ -334,7 +343,7 @@ async function testAiConfig() {
   if (status) status.textContent = '⏳ 通过后端测试连接...';
 
   var ac = state.aiConfig || {};
-  if (!ac.apiKey && !(ac.providerKeys && Object.values(ac.providerKeys).some(function(k) { return !!k; }))) {
+  if (!getAiApiKey(ac.provider || 'ecnu')) {
     status.textContent = '❌ 请先保存 API 密钥';
     status.style.color = '#e94560';
     return;
@@ -342,11 +351,11 @@ async function testAiConfig() {
 
   var provider = ac.provider || 'ecnu';
   var model = ac.model || 'ecnu-plus';
-  var apiKey = (ac.providerKeys && ac.providerKeys[provider]) || ac.apiKey || '';
+  var apiKey = getAiApiKey(provider);
   var envPrompt = ac.systemPrompt ? ac.systemPrompt.trim() + '\n\n' : '';
 
   try {
-    var res = await fetch(API_BASE + '/ai/generate', {
+    var res = await fetch(API_BASE + '/ai/test', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -356,14 +365,14 @@ async function testAiConfig() {
         'x-ai-provider': provider
       },
       body: JSON.stringify({
-        textContent: '你好，请回复两个字',
+        message: 'ping',
         typeCounts: { single: 1, judge: 0, term: 0, short: 0 },
         prompt: envPrompt + '你是一个助手。请回答一句话。'
       })
     });
     if (res.ok) {
       var d = await res.json();
-      status.textContent = '✅ 连接成功 (' + provider + '/' + model + ')，返回 ' + (d.questions ? d.questions.length : 0) + ' 条';
+      status.textContent = '✅ 连接成功 (' + provider + '/' + model + ')，耗时 ' + (d.latencyMs || '?') + 'ms';
       status.style.color = '#2ed573';
     } else {
       var err = await res.json().catch(function() { return {}; });
