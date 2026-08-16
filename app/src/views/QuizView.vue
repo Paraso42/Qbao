@@ -44,9 +44,16 @@
           <p v-html="renderMarkdown(q.explanation)"></p>
         </div>
 
-        <!-- 导航点 -->
+        <!-- 导航点 + 图例 -->
+        <div v-if="as.questions.length > 1" class="quiz-legend">
+          <span class="lg-item"><span class="lg-dot current"></span>当前</span>
+          <span class="lg-item"><span class="lg-dot"></span>未答</span>
+          <span class="lg-item"><span class="lg-dot ok"></span>答对</span>
+          <span class="lg-item"><span class="lg-dot bad"></span>答错</span>
+        </div>
         <div v-if="as.questions.length > 1" class="quiz-nav">
           <button v-for="(qq, i) in as.questions" :key="i" class="dot"
+            :aria-label="'跳转到第 ' + (i + 1) + ' 题'"
             :class="dotClass(i)" @click="quiz.goToQuestion(i)">{{ i + 1 }}</button>
         </div>
 
@@ -59,8 +66,9 @@
             <button v-if="isObj" class="btn btn-danger" @click="quiz.markDontKnow">我不会</button>
           </template>
           <template v-else>
+            <button v-if="idx > 0" class="btn btn-ghost" @click="quiz.goToQuestion(idx - 1)">上一题</button>
             <button v-if="idx < as.questions.length - 1" class="btn btn-primary" @click="quiz.nextQuestion">下一题</button>
-            <button v-else class="btn btn-success" @click="quiz.endExam">结束并查看报告</button>
+            <button v-else class="btn btn-primary" @click="quiz.endExam">查看报告</button>
           </template>
           <button v-if="as.isExam" class="btn btn-danger" @click="quiz.endExam">结束</button>
         </div>
@@ -322,8 +330,8 @@ watch(() => quiz.session.modalOpen, (open) => {
 }
 .quiz-option:hover:not(.disabled) { border-color: var(--color-primary); box-shadow: var(--shadow-sm); }
 .quiz-option.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
-.quiz-option.correct { border-color: var(--color-success); background: var(--color-success-light); }
-.quiz-option.wrong { border-color: var(--color-danger); background: var(--color-danger-light); }
+.quiz-option.correct { border-color: var(--color-success); background: var(--color-success-light); box-shadow: inset 0 0 0 1px var(--color-success); }
+.quiz-option.wrong { border-color: var(--color-danger); background: var(--color-danger-light); box-shadow: inset 0 0 0 1px var(--color-danger); }
 .quiz-option.disabled { cursor: default; }
 .opt-letter {
   width: 24px; height: 24px; flex-shrink: 0;
@@ -342,13 +350,19 @@ watch(() => quiz.session.modalOpen, (open) => {
 .explanation-box {
   margin: var(--space-md) 0;
   padding: var(--space-md) var(--space-lg);
-  background: var(--color-warning-light);
+  background: var(--color-primary-light);
   border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-warning);
+  border-left: 3px solid var(--color-primary);
 }
 .explanation-box h4 { margin: 0 0 4px; }
 .explanation-box p { font-size: var(--fs-base); line-height: 1.7; }
-.quiz-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-md) 0; }
+.quiz-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: var(--space-md) 0 var(--space-xs); font-size: 11px; color: var(--text-muted); }
+.lg-item { display: inline-flex; align-items: center; gap: 5px; }
+.lg-dot { width: 12px; height: 12px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--surface-card); }
+.lg-dot.current { background: var(--color-primary); border-color: var(--color-primary); }
+.lg-dot.ok { background: var(--color-success); border-color: var(--color-success); }
+.lg-dot.bad { background: var(--color-danger); border-color: var(--color-danger); }
+.quiz-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-sm) 0 var(--space-md); }
 .dot {
   width: 30px; height: 30px;
   border-radius: var(--radius-full);
@@ -396,5 +410,7 @@ watch(() => quiz.session.modalOpen, (open) => {
 @media (max-width: 768px) {
   .report-grid { grid-template-columns: repeat(2, 1fr); }
   .quiz-actions .btn { flex: 1; }
+  .quiz-legend { font-size: 12px; }
+  .lg-dot { width: 14px; height: 14px; }
 }
 </style>

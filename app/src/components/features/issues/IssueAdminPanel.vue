@@ -53,7 +53,7 @@ const groups = computed(() => store.adminGroups)
 function open(issue) { store.openDetail(issue.id) }
 
 async function onDelete(issue) {
-  const ok = await ui.openConfirm('删除反馈', '确定删除此反馈？删除后用户端将同步移除。', '删除')
+  const ok = await ui.openConfirm('删除反馈', '确定删除此反馈？删除后用户端将同步移除，且无法恢复。', '删除', { danger: true })
   if (!ok) return
   try {
     await store.remove(issue.id)

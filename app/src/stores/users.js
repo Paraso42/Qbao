@@ -337,7 +337,7 @@ export const useUsersStore = defineStore('users', () => {
   }
 
   async function removeNotice(id) {
-    const ok = await ui.openConfirm('删除消息', '确定删除此消息？', '删除')
+    const ok = await ui.openConfirm('删除消息', '确定删除此消息？删除后无法恢复。', '删除', { danger: true })
     if (!ok) return false
     try { await usersApi.deleteNotice(id); await loadNotices(); return true }
     catch (e) { ui.toast('删除失败: ' + e.message, 'err'); return false }

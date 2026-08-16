@@ -29,24 +29,27 @@ a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 h1 { font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.3px; line-height: var(--lh-tight); }
-h2 { font-size: var(--fs-xl); font-weight: 600; }
-h3 { font-size: var(--fs-lg); font-weight: 600; }
+h2 { font-size: var(--fs-xl); font-weight: 600; line-height: 28px; }
+h3 { font-size: var(--fs-md); font-weight: 600; }
 h4 { font-size: var(--fs-base); font-weight: 600; }
 
 ::selection { background: var(--color-primary-light); color: var(--color-primary); }
 
-/* 全局聚焦环 */
+/* 全局聚焦环（键盘可达性） */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
-/* 滚动条 */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+/* 滚动条：安静克制的细条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+/* 弹层打开时隐藏 toast，避免多层浮层叠加 */
+body.has-dialog .toast-host { display: none; }
 
 /* KaTeX 内联公式与行内对齐 */
 .katex { font-size: 1em !important; }
@@ -54,3 +57,12 @@ h4 { font-size: var(--fs-base); font-weight: 600; }
 
 /* 数字等宽 */
 .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* 减少动态效果（无障碍） */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

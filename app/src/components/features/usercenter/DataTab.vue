@@ -65,7 +65,7 @@ async function onRestoreFile(e) {
   const file = e.target.files && e.target.files[0]
   e.target.value = ''
   if (!file) return
-  const ok = await ui.openConfirm('回档确认', '回档后当前数据将被替换。建议先做一次备份。', '继续回档')
+  const ok = await ui.openConfirm('回档确认', '回档后当前数据将被替换。建议先做一次备份。', '继续回档', { danger: true })
   if (!ok) return
   const reader = new FileReader()
   reader.onload = (ev) => {

@@ -33,6 +33,12 @@ export const useUiStore = defineStore('ui', {
     toast(message, type = 'info', duration = 4000) {
       const id = ++toastSeq
       this.toasts.push({ id, message, type })
+      // 队列治理：同屏最多 2 条，溢出时移除最早的非错误提示
+      while (this.toasts.length > 2) {
+        const dropIdx = this.toasts.findIndex((t) => t.type !== 'err' && t.type !== 'error')
+        if (dropIdx < 0) this.toasts.shift()
+        else this.toasts.splice(dropIdx, 1)
+      }
       setTimeout(() => { this.dismissToast(id) }, duration)
     },
     dismissToast(id) {
@@ -40,9 +46,9 @@ export const useUiStore = defineStore('ui', {
       if (idx >= 0) this.toasts.splice(idx, 1)
     },
     // Promise 化的确认框（替代原生 confirm）
-    openConfirm(title, message, okText) {
+    openConfirm(title, message, okText, opts) {
       return new Promise((resolve) => {
-        this.confirm = { open: true, title, message: message || '', okText: okText || '', resolve }
+        this.confirm = { open: true, title, message: message || '', okText: okText || '', danger: !!(opts && opts.danger), resolve }
       })
     },
     closeConfirm() { this.confirm.open = false },

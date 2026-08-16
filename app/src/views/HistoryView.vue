@@ -3,7 +3,7 @@
   <section>
     <div class="hs-head">
       <h1>全部答题历史</h1>
-      <button class="btn btn-secondary btn-small" @click="ui.showScreen('start')">← 返回</button>
+      <button class="btn btn-secondary btn-small" @click="ui.showScreen('start')"><Icon name="arrow-left" :size="14" /> 返回主页</button>
     </div>
 
     <EmptyState v-if="groups.length === 0" icon="clock" title="暂无答题记录" hint="完成一轮答题后，历史记录会显示在这里" />
@@ -12,8 +12,8 @@
       <h3 class="hs-ch">{{ g.name }} <span class="hs-count tabular-nums">{{ g.records.length }} 次</span></h3>
       <div v-for="item in g.records" :key="item.record.id" class="hs-session" :class="{ expanded: expanded.has(item.record.id) }">
         <div class="hs-session-head" @click="toggle(item.record.id)">
-          <span class="hs-date">🕐 {{ item.record.date }}</span>
-          <span class="hs-stats tabular-nums">✅ {{ item.record.correct || 0 }} / ❌ {{ item.record.wrong || 0 }} / 📊 {{ item.record.rate || 0 }}%</span>
+          <span class="hs-date"><Icon name="clock" :size="13" /> {{ item.record.date }}</span>
+          <span class="hs-stats tabular-nums"><span class="hs-ok">答对 {{ item.record.correct || 0 }}</span><span class="hs-bad">答错 {{ item.record.wrong || 0 }}</span><span class="hs-rate">正确率 {{ item.record.rate || 0 }}%</span></span>
           <span class="hs-caret"><Icon name="chevron-down" :size="14" :class="{ rotated: expanded.has(item.record.id) }" /></span>
         </div>
         <div v-if="expanded.has(item.record.id)" class="hs-session-body">
@@ -94,7 +94,10 @@ function sessionQuestions(record) {
 }
 .hs-session-head:hover { background: var(--surface-hover); }
 .hs-date { flex: 1; font-size: var(--fs-sm); color: var(--text-secondary); }
-.hs-stats { font-size: var(--fs-sm); }
+.hs-stats { font-size: var(--fs-sm); display: inline-flex; gap: 10px; }
+.hs-ok { color: var(--color-success); }
+.hs-bad { color: var(--color-danger); }
+.hs-rate { color: var(--text-secondary); }
 .hs-caret { color: var(--text-muted); display: flex; transition: transform var(--transition-fast); }
 .hs-caret .icon.rotated { transform: rotate(180deg); }
 .hs-session-body { border-top: 1px solid var(--border-light); padding: var(--space-sm) var(--space-md) var(--space-md); background: var(--surface-hover); }

@@ -1,8 +1,8 @@
-/* ===== 暗色模式补充（token 在 tokens.css，此处为组件级微调） ===== */
-html.dark-mode {
-  color-scheme: dark;
-}
+/* Dark mode component tweaks (tokens live in tokens.css) */
+html.dark-mode { color-scheme: dark; }
 html.dark-mode .card { border-color: var(--border-light); }
-html.dark-mode .input:focus,
-html.dark-mode .select:focus,
-html.dark-mode .textarea:focus { background: var(--surface-raised); }
+html.dark-mode .input:focus, html.dark-mode .select:focus, html.dark-mode .textarea:focus { background: var(--surface-raised); }
+html.dark-mode #sidebar { background: var(--sidebar-bg); border-right-color: var(--border-light); }
+html.dark-mode .toast { background: var(--surface-raised); border-color: var(--border-light); }
+html.dark-mode .btn-ghost { border-color: var(--border-default); }
+html.dark-mode .btn-ghost:hover:not(:disabled) { border-color: var(--border-strong); }
