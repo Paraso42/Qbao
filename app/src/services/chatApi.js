@@ -44,9 +44,17 @@ export async function getMessages(roomId) {
 
 // POST body 含 content/images/file_info/msg_type/quiz_data/reply_to
 export async function sendMessage(roomId, body) {
+  // 只发送有值的字段：避免 file_info/quiz_data 等以 null 提交被后端 zod 拒绝
+  const clean = {}
+  for (const k in body) {
+    const v = body[k]
+    if (v === null || v === undefined) continue
+    if (Array.isArray(v) && v.length === 0 && k === 'images') continue
+    clean[k] = v
+  }
   const res = await fetchWithAuth('/chat/rooms/' + roomId + '/messages', {
     method: 'POST',
-    body: JSON.stringify(body)
+    body: JSON.stringify(clean)
   })
   if (!res || !res.ok) throw new Error(await readApiError(res, '发送失败'))
   return res.json()

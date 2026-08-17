@@ -44,24 +44,13 @@
         </div>
       </div>
 
-      <!-- 导航区：高频功能入口 -->
-      <div class="side-nav">
-        <button class="nav-item" @click="ui.showScreen('history')"><Icon name="clock" :size="15" /> 答题历史</button>
-        <button class="nav-item" @click="onChatClick">
-          <Icon name="chat" :size="15" /> 好友消息
-          <span v-if="chatBadge > 0" class="nav-badge">{{ chatBadge > 99 ? '99+' : chatBadge }}</span>
-        </button>
-        <button class="nav-item" @click="ai.openQueueDialog">
-          <Icon name="sparkle" :size="15" /> AI 任务
-          <span v-if="aiRunning > 0" class="nav-badge run">{{ aiRunning }}</span>
-        </button>
-      </div>
     </div>
 
     <div id="sidebar-footer">
-      <div class="ai-row">
+      <div class="ai-row" :class="{ 'ai-row-open': data.state.aiEnabled }" :title="data.state.aiEnabled ? '点击查看 AI 任务' : ''" @click="onAiRowClick">
         <span class="ai-label"><Icon name="sparkle" :size="14" /> AI 出题</span>
-        <Toggle :model-value="data.state.aiEnabled" @change="toggleAi" />
+        <span v-if="aiRunning > 0" class="ai-row-badge run">{{ aiRunning }}</span>
+        <span class="ai-row-switch" @click.stop><Toggle :model-value="data.state.aiEnabled" @change="toggleAi" /></span>
       </div>
       <div v-if="user.isOnline" class="user-row" @click="ui.openUserCenter">
         <span class="user-avatar">{{ user.shortName }}</span>
@@ -86,7 +75,6 @@ import { useUserStore } from '../../stores/user'
 import { useSyncStore } from '../../stores/sync'
 import { useQuizStore } from '../../stores/quiz'
 import { useAiStore } from '../../stores/ai'
-import { useChatStore } from '../../stores/chat'
 import Icon from '../ui/Icon.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import Toggle from '../ui/Toggle.vue'
@@ -98,9 +86,7 @@ const user = useUserStore()
 const sync = useSyncStore()
 const quiz = useQuizStore()
 const ai = useAiStore()
-const chat = useChatStore()
 
-const chatBadge = computed(() => (chat.totalUnread || 0) + (chat.pendingRequests || 0))
 const aiRunning = computed(() => {
   const queue = data.state.aiTaskQueue || []
   return queue.filter((t) => t.status === 'pending' || t.status === 'running').length
@@ -169,9 +155,9 @@ function selectChapter(cid) {
   quiz.restoreQuizFromServer(false)
 }
 
-function onChatClick() {
-  if (!user.isOnline) { ui.openAuth(); return }
-  chat.openChatModal()
+function onAiRowClick() {
+  if (!data.state.aiEnabled) return
+  ai.openQueueDialog()
 }
 
 function toggleAi(v) {
@@ -296,46 +282,33 @@ function toggleAi(v) {
 }
 .btn-add-chapter:hover { background: var(--surface-hover); color: var(--color-primary); }
 
-/* 导航区：与科目树分隔 */
-.side-nav {
-  margin-top: var(--space-md);
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--border-light);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.nav-item {
+#sidebar-footer { border-top: 1px solid var(--border-light); padding: var(--space-md) var(--space-sm) calc(var(--space-md) + env(safe-area-inset-bottom)); }
+.ai-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
   padding: 8px 10px;
   border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-  text-align: left;
+  cursor: default;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
-.nav-item:hover { background: var(--surface-hover); color: var(--text-primary); }
-.nav-badge {
-  margin-left: auto;
+.ai-row.ai-row-open { cursor: pointer; }
+.ai-row.ai-row-open:hover { background: var(--surface-hover); }
+.ai-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); flex: 1; }
+.ai-row-badge {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
   border-radius: var(--radius-full);
-  background: var(--color-danger);
+  background: var(--color-primary);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   line-height: 18px;
   text-align: center;
 }
-.nav-badge.run { background: var(--color-primary); }
-
-#sidebar-footer { border-top: 1px solid var(--border-light); padding: var(--space-md) var(--space-sm) calc(var(--space-md) + env(safe-area-inset-bottom)); }
-.ai-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); padding: 0 10px; }
-.ai-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); }
+.ai-row-switch { display: flex; align-items: center; }
 .user-row {
   display: flex;
   align-items: center;

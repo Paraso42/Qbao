@@ -416,7 +416,45 @@ onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
 .sm-content { flex: 1; min-width: 0; padding: var(--space-2xl); overflow-y: auto; max-height: 70vh; }
 .settings-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) 0; border-bottom: 1px solid var(--border-light); }
 .settings-row label { min-width: 110px; font-size: var(--fs-base); color: var(--text-primary); flex-shrink: 0; }
-.settings-row input[type="range"] { flex: 1; max-width: 220px; accent-color: var(--color-primary); }
+.settings-row input[type="range"] {
+  flex: 1;
+  max-width: 220px;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+/* WebKit：runnable-track 默认按拇指宽度内缩，使滑条长度=拇指实际行程 */
+.settings-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-default);
+}
+.settings-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+.settings-row input[type="range"]:hover::-webkit-slider-thumb { background: var(--color-primary-hover); }
+.settings-row input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-default);
+}
+.settings-row input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: none;
+}
 .settings-val { font-size: var(--fs-base); font-weight: 600; min-width: 44px; color: var(--color-primary); text-align: right; }
 .row-desc { flex: 1; font-size: var(--fs-sm); color: var(--text-secondary); }
 .row-desc em { color: var(--text-muted); font-style: normal; font-size: var(--fs-xs); }

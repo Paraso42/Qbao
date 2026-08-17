@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useDataStore } from '../../../stores/data'
 import { useAiStore } from '../../../stores/ai'
 import { useUiStore } from '../../../stores/ui'
@@ -89,20 +89,35 @@ function onDrop(e) {
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) ai.addMaterialFiles(props.chapterId, e.dataTransfer.files)
 }
 
-async function openPool() {
-  poolOpen.value = true
+async function loadPoolFiles() {
   poolLoading.value = true
   try {
     const res = await fetchWithAuth('/files?pool=true')
-    if (!res || !res.ok) { ui.toast('获取文件池失败', 'err'); return }
+    if (!res || !res.ok) { ui.toast('获取文件池失败', 'err'); return [] }
     const d = await res.json()
-    poolFiles.value = d.files || []
+    const files = d.files || []
+    // 文件池中已过期/删除的文件，同步从本章节复习资料中移除
+    ai.reconcilePoolMaterials(props.chapterId, files)
+    return files
   } catch (e) {
     ui.toast('获取文件池失败', 'err')
+    return []
   } finally {
     poolLoading.value = false
   }
 }
+
+async function openPool() {
+  poolOpen.value = true
+  poolFiles.value = await loadPoolFiles()
+}
+
+onMounted(async () => {
+  // 仅当复习资料中存在文件池引用时才拉取文件池并清理已过期项，避免无谓请求
+  if (ai.getChapterMaterials(props.chapterId).some((m) => m._poolFile)) {
+    await loadPoolFiles()
+  }
+})
 
 async function assign(f) {
   try {

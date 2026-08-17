@@ -1,6 +1,6 @@
 {
   "name": "qbao-desktop",
-  "version": "3.27.2",
+  "version": "3.27.3",
   "description": "Qbao 全能互动做题引擎 — Windows 桌面客户端",
   "main": "main.js",
   "author": "Paraso42",
@@ -28,13 +28,28 @@
       "updater.js",
       "config.json",
       "!config.local.json",
-      { "from": "../app/dist", "to": "app" }
+      {
+        "from": "../app/dist",
+        "to": "app"
+      }
     ],
     "publish": [
-      { "provider": "github", "owner": "Paraso42", "repo": "Qbao", "releaseType": "release" }
+      {
+        "provider": "github",
+        "owner": "Paraso42",
+        "repo": "Qbao",
+        "releaseType": "release"
+      }
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "signAndEditExecutable": false,
       "artifactName": "Qbao-Setup-${version}.${ext}"
     },
