@@ -415,7 +415,8 @@ onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
 .sm-nav-item.active { background: var(--sidebar-active); color: var(--color-primary); font-weight: 500; box-shadow: inset 2px 0 0 var(--color-primary); }
 .sm-content { flex: 1; min-width: 0; padding: var(--space-2xl); overflow-y: auto; max-height: 70vh; }
 .settings-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) 0; border-bottom: 1px solid var(--border-light); }
-.settings-row label { min-width: 110px; font-size: var(--fs-base); color: var(--text-primary); flex-shrink: 0; }
+.settings-row label:not(.toggle-switch) { min-width: 110px; font-size: var(--fs-base); color: var(--text-primary); flex-shrink: 0; }
+.settings-row .toggle-switch { min-width: var(--track-width); max-width: var(--track-width); }
 .settings-row input[type="range"] {
   flex: 1;
   max-width: 220px;

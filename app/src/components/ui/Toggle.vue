@@ -25,6 +25,8 @@ function onChange(e) { emit('update:modelValue', e.target.checked); emit('change
   --thumb-size: 16px;       /* 圆点直径 */
   --thumb-gap: 2px;         /* 圆点离轨道内边缘的单侧间距 */
   width: var(--track-width);
+  min-width: var(--track-width);
+  max-width: var(--track-width);
   height: var(--track-height);
   border: var(--track-border) solid var(--border-light);
   border-radius: var(--radius-full);
@@ -49,7 +51,7 @@ function onChange(e) { emit('update:modelValue', e.target.checked); emit('change
   width: var(--thumb-size);
   height: var(--thumb-size);
   left: var(--thumb-gap);
-  top: calc((var(--track-height) - var(--thumb-size)) / 2);
+  top: calc((var(--track-height) - var(--track-border) * 2 - var(--thumb-size)) / 2);
   background: #fff;
   border-radius: 50%;
   box-shadow: var(--shadow-sm);
