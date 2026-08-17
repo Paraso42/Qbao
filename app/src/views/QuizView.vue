@@ -2,7 +2,7 @@
 <template>
   <Modal :open="quiz.session.modalOpen" wide fullscreen @close="close">
     <!-- 答题视图 -->
-    <div v-if="quiz.session.view === 'quiz'" class="quiz-shell">
+    <div v-if="quiz.session.view === 'quiz'" id="quiz-root" class="quiz-shell">
       <div class="quiz-header">
         <span class="quiz-ch-name">{{ setName }}</span>
         <span class="cap-chip" v-if="q">{{ typeMap[q.type] || q.type }}</span>
@@ -330,7 +330,7 @@ watch(() => quiz.session.modalOpen, (open) => {
 .quiz-ch-name { font-size: var(--fs-md); font-weight: 600; }
 .quiz-header-spacer { flex: 1; }
 .quiz-body { flex: 1; display: flex; flex-direction: column; }
-.quiz-question { font-size: 17px; line-height: 1.7; margin-bottom: var(--space-lg); }
+.quiz-question { font-size: var(--quiz-font-size, 17px); line-height: 1.7; margin-bottom: var(--space-lg); }
 .quiz-options { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-lg); }
 .quiz-option {
   display: flex;

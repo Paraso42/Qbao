@@ -28,7 +28,7 @@
       </div>
       <div class="upload-actions">
         <button class="btn btn-primary btn-small" @click="pickFiles">📤 上传文件</button>
-        <input ref="fileInputRef" type="file" multiple hidden accept=".pdf,.doc,.docx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp" @change="onUpload">
+        <input ref="fileInputRef" type="file" multiple hidden accept=".pdf,.doc,.docx,.pptx,.txt,.md" @change="onUpload">
       </div>
 
       <div v-if="users.filesLoading" class="loading">加载中...</div>

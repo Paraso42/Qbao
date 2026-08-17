@@ -71,8 +71,11 @@
         <template v-if="openQbGroups.has(group.cid)">
           <div v-if="group.items.length === 0" class="qb-empty">无匹配题目</div>
           <div v-for="item in shownQbItems(group)" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
-            <p class="qb-q"><span class="qb-icon" :class="qbIconClass(item.ci)"></span>[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
-            <p v-if="item.q.explanation" class="qb-detail">{{ shortText(item.q.explanation, 80) }}</p>
+            <span class="qb-icon" :class="qbIconClass(item.ci)"></span>
+            <div class="qb-text">
+              <p class="qb-q">[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
+              <p v-if="item.q.explanation" class="qb-detail">{{ shortText(item.q.explanation, 80) }}</p>
+            </div>
           </div>
           <button v-if="group.items.length > (qbLimits[group.cid] || 50)" class="qb-more" @click="qbLimits[group.cid] = (qbLimits[group.cid] || 50) + 50">
             显示更多（已显示 {{ qbLimits[group.cid] || 50 }} / {{ group.items.length }}）
@@ -88,11 +91,13 @@
         <p class="ce-hint">从本科目各章节中抽取题目，组成综合试卷。</p>
         <h4>1. 选择章节</h4>
         <div class="ce-chapters">
-          <label v-for="cid in (subj ? subj.chapterIds : [])" :key="cid" class="ce-ch" v-if="data.state.chapters[cid]">
-            <input type="checkbox" :value="cid" v-model="checkedCids" @change="resetWeights">
-            <span class="ce-ch-name">{{ data.state.chapters[cid].name }}</span>
-            <span class="ce-ch-count tabular-nums">{{ data.state.chapters[cid].questions ? data.state.chapters[cid].questions.length : 0 }} 题</span>
-          </label>
+          <template v-for="cid in (subj ? subj.chapterIds : [])" :key="cid">
+            <label v-if="data.state.chapters[cid]" class="ce-ch">
+              <input type="checkbox" :value="cid" v-model="checkedCids" @change="resetWeights">
+              <span class="ce-ch-name">{{ data.state.chapters[cid].name }}</span>
+              <span class="ce-ch-count tabular-nums">{{ data.state.chapters[cid].questions ? data.state.chapters[cid].questions.length : 0 }} 题</span>
+            </label>
+          </template>
         </div>
 
         <h4>2. 各题型数量</h4>
@@ -544,16 +549,28 @@ watch(() => ui.activeScreen, (screen) => {
   margin-top: 2px;
 }
 .qb-more:hover { background: var(--color-primary-light); }
-.qb-item { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; transition: border-color var(--transition-fast), background var(--transition-fast); }
+.qb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  min-height: 28px;
+}
 .qb-item:hover { border-color: var(--color-primary); background: var(--surface-hover); }
-.qb-item.correct { background: var(--color-success-light); }
-.qb-item.wrong { background: var(--color-danger-light); }
-.qb-q { font-size: var(--fs-sm); line-height: 1.6; display: flex; align-items: flex-start; gap: 6px; }
-.qb-icon { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; background: var(--text-faint); display: inline-block; }
+.qb-item.correct { background: var(--color-success-light); border-color: var(--color-success-light); }
+.qb-item.wrong { background: var(--color-danger-light); border-color: var(--color-danger-light); }
+.qb-text { flex: 1; min-width: 0; }
+.qb-q { font-size: var(--fs-sm); line-height: 1.45; display: flex; align-items: center; gap: 6px; }
+.qb-icon { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-faint); display: inline-block; }
 .qb-icon.ok { background: var(--color-success); }
 .qb-icon.bad { background: var(--color-danger); }
 .qb-icon.pending { background: var(--text-faint); }
-.qb-detail { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+.qb-detail { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 1px; }
 .qb-empty { color: var(--text-muted); font-size: var(--fs-sm); padding: var(--space-md); text-align: center; }
 
 .ce-hint { color: var(--text-secondary); font-size: var(--fs-sm); margin-bottom: var(--space-sm); }

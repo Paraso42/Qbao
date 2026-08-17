@@ -4,18 +4,7 @@
     <div class="hs-head">
       <h1>答题历史</h1>
       <div class="hs-head-right">
-        <label class="hs-chapter-pick">
-          <Icon name="book" :size="14" />
-          <select v-model="selectedChId">
-            <optgroup v-for="s in subjects.list" :key="s.id" :label="s.name">
-              <template v-for="cid in s.chapterIds" :key="cid">
-                <option v-if="data.state.chapters[cid]" :value="cid">
-                  {{ data.state.chapters[cid].name }}（{{ countOf(cid) }} 次）
-                </option>
-              </template>
-            </optgroup>
-          </select>
-        </label>
+        <span v-if="chapter" class="hs-current"><Icon name="book" :size="14" /> {{ subjectName }} · {{ chapter.name }}</span>
         <button class="btn btn-secondary btn-small" @click="ui.showScreen('start')"><Icon name="arrow-left" :size="14" /> 返回主页</button>
       </div>
     </div>
@@ -64,7 +53,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSubjectStore } from '../stores/subjects'
 import { useUiStore } from '../stores/ui'
@@ -83,17 +72,8 @@ const search = reactive({})
 const qLimit = reactive({})
 
 const allRecords = computed(() => data.state.history || [])
-const selectedChId = ref(null)
-
-// 默认选中当前章节；若当前章节无记录则选第一条记录所在章节
-const initialId = computed(() => {
-  const cur = data.state.currentChapterId
-  if (cur && countOf(cur) > 0) return cur
-  for (const r of allRecords.value) {
-    if (data.state.chapters[r.chapterId]) return r.chapterId
-  }
-  return null
-})
+// 直接锁定当前章节（章节内查看单章答题记录，不再提供跨章节切换栏）
+const selectedChId = computed(() => data.state.currentChapterId || null)
 
 const chapter = computed(() => (selectedChId.value ? data.state.chapters[selectedChId.value] || null : null))
 const subjectName = computed(() => {
@@ -111,18 +91,6 @@ const records = computed(() => {
     .reverse()
     .map((record) => ({ record }))
 })
-
-function countOf(cid) {
-  return allRecords.value.filter((r) => r.chapterId === cid).length
-}
-
-function ensureSelection() {
-  if (!selectedChId.value) selectedChId.value = initialId.value
-  else if (countOf(selectedChId.value) === 0 && initialId.value && initialId.value !== selectedChId.value) {
-    selectedChId.value = initialId.value
-  }
-}
-ensureSelection()
 
 function toggle(id) {
   if (expanded.has(id)) expanded.delete(id)
@@ -148,25 +116,16 @@ function sessionQuestions(record) {
 .hs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-md); flex-wrap: wrap; gap: var(--space-sm); }
 .hs-head h1 { margin: 0; }
 .hs-head-right { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
-.hs-chapter-pick {
+.hs-current {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 4px 12px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   background: var(--surface-panel);
-  color: var(--text-muted);
-}
-.hs-chapter-pick select {
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-size: var(--fs-sm);
-  padding: 7px 0;
-  max-width: 260px;
-  outline: none;
-  cursor: pointer;
 }
 .hs-chapter { margin-bottom: var(--space-md); }
 .hs-chapter-info h2 { margin: 0; }
@@ -212,6 +171,5 @@ function sessionQuestions(record) {
 .hs-more:hover { background: var(--color-primary-light); }
 @media (max-width: 768px) {
   .hs-stats { gap: 6px; }
-  .hs-chapter-pick select { max-width: 160px; }
 }
 </style>

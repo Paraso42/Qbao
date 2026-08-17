@@ -23,7 +23,7 @@
         </span>
       </div>
       <button v-if="tagsOf(cat.key).length > 5" class="tag-col-toggle" @click="toggleCol(cat.key)">
-        {{ openCols.has(cat.key) ? '收起' : '展开全部 ' + tagsOf(cat.key) + ' 个' }}
+        {{ openCols.has(cat.key) ? '收起' : '展开全部 ' + tagsOf(cat.key).length + ' 个' }}
       </button>
       <input class="tag-col-input" :placeholder="'＋ 添加' + cat.label.replace(/标签$/, '')" :data-cat="cat.key"
         @keydown.enter="addTag(cat.key, $event.target)">

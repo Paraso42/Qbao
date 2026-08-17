@@ -690,6 +690,19 @@ export const useAiStore = defineStore('ai', () => {
     saveChapterMaterials(chapterId, materials)
   }
 
+  // 过期/删除的文件池文件不再显示在复习资料里：移除 chapterMaterials 中
+  // 已不在文件池（名称+大小不匹配）的 _poolFile 条目。
+  function reconcilePoolMaterials(chapterId, poolFiles) {
+    const materials = getChapterMaterials(chapterId)
+    const valid = new Set((poolFiles || []).map((f) => (f.originalName || '') + '|' + (f.fileSize || 0)))
+    const kept = materials.filter((m) => !m._poolFile || valid.has((m.name || '') + '|' + (m.size || 0)))
+    if (kept.length !== materials.length) {
+      saveChapterMaterials(chapterId, kept)
+      return true
+    }
+    return false
+  }
+
   async function assignPoolFileToChapter(chapterId, fileId) {
     const res = await fetchWithAuth('/files/' + fileId + '/assign', {
       method: 'POST',
@@ -719,7 +732,7 @@ export const useAiStore = defineStore('ai', () => {
     enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter,
     refreshServerTasks, importServerTaskResult, cancelServerTask,
     openQueueDialog, closeQueueDialog,
-    addMaterialFiles, removeMaterial, assignPoolFileToChapter, getExtIcon,
+    addMaterialFiles, removeMaterial, assignPoolFileToChapter, reconcilePoolMaterials, getExtIcon,
     formatFileSize
   }
 })

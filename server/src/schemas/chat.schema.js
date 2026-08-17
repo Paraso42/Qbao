@@ -42,10 +42,10 @@ const listMessagesQuerySchema = z.object({
 const sendMessageSchema = z.object({
   content: z.string().max(20000).optional(),
   images: z.array(z.string().max(1024)).max(20).optional(),
-  file_info: z.record(z.unknown()).optional(),
+  file_info: z.record(z.unknown()).nullable().optional(),
   msg_type: z.enum(['text', 'image', 'file', 'quiz_share', 'bank_share']).optional(),
-  quiz_data: z.record(z.unknown()).optional(),
-  reply_to: z.record(z.unknown()).optional(),
+  quiz_data: z.record(z.unknown()).nullable().optional(),
+  reply_to: z.record(z.unknown()).nullable().optional(),
 });
 
 const addMembersSchema = z.object({

@@ -127,11 +127,18 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
-  // 批量上传（单文件 ≤20MB，409 重复等错误由 filesApi 抛中文 message）
+  // 批量上传（单文件 ≤20MB；仅允许后端支持的类型，其余直接跳过提示）
+  const POOL_ALLOWED_EXTS = ['pdf', 'doc', 'docx', 'pptx', 'txt', 'md']
   async function uploadFiles(fileList) {
     let success = 0
     let fail = 0
     for (const file of fileList) {
+      const ext = (file.name || '').split('.').pop().toLowerCase()
+      if (POOL_ALLOWED_EXTS.indexOf(ext) === -1) {
+        ui.toast(file.name + ' 类型不支持（仅支持 pdf/doc/docx/pptx/txt/md），已跳过', 'err')
+        fail++
+        continue
+      }
       if (file.size > 20 * 1024 * 1024) {
         ui.toast(file.name + ' 超过 20MB，已跳过', 'err')
         fail++
