@@ -22,6 +22,73 @@ export function getLastSyncAt() {
 }
 
 // 合并策略（v1）：实体级并集，同 id 本地优先，云端独有实体保留——任何一侧数据都不丢。
+// v3.28 增强：chapters 从"整章覆盖"升级为"章节级并集"，防止多端并发出题时先写端题目被覆盖丢失。
+function questionKey(q) {
+  if (!q || typeof q !== 'object') return null
+  try {
+    return JSON.stringify([q.question, q.type, q.answer, Array.isArray(q.options) ? q.options.join('|') : ''])
+  } catch (e) { return null }
+}
+
+// quizSets 并集：按题目签名去重（云端在前、本地新增在后），答案保留各自原值。
+function mergeQuizSets(localSets, cloudSets) {
+  const out = []
+  const seen = new Set()
+  const pushSet = (set) => {
+    if (!set || !Array.isArray(set.questions)) return
+    const sig = set.questions.map(questionKey).filter(Boolean).join('\u0001')
+    if (!sig) return
+    if (seen.has(sig)) return
+    seen.add(sig)
+    out.push(JSON.parse(JSON.stringify(set)))
+  }
+  ;(cloudSets || []).forEach(pushSet)
+  ;(localSets || []).forEach(pushSet)
+  return out
+}
+
+// 章节题库并集：按题干文本去重，答案以本地为准（本地没答的用云端值）。
+function mergeChapterQuestions(localCh, cloudCh) {
+  const cloudQs = Array.isArray(cloudCh.questions) ? cloudCh.questions : []
+  const localQs = Array.isArray(localCh.questions) ? localCh.questions : []
+  const cloudAns = Array.isArray(cloudCh.userAnswers) ? cloudCh.userAnswers : []
+  const localAns = Array.isArray(localCh.userAnswers) ? localCh.userAnswers : []
+  const byText = new Map()
+  const order = []
+  const addQ = (q, answer) => {
+    if (!q || !q.question) return
+    if (byText.has(q.question)) return
+    byText.set(q.question, { q, answer })
+    order.push(q.question)
+  }
+  cloudQs.forEach((q, i) => addQ(q, cloudAns[i]))
+  localQs.forEach((q, i) => addQ(q, localAns[i]))
+  return {
+    questions: order.map((t) => byText.get(t).q),
+    userAnswers: order.map((t) => byText.get(t).answer),
+  }
+}
+
+// 章节级并集合并（v3.28）
+function mergeChapter(localCh, cloudCh) {
+  const out = JSON.parse(JSON.stringify(cloudCh || {}))
+  const L = localCh || {}
+
+  // 1) 题库并集（本地答案优先）
+  const qm = mergeChapterQuestions(L, out)
+  out.questions = qm.questions
+  out.userAnswers = qm.userAnswers
+
+  // 2) quizSets 并集（云端在前、本地在后，按签名去重）
+  out.quizSets = mergeQuizSets(L.quizSets, out.quizSets)
+
+  // 3) 操作性字段本地优先（正在作答的进度、策略、最近生成状态）
+  ;['currentQuizSetIdx', 'currentIdx', 'strategy', '_hasNewFilesSinceLastGen', '_lastGenTime'].forEach((k) => {
+    if (typeof L[k] !== 'undefined' && L[k] !== null) out[k] = L[k]
+  })
+  return out
+}
+
 export function mergeStates(localState, cloudState) {
   const m = JSON.parse(JSON.stringify(cloudState || {}))
   const L = localState || {}
@@ -29,12 +96,34 @@ export function mergeStates(localState, cloudState) {
     'aiConfig', 'settings', 'userSettings', 'notices'].forEach(function (k) {
     if (typeof L[k] !== 'undefined' && L[k] !== null) m[k] = L[k]
   })
-  ;['subjects', 'chapters', 'generatedExams', 'srsData'].forEach(function (k) {
+  let conflictAddedCount = 0
+  ;['subjects', 'generatedExams', 'srsData'].forEach(function (k) {
     const c = m[k] || {}
     const l = L[k] || {}
     Object.keys(l).forEach(function (id) { c[id] = l[id] })
     m[k] = c
   })
+  // chapters：章节级并集合并；记录本次合并新增的题目数（供提示）
+  {
+    const c = m.chapters || {}
+    const l = L.chapters || {}
+    Object.keys(l).forEach(function (id) {
+      const cloudCh = c[id]
+      const localCh = l[id]
+      if (cloudCh && typeof cloudCh === 'object' && localCh && typeof localCh === 'object') {
+        const before = (Array.isArray(cloudCh.questions) ? cloudCh.questions.length : 0)
+          + (Array.isArray(cloudCh.quizSets) ? cloudCh.quizSets.length : 0)
+        const merged = mergeChapter(localCh, cloudCh)
+        const after = (Array.isArray(merged.questions) ? merged.questions.length : 0)
+          + (Array.isArray(merged.quizSets) ? merged.quizSets.length : 0)
+        if (after > before) conflictAddedCount += after - before
+        c[id] = merged
+      } else {
+        c[id] = localCh
+      }
+    })
+    m.chapters = c
+  }
   if (Array.isArray(L.history) && Array.isArray(m.history)) {
     const have = {}
     m.history.forEach(function (h) { if (h && h.id) have[h.id] = true })
@@ -42,7 +131,7 @@ export function mergeStates(localState, cloudState) {
   } else if (Array.isArray(L.history)) {
     m.history = L.history
   }
-  return m
+  return { state: m, conflictAddedCount }
 }
 
 export function persistMergedState(merged) {
@@ -100,11 +189,18 @@ export function createSyncEngine(ctx) {
         if (cur && cur.ok) {
           const cloud = await cur.json().catch(() => null)
           if (cloud && cloud.state_json) {
-            const merged = mergeStates(ctx.getState(), migrateState(cloud.state_json))
+            const mergedRes = mergeStates(ctx.getState(), migrateState(cloud.state_json))
+            const merged = mergedRes.state
             ctx.replaceState(merged)
             persistMergedState(merged)
             if (typeof cloud.rev === 'number') _syncRev = cloud.rev
-            if (ctx.notify) ctx.notify('检测到其他设备的数据，已自动合并')
+            if (ctx.notify) {
+              if (mergedRes.conflictAddedCount > 0) {
+                ctx.notify('检测到其他设备同时出题，已合并双方题目（新增 ' + mergedRes.conflictAddedCount + ' 题）')
+              } else {
+                ctx.notify('检测到其他设备的数据，已自动合并')
+              }
+            }
           }
           if (typeof _syncRev === 'number' && _syncRev > 0) {
             stripAiSecretsFromState(ctx.getState())

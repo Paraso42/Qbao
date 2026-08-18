@@ -44,6 +44,18 @@ module.exports = function (app) {
       return res.json({ session: formatSession(compResult.rows[0]) });
     }
 
+    // in_progress：拒绝凭空创建"空题"会话（防 K3：有未做完的假象却进不去答题界面）。
+    // 已有 in_progress 会话时的空题更新属于合法中间态，放行。
+    if (newStatus === 'in_progress' && (!questions || !Array.isArray(questions) || questions.length === 0)) {
+      const exIn = await pool.query(
+        "SELECT id FROM answer_sessions WHERE user_id = $1 AND chapter_id = $2 AND status = 'in_progress'",
+        [req.userId, chapterId]
+      );
+      if (exIn.rows.length === 0) {
+        throw new ApiError(422, '题目为空，无法开始答题');
+      }
+    }
+
     // in_progress：若已有 completed 会话，则将其重置为新一轮 in_progress
     const checkRes = await pool.query(
       'SELECT id, status FROM answer_sessions WHERE user_id = $1 AND chapter_id = $2 AND status = \'completed\'',

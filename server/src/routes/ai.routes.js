@@ -11,6 +11,9 @@ const { parseAiHeaders, resolveAiTarget, normalizeTypeCounts, calculateMaxTokens
 const { getCachedOrExtractFileText } = require('../services/aiMaterialCache');
 const { validateQuestionSet } = require('../services/aiQuestionValidator');
 const { finalizeAiQuestions } = require('../services/aiQuestionFinalizer');
+const { assertChapterCanGenerate } = require('../services/chapterSessionGuard');
+const { cleanupExpiredFiles } = require('../services/filePoolService');
+const { aiQuestionSchema } = require('../lib/aiQuestionSchema');
 const aiQuestionParser = require('../services/aiQuestionParser');
 
 // AI 请求审计：所有路径都记录 status，失败也不影响主流程。
@@ -164,6 +167,9 @@ module.exports = function (app) {
       const { textContent, typeCounts, prompt, chapterHistory, chapterId, selfCheck } = req.body;
       const useStream = parsed.useStream;
 
+      // 章节未完成规则校验（与任务队列一致）：仍有未做完的题目不允许继续出题（409）
+      await assertChapterCanGenerate(req.userId, chapterId || null);
+
       const provider = target.provider;
         await logAiRequest(req.userId, model, 'started');
       console.log('AI generate: provider=' + providerName + ', model=' + model +
@@ -189,8 +195,20 @@ let userText = textContent || '';
       var poolFilesStatus = [];
       if (chapterId) {
         try {
+          // 过期文件池文件：先标记诊断条目，再统一清理，读取时按过期时间过滤（修复"过期文件仍被用于出题"）
+          var expiredRows = await pool.query(
+            `SELECT original_name FROM user_files WHERE user_id = $1 AND chapter_id = $2
+             AND in_pool = true AND pool_expires_at IS NOT NULL AND pool_expires_at < NOW()`,
+            [req.userId, chapterId]
+          );
+          if (expiredRows.rows.length > 0) {
+            expiredRows.rows.forEach(function (r) {
+              poolFilesStatus.push({ name: r.original_name, found: false, extracted: false, empty: true, expired: true, error: '文件池文件已过期，已删除' });
+            });
+            await cleanupExpiredFiles(req.userId);
+          }
           var fileResult = await pool.query(
-            'SELECT * FROM user_files WHERE user_id = $1 AND chapter_id = $2',
+            'SELECT * FROM user_files WHERE user_id = $1 AND chapter_id = $2 AND (pool_expires_at IS NULL OR pool_expires_at > NOW())',
             [req.userId, chapterId]
           );
           for (var fi = 0; fi < fileResult.rows.length; fi++) {
@@ -273,22 +291,7 @@ let userText = textContent || '';
         messages[0].content += '\n\n输出格式：必须输出一个合法的JSON对象 {\"questions\": [...]}，不要输出纯数组或其他格式。';
       }
 
-      const jsonSchema = {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', enum: ['single', 'judge', 'term', 'short'] },
-            question: { type: 'string' },
-            options: { type: 'array', items: { type: 'string' } },
-            answer: { type: 'integer' },
-            tag: { type: 'string' },
-            strategy: { type: 'string', enum: ['error', 'review', 'new'] },
-            explanation: { type: 'string' }
-          },
-          required: ['type', 'question', 'tag', 'strategy', 'explanation']
-        }
-      };
+      const jsonSchema = aiQuestionSchema;
 
       // Dynamic max_tokens calculation
       var baseTokens = Math.max(4096, Math.ceil((typeof userText === 'string' ? userText.length : 0) / 2) * 3);
@@ -328,7 +331,20 @@ let userText = textContent || '';
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
+        // 客户端断连检测：连接关闭且在正常结束前 → 中止上游流，避免继续消耗
+        // （修复"短线/退出后服务端仍生成 10~18s"问题；正常 res.end() 后由 writableEnded 守卫忽略）
+        var clientClosed = false;
+        var onResClose = function () {
+          if (res.writableEnded || streamDone) return;
+          clientClosed = true;
+          streamAborter.abort();
+        };
+        res.on('close', onResClose);
+
         try {
+          // 流式提前终止条件：每种题型配额均已满足时即可停止；否则最多流式到安全上限，
+          // 避免单/判断题的过量产出把名词解释、简答题截断（修复"5:5:3:2 实际 9:6:0:0"）。
+          var safetyCap = Math.max(totalQ * 2, 40);
           var result = await provider.streamChatCompletions(apiKey, model, messages, streamOpts, function(evt) {
             finalFullContent = evt.full;
             if (evt.deltaCount % 2 === 0) {
@@ -337,8 +353,8 @@ let userText = textContent || '';
               if (newQs && newQs.length > 0) {
                 lastParsedLength += newQs.length;
                 accumulatedQuestions = accumulatedQuestions.concat(newQs);
-                if (lastParsedLength >= totalQ) {
-                  console.log('[stream] early abort: parsed=' + lastParsedLength + ' >= totalQ=' + totalQ + ', model=' + model);
+                if (lastParsedLength >= safetyCap || typeQuotaSatisfied(accumulatedQuestions, safeTc)) {
+                  console.log('[stream] early abort: parsed=' + lastParsedLength + ' totalQ=' + totalQ + ' safetyCap=' + safetyCap + ', types=' + JSON.stringify(countTypes(accumulatedQuestions)) + ', model=' + model);
                   streamAborter.abort();
                   streamDone = true;
                 }
@@ -359,21 +375,26 @@ let userText = textContent || '';
           if (!res.headersSent) {
             return res.status(500).json({ error: e.message });
           }
+          if (clientClosed) {
+            // 客户端已断开：立即停止，不再解析/落库，审计记为 cancelled
+            await logAiRequest(req.userId, model, 'cancelled');
+            console.log('[stream] client disconnected, stream aborted: model=' + model);
+            res.removeListener('close', onResClose);
+            return;
+          }
           console.error('Stream error:', e.message);
         }
 
         if (streamDone) {
-          var typeDist = {};
-          (accumulatedQuestions.slice(0, totalQ) || []).forEach(function(q) {
-            typeDist[q.type || '?'] = (typeDist[q.type || '?'] || 0) + 1;
-          });
-          console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.slice(0, totalQ).length + ', types=' + JSON.stringify(typeDist));
+          var typeDist = countTypes(accumulatedQuestions);
+          console.log('[stream] early done: model=' + model + ', questions=' + accumulatedQuestions.length + ', types=' + JSON.stringify(typeDist));
             await logAiRequest(req.userId, model, 'ok');
           try {
-            const finalized = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: accumulatedQuestions.slice(0, totalQ) });
-              res.write('data: ' + JSON.stringify({ done: true, questions: finalized.questions, validation: finalized.baseValidation, selfCheck: finalized.selfCheck, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            const finalized = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: accumulatedQuestions, typeCounts: safeTc, signal: streamAborter.signal });
+              res.write('data: ' + JSON.stringify({ done: true, questions: finalized.questions, validation: finalized.baseValidation, selfCheck: finalized.selfCheck, topUp: finalized.topUp, typeShortfall: finalized.typeShortfall, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
           } catch(e) { /* connection already closed */ }
+          res.removeListener('close', onResClose);
           return;
         }
 
@@ -386,16 +407,15 @@ let userText = textContent || '';
 
         try {
           var questions = normalizeQuestions(JSON.parse(repairJson(finalClean)));
-            var finalizedFinal = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: questions }); questions = finalizedFinal.questions; var streamValidation = finalizedFinal.baseValidation;
+            var finalizedFinal = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: questions, typeCounts: safeTc, signal: streamAborter.signal }); questions = finalizedFinal.questions; var streamValidation = finalizedFinal.baseValidation; var streamShortfall = finalizedFinal.typeShortfall;
           var typeDist3 = {};
           (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
           console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
             await logAiRequest(req.userId, model, 'ok');
-            res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: streamValidation, selfCheck: finalizedFinal.selfCheck, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: streamValidation, selfCheck: finalizedFinal.selfCheck, topUp: finalizedFinal.topUp, typeShortfall: streamShortfall, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
+            res.removeListener('close', onResClose);
             return;
-          res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
-          res.end();
         } catch (e) {
           if (!finalClean.endsWith(']')) finalClean += ']';
           try {
@@ -403,23 +423,39 @@ let userText = textContent || '';
             if (questions.length > 0) {
               res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
               res.end();
+              res.removeListener('close', onResClose);
             } else throw new Error();
           } catch (e2) {
             // Fallback: extract individual complete objects from partially malformed JSON
             var extracted = tryExtractCompletedObjects(finalFullContent, 0);
             if (extracted && extracted.length > 0) {
-              var finalizedFallback = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: extracted }); questions = finalizedFallback.questions; var fallbackValidation = finalizedFallback.baseValidation;
+              var finalizedFallback = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: extracted, typeCounts: safeTc, signal: streamAborter.signal }); questions = finalizedFallback.questions; var fallbackValidation = finalizedFallback.baseValidation; var fallbackShortfall = finalizedFallback.typeShortfall;
               console.log('[stream] fallback extract: model=' + model + ', questions=' + questions.length);
                 await logAiRequest(req.userId, model, 'ok');
-                res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: fallbackValidation, selfCheck: finalizedFallback.selfCheck, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+                res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: fallbackValidation, selfCheck: finalizedFallback.selfCheck, typeShortfall: fallbackShortfall, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
                 res.end();
+                res.removeListener('close', onResClose);
                 return;
-              res.write('data: ' + JSON.stringify({ done: true, questions: questions, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
-              res.end();
             } else {
-                await logAiRequest(req.userId, model, 'parse_error');
+              // JSON 解析失败/0 题 → 纠正性重试（≤2 次非流式），仍失败才报错（发现 A 兜底）
+              var retried = await retryNonStreamJson({
+                provider, apiKey, model, providerName, systemPrompt, userText,
+                typeCounts: safeTc, jsonSchema, maxTokens,
+                signal: streamAborter.signal, lastRaw: finalFullContent,
+              });
+              if (retried && retried.length > 0) {
+                var finalizedRetry = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: retried, typeCounts: safeTc, signal: streamAborter.signal });
+                console.log('[stream] json retry ok: model=' + model + ', questions=' + finalizedRetry.questions.length);
+                await logAiRequest(req.userId, model, 'ok');
+                res.write('data: ' + JSON.stringify({ done: true, questions: finalizedRetry.questions, validation: finalizedRetry.baseValidation, selfCheck: finalizedRetry.selfCheck, typeShortfall: finalizedRetry.typeShortfall, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
+                res.end();
+                res.removeListener('close', onResClose);
+                return;
+              }
+              await logAiRequest(req.userId, model, 'parse_error');
               res.write('data: ' + JSON.stringify({ done: true, error: 'JSON解析失败', raw: finalFullContent, poolFilesStatus: poolFilesStatus }) + '\n\n');
               res.end();
+              res.removeListener('close', onResClose);
             }
           }
         }
@@ -437,15 +473,27 @@ let userText = textContent || '';
 
         const completion = await provider.chatCompletions(apiKey, model, messages, opts);
         const output = completion.choices[0].message.content;
+        let parsedRaw = null;
+        try { parsedRaw = normalizeQuestions(JSON.parse(output)); } catch (e) { parsedRaw = []; }
         let questions;
-        try { questions = JSON.parse(output); } catch (e) { questions = [output]; }
-        const finalized = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: questions }); questions = finalized.questions; const validation = finalized.baseValidation;
+        if (parsedRaw.length > 0) {
+          questions = parsedRaw;
+        } else {
+          // 0 题/非 JSON → 纠正性重试（≤2 次），仍失败则原样走 finalize 兜底
+          const retried = await retryNonStreamJson({
+            provider, apiKey, model, providerName, systemPrompt, userText,
+            typeCounts: safeTc, jsonSchema, maxTokens,
+            signal: undefined, lastRaw: output,
+          });
+          questions = (retried && retried.length > 0) ? retried : parsedRaw;
+        }
+        const finalized = await finalizeAiQuestions({ selfCheck, provider, apiKey, model, modelConfig: target.modelConfig, sourceText: userText, rawQuestions: questions, typeCounts: safeTc }); questions = finalized.questions; const validation = finalized.baseValidation;
 
         await pool.query(
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
           [req.userId, model, 'ok']
         );
-        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus, validation: validation, selfCheck: finalized.selfCheck });
+        res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus, validation: validation, selfCheck: finalized.selfCheck, typeShortfall: finalized.typeShortfall });
       }
     } catch (e) {
         if (req.aiModel) { await logAiRequest(req.userId, req.aiModel, 'error'); }
@@ -527,4 +575,72 @@ function repairJson(text) {
 // JSON state machine — tracks both {} and [] nesting, handles json_object wrapper
 function tryExtractCompletedObjects(text, knownCount) {
   return aiQuestionParser.tryExtractCompletedObjects(text, knownCount);
+}
+
+// 纠正性重试（发现 A 兜底）：流式/非流式 JSON 解析失败或 0 题时，
+// 携带上次无效输出用非流式方式重试 ≤2 次；成功返回题目数组，失败返回 null。
+const JSON_RETRY_MAX = 2;
+async function retryNonStreamJson({ provider, apiKey, model, providerName, systemPrompt, userText, typeCounts, jsonSchema, maxTokens, signal, lastRaw }) {
+  for (let attempt = 1; attempt <= JSON_RETRY_MAX; attempt++) {
+    if (signal && signal.aborted) return null;
+    const correction =
+      '\n\n重要：你上次返回了无效JSON，错误是：' + String(lastRaw || '').slice(0, 500) +
+      '。请修正后重新输出纯JSON数组，不要包含任何其他文字、代码块标记或解释。';
+    const retryMessages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userText + correction },
+    ];
+    const retryOpts = { temperature: 0.7, max_tokens: maxTokens, signal };
+    if (provider.supportsJsonSchema && provider.supportsJsonSchema(model)) {
+      retryOpts.response_format = { type: 'json_schema', json_schema: { name: 'questions', schema: jsonSchema } };
+    } else if (providerName === 'deepseek') {
+      retryOpts.response_format = { type: 'json_object' };
+    }
+    try {
+      const completion = await provider.chatCompletions(apiKey, model, retryMessages, retryOpts);
+      const out = completion.choices[0].message.content;
+      let cleaned = String(out || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+      const parsed = normalizeQuestions(JSON.parse(repairJson(cleaned)));
+      if (parsed.length > 0) {
+        console.log('[stream] json retry ok (attempt=' + attempt + '), questions=' + parsed.length);
+        return parsed;
+      }
+      lastRaw = out;
+    } catch (retryErr) {
+      if (signal && signal.aborted) return null;
+      console.warn('[stream] json retry failed (attempt=' + attempt + '): ' + retryErr.message);
+      lastRaw = retryErr.message;
+    }
+  }
+  return null;
+}
+
+// Helper: count produced questions by type (for logging / early-abort decisions)
+function countTypes(questions) {
+  const dist = {};
+  (questions || []).forEach((q) => {
+    dist[q && q.type ? q.type : '?'] = (dist[q && q.type ? q.type : '?'] || 0) + 1;
+  });
+  return dist;
+}
+
+// Helper: 每种题型的配额是否都已满足（用于流式提前终止判断）
+function typeQuotaSatisfied(questions, safeTc) {
+  const need = {
+    single: (safeTc && safeTc.single) || 0,
+    judge: (safeTc && safeTc.judge) || 0,
+    term: (safeTc && safeTc.term) || 0,
+    short: (safeTc && safeTc.short) || 0,
+  };
+  const have = { single: 0, judge: 0, term: 0, short: 0 };
+  (questions || []).forEach((q) => {
+    if (q && q.type && have[q.type] !== undefined) have[q.type]++;
+  });
+  if (need.single > 0 && have.single < need.single) return false;
+  if (need.judge > 0 && have.judge < need.judge) return false;
+  if (need.term > 0 && have.term < need.term) return false;
+  if (need.short > 0 && have.short < need.short) return false;
+  return true;
 }

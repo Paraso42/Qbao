@@ -152,11 +152,20 @@ function createFirstSubject() {
 // AI 生成
 const materials = computed(() => (ch.value ? ai.getChapterMaterials(ch.value.id) : []))
 const hasTask = computed(() => (ch.value ? ai.hasTaskForChapter(ch.value.id) : false))
+// 本章节仍有未做完的题目 → 不允许继续出题（K1 规则；服务端同样有 409 兜底）
+const hasUnfinishedSet = computed(() => {
+  const qs = data.getCurrentQuizSet()
+  if (!qs || !qs.questions || qs.questions.length === 0) return false
+  const unanswered = (qs.userAnswers || [])
+    .filter((a) => a === undefined || a === null || a === -1).length
+  return unanswered > 0
+})
 const canGenerate = computed(() => {
   if (!ch.value) return false
   if (materials.value.length === 0) return false
   if (!user.isOnline) return false
   if (hasTask.value) return false
+  if (hasUnfinishedSet.value) return false
   const tc = (strategy.value && strategy.value.typeCounts) ? strategy.value.typeCounts : null
   if (!tc) return false
   return ((tc.single || 0) + (tc.judge || 0) + (tc.term || 0) + (tc.short || 0)) > 0
@@ -166,6 +175,7 @@ const genStatus = computed(() => {
   if (materials.value.length === 0) return '请先上传复习资料'
   if (!user.isOnline) return '请先登录'
   if (hasTask.value) return '该章节已有任务在队列中'
+  if (hasUnfinishedSet.value) return '本章节还有未做完的题目，请先完成本轮答题'
   return '已准备就绪，共 ' + materials.value.length + ' 份资料'
 })
 

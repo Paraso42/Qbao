@@ -163,7 +163,12 @@ export const useQuizStore = defineStore('quiz', () => {
     const srv = dData.session
     if (!srv || !srv.userAnswers || !Array.isArray(srv.userAnswers)) return
     const srvQs = srv.questions || []
-    if (srvQs.length === 0) return
+    if (srvQs.length === 0) {
+      // 空题会话：无实际题目却占着 in_progress，自动清理，避免"有未做完却进不去答题界面"（K3）
+      fetchWithAuth('/quiz/session/' + sessionMeta.id, { method: 'DELETE' }).catch(() => {})
+      ui.toast('发现空答题会话，已自动清理', 'info')
+      return
+    }
 
     const ch = data.state.chapters[sessionMeta.chapterId]
     if (!ch) return

@@ -13,6 +13,7 @@ const {
   idParamsSchema,
   assignFileBodySchema,
 } = require('../schemas/files.schema');
+const { cleanupExpiredFiles } = require('../services/filePoolService');
 
 const UPLOAD_BASE = path.join(__dirname, '../../../uploads/pool');
 if (!fs.existsSync(UPLOAD_BASE)) fs.mkdirSync(UPLOAD_BASE, { recursive: true });
@@ -51,20 +52,7 @@ function removeUploadedFile(file) {
   }
 }
 
-async function cleanupExpiredFiles(userId) {
-  const result = await pool.query(
-    `DELETE FROM user_files
-     WHERE user_id = $1 AND in_pool = true
-       AND pool_expires_at IS NOT NULL AND pool_expires_at < NOW()
-     RETURNING file_path`,
-    [userId]
-  );
-  for (const row of result.rows) {
-    const absPath = path.join(UPLOAD_BASE, '..', row.file_path);
-    try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (_) {}
-  }
-  return result.rows.length;
-}
+// 过期文件清理统一走 services/filePoolService.js（与 AI 出题读池共用）
 
 function formatFileRow(row) {
   return {

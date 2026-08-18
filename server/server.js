@@ -8,12 +8,15 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || process.env
   console.error('[startup] JWT_SECRET 未配置或仍为示例值，请运行: openssl rand -hex 32 并写入 server/.env');
   process.exit(1);
 }
-const { startAiTaskWorker } = require('./src/services/aiTaskService');
+const { startAiTaskWorker, markStaleTasksFailed } = require('./src/services/aiTaskService');
 const { createApp } = require('./app');
 
 const PORT = process.env.PORT || 3000;
 createApp().listen(PORT, () => {
   console.log('Qbao API running on port ' + PORT);
-  startAiTaskWorker();
-  console.log('AI task worker started');
+  // 清理上次进程遗留的 queued/running 任务（API Key 在内存中已丢失）
+  markStaleTasksFailed().finally(() => {
+    startAiTaskWorker();
+    console.log('AI task worker started');
+  });
 });

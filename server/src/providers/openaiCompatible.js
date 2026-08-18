@@ -61,6 +61,11 @@ function createOpenAICompatibleProvider(config) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const abortFromCaller = () => controller.abort();
+    if (options && options.signal) {
+      if (options.signal.aborted) controller.abort();
+      else options.signal.addEventListener('abort', abortFromCaller, { once: true });
+    }
     const start = Date.now();
 
     try {
@@ -87,8 +92,13 @@ function createOpenAICompatibleProvider(config) {
       return JSON.parse(text);
     } catch (e) {
       clearTimeout(timeout);
+      if (options && options.signal) options.signal.removeEventListener('abort', abortFromCaller);
       const ms = Date.now() - start;
       if (e.name === 'AbortError') {
+        if (options && options.signal && options.signal.aborted) {
+          console.log(`[${name}] aborted by caller after ${ms}ms`);
+          throw new Error('已取消');
+        }
         console.log(`[${name}] TIMEOUT after ${ms}ms`);
         throw new Error('AI响应超时（超过5分钟），可能是内容过长或网络慢。请减少资料后重试。');
       }

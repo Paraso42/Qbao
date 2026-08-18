@@ -4,6 +4,7 @@ const {
   normalizeQuestions,
   repairJson,
   tryExtractCompletedObjects,
+  applyTypeQuota,
 } = require('../src/services/aiQuestionParser');
 
 describe('AI 题目解析服务', () => {
@@ -35,5 +36,33 @@ describe('AI 题目解析服务', () => {
     const first = tryExtractCompletedObjects(text, 0);
     expect(first).toHaveLength(1);
     expect(first[0].question).toBe('第一题');
+  });
+
+  it('applyTypeQuota 按题型配额裁剪（5:5:3:2，过量产出 9:6:0:0 → 5:5:3:2）', () => {
+    const raw = [];
+    for (let i = 0; i < 9; i++) raw.push({ type: 'single', question: '单选' + i, options: ['a', 'b'], answer: 0, tag: 't', strategy: 'new' });
+    for (let i = 0; i < 6; i++) raw.push({ type: 'judge', question: '判断' + i, options: ['正确', '错误'], answer: 0, tag: 't', strategy: 'new' });
+    for (let i = 0; i < 3; i++) raw.push({ type: 'term', question: '名解' + i, tag: 't', strategy: 'new' });
+    for (let i = 0; i < 2; i++) raw.push({ type: 'short', question: '简答' + i, tag: 't', strategy: 'new' });
+
+    const result = applyTypeQuota(raw, { single: 5, judge: 5, term: 3, short: 2 });
+    const dist = { single: 0, judge: 0, term: 0, short: 0 };
+    result.questions.forEach((q) => dist[q.type]++);
+
+    expect(dist).toEqual({ single: 5, judge: 5, term: 3, short: 2 });
+    expect(result.questions).toHaveLength(15);
+    expect(result.shortfall).toEqual({ single: 0, judge: 0, term: 0, short: 0 });
+  });
+
+  it('applyTypeQuota 未指定配额时原样放行', () => {
+    const raw = [{ type: 'single', question: 'q', options: ['a', 'b'], answer: 0, tag: 't', strategy: 'new' }];
+    expect(applyTypeQuota(raw).questions).toHaveLength(1);
+    expect(applyTypeQuota(raw, null).questions).toHaveLength(1);
+  });
+
+  it('applyTypeQuota 某题型产出不足时给出 shortfall', () => {
+    const raw = [{ type: 'single', question: 'q', options: ['a', 'b'], answer: 0, tag: 't', strategy: 'new' }];
+    const result = applyTypeQuota(raw, { single: 5, judge: 5, term: 3, short: 2 });
+    expect(result.shortfall).toEqual({ single: 4, judge: 5, term: 3, short: 2 });
   });
 });

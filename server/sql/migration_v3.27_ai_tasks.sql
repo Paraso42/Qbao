@@ -19,3 +19,14 @@ CREATE INDEX IF NOT EXISTS idx_ai_tasks_user_status
 
 CREATE INDEX IF NOT EXISTS idx_ai_tasks_status
     ON ai_tasks(status, id);
+
+-- 授权给应用角色（避免"数据库错误":迁移以 superuser 建表后 app 角色无权限）。
+-- 其他业务表由应用角色自建自持，但 ai_tasks 由迁移(以 postgres)创建，
+-- 若不授权则 INSERT/SELECT 都会 Permission denied。
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qbao') THEN
+        GRANT ALL PRIVILEGES ON TABLE ai_tasks TO qbao;
+        GRANT USAGE, SELECT ON SEQUENCE ai_tasks_id_seq TO qbao;
+    END IF;
+END $$;
