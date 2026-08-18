@@ -101,12 +101,18 @@ export const useUsersStore = defineStore('users', () => {
       const av = await usersApi.uploadAvatar(dataUrl)
       if (av && av.user) {
         const next = { ...(user.user || {}), ...av.user }
+        // 同用户换头像时 URL 路径不变，追加时间戳防止浏览器缓存旧图
+        if (next.avatarUrl && next.avatarUrl.indexOf('data:') !== 0 && next.avatarUrl.indexOf('http') !== 0) {
+          const sep = next.avatarUrl.indexOf('?') === -1 ? '?' : '&'
+          next.avatarUrl = next.avatarUrl + sep + 't=' + Date.now()
+        }
         user.user = next
         setStoredUser(next)
       }
+      ui.toast('✅ 头像已更新，各界面已同步显示', 'ok')
       return { ok: true, avatarUrl: av && av.user && av.user.avatarUrl }
     } catch (e) {
-      ui.toast(e.message || '头像上传失败', 'err')
+      ui.toast('头像上传失败: ' + (e.message || '请重试'), 'err')
       return { ok: false, error: e.message }
     }
   }

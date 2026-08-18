@@ -24,9 +24,10 @@
           <div class="crop-mask"></div>
         </div>
       </div>
+      <div class="crop-tip">拖动图片调整位置，缩放调整取景范围（图片始终铺满裁剪框）</div>
       <div class="crop-controls">
         <span>缩放</span>
-        <input v-model.number="zoom" type="range" min="80" max="300" step="1">
+        <input v-model.number="zoom" type="range" :min="minZoom" max="300" step="1">
         <span class="crop-zoom-val">{{ zoom }}%</span>
       </div>
       <div class="dialog-actions">
@@ -38,14 +39,14 @@
 </template>
 
 <script setup>
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import Modal from '../../ui/Modal.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
   src: { type: String, default: '' }
 })
-const emit = defineEmits(['close', 'confirm'])
+const emit = defineEmits(['close', 'confirm', 'error'])
 
 const VIEWPORT = 280
 const OUTPUT = 200
@@ -54,6 +55,7 @@ const imgRef = ref(null)
 const zoom = ref(100)
 const imgStyle = ref({})
 const ready = ref(false)
+const minZoom = computed(() => minZoomPct())
 // 非响应式的适配几何信息（naturalW/H、适配后宽高、偏移）
 let fit = null
 let dragging = false
@@ -62,14 +64,23 @@ let dragStartY = 0
 let origOffsetX = 0
 let origOffsetY = 0
 
+// 保证图片始终完全覆盖视口的最小缩放百分比（cover 适配后至少 100%）
+function minZoomPct() {
+  if (!fit) return 100
+  const need = Math.max(VIEWPORT / fit.displayW, VIEWPORT / fit.displayH)
+  return Math.max(100, Math.ceil(need * 100))
+}
+
 function clampOffset() {
   if (!fit) return
+  const minZ = minZoomPct()
+  if (zoom.value < minZ) zoom.value = minZ
   const s = zoom.value / 100
   const displayW = fit.displayW * s
   const displayH = fit.displayH * s
-  const halfVp = VIEWPORT / 2
-  fit.offsetX = Math.min(halfVp, Math.max(halfVp - displayW, fit.offsetX))
-  fit.offsetY = Math.min(halfVp, Math.max(halfVp - displayH, fit.offsetY))
+  // 图片必须完全覆盖视口：偏移不允许为正（露白边），且右/下边缘不能缩进视口内
+  fit.offsetX = Math.min(0, Math.max(VIEWPORT - displayW, fit.offsetX))
+  fit.offsetY = Math.min(0, Math.max(VIEWPORT - displayH, fit.offsetY))
 }
 
 function renderStyle() {
@@ -88,11 +99,16 @@ function onImgLoad() {
   if (!img) return
   const naturalW = img.naturalWidth
   const naturalH = img.naturalHeight
+  if (!naturalW || !naturalH) {
+    emit('error', '图片读取失败，请更换图片')
+    return
+  }
   // cover 适配：铺满正方形视口
   const scale = Math.max(VIEWPORT / naturalW, VIEWPORT / naturalH)
   const displayW = naturalW * scale
   const displayH = naturalH * scale
   fit = { naturalW, naturalH, displayW, displayH, offsetX: (VIEWPORT - displayW) / 2, offsetY: (VIEWPORT - displayH) / 2 }
+  if (zoom.value < minZoomPct()) zoom.value = minZoomPct()
   ready.value = true
   renderStyle()
 }
@@ -150,31 +166,37 @@ function onTouchEnd() {
 function confirm() {
   const img = imgRef.value
   if (!img || !fit) return
-  const s = zoom.value / 100
-  const displayW = fit.displayW * s
-  const displayH = fit.displayH * s
-  const naturalW = fit.naturalW
-  const naturalH = fit.naturalH
-  const imgCenterX = fit.offsetX + displayW / 2
-  const imgCenterY = fit.offsetY + displayH / 2
-  const vpCenter = VIEWPORT / 2
-  const srcX = (vpCenter - imgCenterX) / displayW * naturalW
-  const srcY = (vpCenter - imgCenterY) / displayH * naturalH
-  const srcSize = VIEWPORT / displayW * naturalW
+  let dataUrl = null
+  try {
+    const s = zoom.value / 100
+    const displayW = fit.displayW * s
+    const displayH = fit.displayH * s
+    const naturalW = fit.naturalW
+    const naturalH = fit.naturalH
+    const imgCenterX = fit.offsetX + displayW / 2
+    const imgCenterY = fit.offsetY + displayH / 2
+    const vpCenter = VIEWPORT / 2
+    const srcX = (vpCenter - imgCenterX) / displayW * naturalW
+    const srcY = (vpCenter - imgCenterY) / displayH * naturalH
+    const srcSize = VIEWPORT / displayW * naturalW
 
-  const canvas = document.createElement('canvas')
-  canvas.width = OUTPUT
-  canvas.height = OUTPUT
-  const ctx = canvas.getContext('2d')
-  ctx.save()
-  ctx.beginPath()
-  ctx.arc(OUTPUT / 2, OUTPUT / 2, OUTPUT / 2, 0, Math.PI * 2)
-  ctx.closePath()
-  ctx.clip()
-  ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, OUTPUT, OUTPUT)
-  ctx.restore()
+    const canvas = document.createElement('canvas')
+    canvas.width = OUTPUT
+    canvas.height = OUTPUT
+    const ctx = canvas.getContext('2d')
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(OUTPUT / 2, OUTPUT / 2, OUTPUT / 2, 0, Math.PI * 2)
+    ctx.closePath()
+    ctx.clip()
+    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, OUTPUT, OUTPUT)
+    ctx.restore()
 
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+  } catch (e) {
+    emit('error', (e && e.message) || '图片处理失败，请更换图片重试')
+    return
+  }
   emit('confirm', dataUrl)
 }
 
@@ -206,6 +228,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .crop-dialog { display: flex; flex-direction: column; }
 .crop-title { margin-bottom: var(--space-md); }
+.crop-tip {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: var(--space-sm);
+}
 .crop-body { display: flex; justify-content: center; margin-bottom: var(--space-md); }
 .crop-viewport {
   position: relative;
