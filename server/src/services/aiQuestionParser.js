@@ -3,6 +3,8 @@
 // AI 生成结果归一化与流式 JSON 提取（v3.27）
 // 从 ai.routes.js 中迁出，便于独立测试与后续替换为更严格的解析器。
 
+const VALID_TYPES = ['single', 'judge', 'term', 'short'];
+
 function normalizeQuestions(raw) {
   if (!raw) return [];
 
@@ -159,8 +161,39 @@ function tryExtractCompletedObjects(text, knownCount) {
   return result.length > knownCount ? result.slice(knownCount) : null;
 }
 
+// 按题型配额收口：每道题型最多保留 requested count 道，超出的多余题删除。
+// 若某题型实际产出不足配额，则给出缺少的数量，不强行补足。
+// typeCounts 未提供（undefined/null）时保持原样放行，不做任何裁剪。
+// 返回 { questions, shortfall: { single, judge, term, short } }。
+function applyTypeQuota(questions, typeCounts) {
+  const src = Array.isArray(questions) ? questions : [];
+  // 未指定配额：不裁剪，原样返回。
+  if (!typeCounts || typeof typeCounts !== 'object') {
+    return { questions: src.slice(), shortfall: { single: 0, judge: 0, term: 0, short: 0 } };
+  }
+  const need = {
+    single: Math.max(0, Math.floor(typeCounts.single) || 0),
+    judge: Math.max(0, Math.floor(typeCounts.judge) || 0),
+    term: Math.max(0, Math.floor(typeCounts.term) || 0),
+    short: Math.max(0, Math.floor(typeCounts.short) || 0),
+  };
+  const taken = { single: 0, judge: 0, term: 0, short: 0 };
+  const kept = [];
+  src.forEach((q) => {
+    if (!q || typeof q !== 'object') return;
+    const t = VALID_TYPES.indexOf(q.type) >= 0 ? q.type : 'single';
+    if (need[t] > 0 && taken[t] < need[t]) {
+      kept.push(q);
+      taken[t]++;
+    }
+  });
+  const shortfall = { single: need.single - taken.single, judge: need.judge - taken.judge, term: need.term - taken.term, short: need.short - taken.short };
+  return { questions: kept, shortfall };
+}
+
 module.exports = {
   normalizeQuestions,
   repairJson,
   tryExtractCompletedObjects,
+  applyTypeQuota,
 };

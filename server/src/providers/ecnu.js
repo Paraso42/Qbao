@@ -70,7 +70,9 @@ async function streamChatCompletions(apiKey, model, messages, options, onEvent, 
 
 async function callEcnuApi(apiKey, model, messages, options) {
   const key = apiKey || process.env.ECNU_API_KEY || 'your-key';
-  const body = { model, messages, ...options };
+  // signal 仅用于中止控制，不得泄漏进请求体
+  const { signal, ...apiOptions } = options || {};
+  const body = { model, messages, ...apiOptions };
 
   const contentLen = (body.messages[1] && body.messages[1].content && typeof body.messages[1].content === 'string')
     ? body.messages[1].content.length : 0;
@@ -80,6 +82,11 @@ async function callEcnuApi(apiKey, model, messages, options) {
 
   const controller = new AbortController();
   const timeout = setTimeout(function() { controller.abort(); }, 300000);
+  const abortFromCaller = function() { controller.abort(); };
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', abortFromCaller, { once: true });
+  }
   const start = Date.now();
 
   try {
@@ -103,8 +110,13 @@ async function callEcnuApi(apiKey, model, messages, options) {
     return JSON.parse(text);
   } catch (e) {
     clearTimeout(timeout);
+    if (signal) signal.removeEventListener('abort', abortFromCaller);
     const ms = Date.now() - start;
     if (e.name === 'AbortError') {
+      if (signal && signal.aborted) {
+        console.log('[ecnu] aborted by caller after ' + ms + 'ms');
+        throw new Error('已取消');
+      }
       console.log('[ecnu] TIMEOUT after ' + ms + 'ms');
       throw new Error('AI响应超时（超过5分钟），可能是内容过长或网络慢。请减少资料后重试。');
     }

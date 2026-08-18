@@ -133,6 +133,16 @@ export const useAiStore = defineStore('ai', () => {
     return (data.state.aiTaskQueue || []).some((t) => t.chapterId === chapterId && (t.status === 'pending' || t.status === 'running'))
   }
 
+  // 章节最近一轮是否还有未做完的题目（K1 规则本地前置校验；服务端有 409 兜底）
+  function hasUnfinishedQuestions(ch) {
+    if (!ch || !ch.quizSets || ch.quizSets.length === 0) return false
+    const qs = ch.quizSets[ch.quizSets.length - 1]
+    if (!qs || !qs.questions || qs.questions.length === 0) return false
+    const unanswered = (qs.userAnswers || [])
+      .filter((a) => a === undefined || a === null || a === -1).length
+    return unanswered > 0
+  }
+
   function enqueueGenerate(chapterId, typeCounts) {
     const ch = data.state.chapters[chapterId]
     if (!ch) { ui.toast('章节不存在', 'err'); return }
@@ -140,6 +150,7 @@ export const useAiStore = defineStore('ai', () => {
     if (!materials.length) { ui.toast('请先上传复习资料', 'err'); return }
     if (!user.isOnline || !user.token) { ui.toast('请先登录', 'err'); return }
     if (hasTaskForChapter(chapterId)) { ui.toast('该章节已在队列中', 'info'); return }
+    if (hasUnfinishedQuestions(ch)) { ui.toast('本章节还有未做完的题目，请先完成本轮答题', 'err'); return }
 
     const strategy = data.getChStrategy(chapterId)
     if (strategy && typeCounts) {
@@ -450,6 +461,8 @@ export const useAiStore = defineStore('ai', () => {
 
     const startedAt = Date.now()
     while (true) {
+      // 本地已取消（cancelTask 已把任务标记为 failed）→ 停止轮询，不再空等
+      if (task.status !== 'running') return
       await sleep(2000)
       const serverTask = await getAiServerTask(task.serverTaskId)
       if (serverTask.status === 'completed') {
@@ -461,7 +474,7 @@ export const useAiStore = defineStore('ai', () => {
         return
       }
       if (serverTask.status === 'failed' || serverTask.status === 'canceled') {
-        throw new Error(serverTask.error || '服务端任务未完成')
+        throw new Error(serverTask.error || (serverTask.status === 'canceled' ? '任务已取消' : '服务端任务未完成'))
       }
       if (Date.now() - startedAt > 20 * 60 * 1000) {
         throw new Error('服务端任务超时，请稍后在任务列表中查看')
@@ -495,6 +508,21 @@ export const useAiStore = defineStore('ai', () => {
         questions = await streamGenerate(task, opts)
         if (!questions || questions.length === 0) {
           questions = await nonStreamGenerate(task, opts, task.promptText)
+          // 流式 0 题 + 兜底成功：把兜底题目灌入流式预创建的空 set，
+          // 否则 executeTask 会因 streamSetRef 存在而跳过 createQuizSetForChapter，题目全部丢失
+          if (questions && questions.length > 0 && task.streamSetRef &&
+              (!task.streamSetRef.questions || task.streamSetRef.questions.length === 0)) {
+            task.streamSetRef.questions = questions.slice()
+            task.streamSetRef.userAnswers = new Array(questions.length).fill(undefined)
+            task.streamSetRef.currentIdx = 0
+            const ch2 = data.state.chapters[task.chapterId]
+            if (ch2) {
+              if (!ch2.questions) ch2.questions = []
+              questions.forEach((q) => ch2.questions.push(q))
+              if (!ch2.userAnswers) ch2.userAnswers = []
+              ch2.userAnswers = ch2.userAnswers.concat(questions.map(() => undefined))
+            }
+          }
         }
       } else {
         questions = await nonStreamGenerate(task, opts, task.promptText)
@@ -510,6 +538,13 @@ export const useAiStore = defineStore('ai', () => {
     } catch (e) {
       if (e.name === 'AbortError') failTask(task, '用户取消')
       else failTask(task, e.message || '生成失败')
+      // 空题 set 回滚：流式预创建的空 quizSet 无意义，移除避免残留"空 in_progress 会话"（K3）
+      if (task.streamSetRef && ch) {
+        const idx = ch.quizSets ? ch.quizSets.indexOf(task.streamSetRef) : -1
+        const empty = !task.streamSetRef.questions || task.streamSetRef.questions.length === 0
+        if (idx >= 0 && empty) ch.quizSets.splice(idx, 1)
+        delete task.streamSetRef
+      }
     }
   }
 

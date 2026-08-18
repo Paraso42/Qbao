@@ -4,6 +4,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { cleanupExpiredFiles } = require('../services/filePoolService');
 
 const UPLOAD_BASE = path.join(__dirname, '../../../uploads/pool');
 if (!fs.existsSync(UPLOAD_BASE)) fs.mkdirSync(UPLOAD_BASE, { recursive: true });
@@ -23,24 +24,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB
 
-// Cleanup expired files for a user — removes DB records + disk files
-async function cleanupExpiredFiles(userId) {
-  try {
-    const result = await pool.query(
-      `DELETE FROM user_files WHERE user_id = $1 AND in_pool = true
-       AND pool_expires_at IS NOT NULL AND pool_expires_at < NOW() RETURNING file_path`,
-      [userId]
-    );
-    for (const row of result.rows) {
-      const absPath = path.join(UPLOAD_BASE, '..', row.file_path);
-      try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (e) { /* ignore */ }
-    }
-    return result.rows.length;
-  } catch (e) {
-    console.error('cleanupExpiredFiles error:', e.message);
-    return 0;
-  }
-}
+// 过期文件清理统一走 services/filePoolService.js（与 AI 出题读池共用）
 
 // Format file row for API response
 function formatFileRow(row) {

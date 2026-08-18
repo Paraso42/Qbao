@@ -54,6 +54,11 @@ async function chatCompletions(apiKey, model, messages, options) {
 
   var controller = new AbortController();
   var timeout = setTimeout(function() { controller.abort(); }, 300000);
+  var abortFromCaller = function() { controller.abort(); };
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener('abort', abortFromCaller, { once: true });
+  }
   var start = Date.now();
 
   try {
@@ -99,8 +104,13 @@ async function chatCompletions(apiKey, model, messages, options) {
     };
   } catch (e) {
     clearTimeout(timeout);
+    if (options.signal) options.signal.removeEventListener('abort', abortFromCaller);
     var ms2 = Date.now() - start;
     if (e.name === 'AbortError') {
+      if (options.signal && options.signal.aborted) {
+        console.log('[gemini] aborted by caller after ' + ms2 + 'ms');
+        throw new Error('已取消');
+      }
       console.log('[gemini] TIMEOUT after ' + ms2 + 'ms');
       throw new Error('AI响应超时（超过5分钟），可能是内容过长或网络慢。请减少资料后重试。');
     }

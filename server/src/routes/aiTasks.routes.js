@@ -43,8 +43,8 @@ module.exports = function (app) {
   }));
 
   app.delete('/api/v1/ai/tasks/:id', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
+    // queued/running → canceled（running 会中止上游）；已结束 → 409；不存在 → 404
     const task = await cancelAiTask(req.userId, req.params.id);
-    if (!task) throw new ApiError(404, '任务不存在或已开始执行');
     res.json({ task });
   }));
 };
