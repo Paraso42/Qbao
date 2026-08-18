@@ -53,7 +53,10 @@
         <span class="ai-row-switch" @click.stop><Toggle :model-value="data.state.aiEnabled" @change="toggleAi" /></span>
       </div>
       <div v-if="user.isOnline" class="user-row" @click="ui.openUserCenter">
-        <span class="user-avatar">{{ user.shortName }}</span>
+        <span class="user-avatar">
+          <img v-if="avatarUrl" :src="avatarUrl" :alt="user.shortName" @error="avatarUrl = ''" />
+          <span v-else>{{ user.shortName }}</span>
+        </span>
         <span class="user-name">{{ user.user.displayName || user.user.username }}</span>
         <span class="user-sync" :class="{ online: sync.online, syncing: sync.syncing }"></span>
       </div>
@@ -67,7 +70,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useUiStore } from '../../stores/ui'
 import { useDataStore } from '../../stores/data'
 import { useSubjectStore } from '../../stores/subjects'
@@ -78,6 +81,7 @@ import { useAiStore } from '../../stores/ai'
 import Icon from '../ui/Icon.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import Toggle from '../ui/Toggle.vue'
+import { resolveMediaUrl } from '../../services/utils'
 
 const ui = useUiStore()
 const data = useDataStore()
@@ -86,6 +90,9 @@ const user = useUserStore()
 const sync = useSyncStore()
 const quiz = useQuizStore()
 const ai = useAiStore()
+
+const avatarUrl = ref(resolveMediaUrl((user.user && (user.user.avatarUrl || user.user.avatar)) || ''))
+watch(() => (user.user && (user.user.avatarUrl || user.user.avatar)) || '', (v) => { avatarUrl.value = resolveMediaUrl(v) })
 
 const aiRunning = computed(() => {
   const queue = data.state.aiTaskQueue || []
@@ -330,7 +337,9 @@ function toggleAi(v) {
   display: flex; align-items: center; justify-content: center;
   font-size: var(--fs-sm); font-weight: 600;
   flex-shrink: 0;
+  overflow: hidden;
 }
+.user-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .user-avatar.ghost { background: var(--surface-hover); color: var(--text-muted); }
 .user-name { font-size: var(--fs-sm); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .user-sync {

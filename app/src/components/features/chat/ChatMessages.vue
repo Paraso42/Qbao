@@ -28,7 +28,7 @@
           <div v-if="m.msg_type === 'image'" class="chat-msg-content">
             <div class="chat-msg-image-wrap">
               <img
-                v-for="(url, i) in (m.images || [])"
+                v-for="(url, i) in (m.imageSrcs || [])"
                 :key="i"
                 :src="url"
                 class="chat-msg-image"
@@ -40,7 +40,7 @@
           </div>
           <!-- 文件消息 -->
           <div v-else-if="m.msg_type === 'file'" class="chat-msg-content">
-            <div class="chat-msg-file" @click="openFile((m.file_info || {}).url)">
+            <div class="chat-msg-file" @click="openFile(m.fileUrl)">
               <span class="chat-msg-file-icon">📄</span>
               <div class="chat-msg-file-info">
                 <div class="chat-msg-file-name">{{ (m.file_info || {}).name || '文件' }}</div>
@@ -126,7 +126,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '../../../stores/chat'
 import { useUserStore } from '../../../stores/user'
-import { renderMarkdown, formatFileSize } from '../../../services/utils'
+import { renderMarkdown, formatFileSize, resolveMediaUrl } from '../../../services/utils'
 
 const store = useChatStore()
 const user = useUserStore()
@@ -151,7 +151,7 @@ function avatarUrlOf(m) {
   const room = store.currentRoom
   if (!room || !room.members) return null
   const mem = room.members.find((x) => x.id === m.user_id)
-  return mem && mem.avatar_url ? mem.avatar_url : null
+  return mem && mem.avatar_url ? resolveMediaUrl(mem.avatar_url) : null
 }
 function canRevoke(m) {
   if (!m.created_at) return false
@@ -175,6 +175,8 @@ const prepared = computed(() => {
       typeName: q ? (typeMap[q.type] || q.type || '') : '',
       initial: isMine ? (user.shortName || '我') : (m.sender_name || '?').charAt(0).toUpperCase(),
       avatarUrl: avatarUrlOf(m),
+      imageSrcs: (m.images || []).map((u) => resolveMediaUrl(u)),
+      fileUrl: resolveMediaUrl((m.file_info || {}).url),
       time: store.formatTime(m.created_at),
       revocable: isMine && !m.is_revoked && canRevoke(m)
     }
@@ -186,11 +188,11 @@ function imgError(url) {
 }
 
 function previewImage(url) {
-  if (url) previewUrl.value = url
+  if (url) previewUrl.value = resolveMediaUrl(url)
 }
 
 function openFile(url) {
-  if (url) window.open(url, '_blank')
+  if (url) window.open(resolveMediaUrl(url), '_blank')
 }
 
 function resultOptionClass(m, oi) {

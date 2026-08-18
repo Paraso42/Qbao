@@ -61,11 +61,23 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-    location /uploads/ {
+    location ^~ /uploads/ {
+        proxy_pass http://127.0.0.1:3000;
+    }
+    location ^~ /avatars/ {
         proxy_pass http://127.0.0.1:3000;
     }
     location / {
         try_files $uri $uri/ /index.html;
+    }
+
+    # 注意：静态资源正则 location 优先级高于普通前缀 location。
+    # 上传/头像目录（/uploads/、/avatars/）必须写成 ^~ 前缀，否则会被此规则
+    # try_files 拦截（在静态根目录找不到图片 → 404）。
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        try_files $uri =404;
     }
 }
 ```

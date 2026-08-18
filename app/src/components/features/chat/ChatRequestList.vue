@@ -3,7 +3,10 @@
   <div class="chat-room-list">
     <div v-if="store.requestList.length === 0" class="chat-room-empty">暂无好友申请</div>
     <div v-for="req in store.requestList" :key="req.id" class="chat-request-item">
-      <div class="chat-avatar">{{ req.initial }}</div>
+      <div class="chat-avatar">
+        <img v-if="req.avatarSrc && !failedImgs[req.avatarSrc]" :src="req.avatarSrc" @error="imgError(req.avatarSrc)" />
+        <span v-else>{{ req.initial }}</span>
+      </div>
       <div class="chat-request-info">
         <div class="chat-request-name">{{ req.name }}</div>
         <div v-if="req.message" class="chat-request-message">{{ req.message }}</div>
@@ -17,8 +20,14 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useChatStore } from '../../../stores/chat'
 const store = useChatStore()
+const failedImgs = ref({})
+
+function imgError(url) {
+  if (url) failedImgs.value = { ...failedImgs.value, [url]: true }
+}
 </script>
 
 <style scoped>
@@ -46,7 +55,9 @@ const store = useChatStore()
   font-weight: 700;
   color: #fff;
   background: var(--gradient-primary);
+  overflow: hidden;
 }
+.chat-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .chat-request-info { flex: 1; min-width: 0; }
 .chat-request-name { font-size: var(--fs-sm); font-weight: 500; color: var(--text-primary); }
 .chat-request-message {

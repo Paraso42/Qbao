@@ -1,5 +1,23 @@
 // 通用工具（自 legacy utils.js + state.js 抽取，语义不变）
+import { API_BASE } from '../core/env'
+
 export function isObjType(t) { return t === 'single' || t === 'judge' }
+
+// 将服务端返回的相对媒体 URL（avatars/…、/avatars/…、uploads/…、/uploads/…）
+// 解析为可访问的绝对 URL：网页版取当前 origin，桌面版（file://）取 API_BASE origin。
+// 绝对 URL（http(s)/data/blob）原样返回。
+export function resolveMediaUrl(url) {
+  if (!url || typeof url !== 'string') return ''
+  if (/^(https?:|data:|blob:)/i.test(url)) return url
+  let origin = ''
+  if (/^https?:/i.test(API_BASE)) {
+    try { origin = new URL(API_BASE).origin } catch (e) { origin = '' }
+  }
+  if (!origin && typeof location !== 'undefined') origin = location.origin
+  if (url.charAt(0) === '/') return origin + url
+  if (url.indexOf('avatars/') === 0 || url.indexOf('uploads/') === 0) return origin + '/' + url
+  return url
+}
 
 export function getCi(q, answer) {
   if (!q) return false

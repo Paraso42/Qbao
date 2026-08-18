@@ -11,7 +11,12 @@
     </span>
 
     <button v-if="!user.isOnline" class="tb-item" @click="ui.openAuth"><Icon name="user" :size="15" /><span class="tb-label"> 登录/注册</span></button>
-    <button v-else class="tb-item" aria-label="用户中心" @click="ui.openUserCenter"><span class="tb-avatar">{{ user.shortName }}</span></button>
+    <button v-else class="tb-item" aria-label="用户中心" @click="ui.openUserCenter">
+      <span class="tb-avatar">
+        <img v-if="avatarUrl" :src="avatarUrl" :alt="user.shortName" @error="avatarUrl = ''" />
+        <span v-else>{{ user.shortName }}</span>
+      </span>
+    </button>
     <button v-if="user.isOnline" class="tb-item tb-chat" aria-label="好友消息" @click="onChatClick">
       <Icon name="chat" :size="15" /><span class="tb-label"> 好友</span>
       <span v-if="chatBadge > 0" class="tb-chat-badge">{{ chatBadge > 99 ? '99+' : chatBadge }}</span>
@@ -24,7 +29,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useUiStore } from '../../stores/ui'
 import { useUserStore } from '../../stores/user'
 import { useSyncStore } from '../../stores/sync'
@@ -33,6 +38,7 @@ import { useAiStore } from '../../stores/ai'
 import { useChatStore } from '../../stores/chat'
 import Icon from '../ui/Icon.vue'
 import NoticeBar from '../features/notices/NoticeBar.vue'
+import { resolveMediaUrl } from '../../services/utils'
 
 const ui = useUiStore()
 const user = useUserStore()
@@ -40,6 +46,9 @@ const sync = useSyncStore()
 const data = useDataStore()
 const ai = useAiStore()
 const chat = useChatStore()
+
+const avatarUrl = ref(resolveMediaUrl((user.user && (user.user.avatarUrl || user.user.avatar)) || ''))
+watch(() => (user.user && (user.user.avatarUrl || user.user.avatar)) || '', (v) => { avatarUrl.value = resolveMediaUrl(v) })
 
 const chatBadge = computed(() => (chat.totalUnread || 0) + (chat.pendingRequests || 0))
 const aiRunning = computed(() => {
@@ -122,7 +131,9 @@ function onChatClick() {
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: var(--fs-sm); font-weight: 600;
+  overflow: hidden;
 }
+.tb-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .tb-chat { position: relative; }
 .tb-chat-badge {
   position: absolute;

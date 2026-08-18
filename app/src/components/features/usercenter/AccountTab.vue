@@ -8,7 +8,7 @@
       <h4>📷 头像</h4>
       <div class="avatar-upload-area">
         <div class="avatar-preview">
-          <img v-if="avatarUrl" :src="avatarUrl" alt="">
+          <img v-if="avatarUrl && !avatarBroken" :src="avatarUrl" alt="" @error="avatarBroken = true">
           <span v-else>{{ initial }}</span>
         </div>
         <div class="avatar-actions">
@@ -49,11 +49,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useUserStore } from '../../../stores/user'
 import { useUsersStore } from '../../../stores/users'
 import { useUiStore } from '../../../stores/ui'
 import AvatarCropDialog from './AvatarCropDialog.vue'
+import { resolveMediaUrl } from '../../../services/utils'
 
 const user = useUserStore()
 const users = useUsersStore()
@@ -69,7 +70,9 @@ const cropOpen = ref(false)
 const cropSrc = ref('')
 const objectUrl = ref(null)
 
-const avatarUrl = computed(() => (user.user && (user.user.avatarUrl || user.user.avatar)) || '')
+const avatarUrl = computed(() => resolveMediaUrl((user.user && (user.user.avatarUrl || user.user.avatar)) || ''))
+const avatarBroken = ref(false)
+watch(avatarUrl, () => { avatarBroken.value = false })
 const initial = computed(() => ((user.user && (user.user.displayName || user.user.username)) || '?').charAt(0).toUpperCase())
 
 function pickAvatar() { if (fileInputRef.value) fileInputRef.value.click() }
