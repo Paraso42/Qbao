@@ -12,7 +12,7 @@
           <span v-else>{{ initial }}</span>
         </div>
         <div class="avatar-actions">
-          <button class="btn btn-primary btn-small" @click="pickAvatar">上传头像</button>
+          <button class="btn btn-primary btn-small" :disabled="avatarUploading" @click="pickAvatar">{{ avatarUploading ? '上传中…' : '上传头像' }}</button>
           <input ref="fileInputRef" type="file" accept="image/*" hidden @change="onPickFile">
         </div>
       </div>
@@ -44,7 +44,7 @@
       💾 {{ users.accountBusy ? '保存中…' : '保存更改' }}
     </button>
 
-    <AvatarCropDialog :open="cropOpen" :src="cropSrc" @close="onCropClose" @confirm="onCropConfirm" />
+    <AvatarCropDialog :open="cropOpen" :src="cropSrc" @close="onCropClose" @confirm="onCropConfirm" @error="onCropError" />
   </div>
 </template>
 
@@ -69,6 +69,7 @@ const fileInputRef = ref(null)
 const cropOpen = ref(false)
 const cropSrc = ref('')
 const objectUrl = ref(null)
+const avatarUploading = ref(false)
 
 const avatarUrl = computed(() => resolveMediaUrl((user.user && (user.user.avatarUrl || user.user.avatar)) || ''))
 const avatarBroken = ref(false)
@@ -85,8 +86,15 @@ function onPickFile(e) {
   const file = e.target.files && e.target.files[0]
   e.target.value = ''
   if (!file) return
-  if (!file.type.startsWith('image/')) { ui.toast('请选择图片文件', 'err'); return }
-  if (file.size > 5 * 1024 * 1024) { ui.toast('图片不能超过 5MB', 'err'); return }
+  if (!file.type || !file.type.startsWith('image/')) { ui.toast('请选择图片文件（jpg/png/gif/webp）', 'err'); return }
+  if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].indexOf(file.type) === -1) {
+    ui.toast('图片格式仅支持 jpg/png/gif/webp', 'err')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ui.toast('图片超过 5MB，无法上传，请先压缩图片', 'err')
+    return
+  }
   revokeObjectUrl()
   objectUrl.value = URL.createObjectURL(file)
   cropSrc.value = objectUrl.value
@@ -99,11 +107,23 @@ function onCropClose() {
   cropSrc.value = ''
 }
 
+function onCropError(message) {
+  cropOpen.value = false
+  revokeObjectUrl()
+  cropSrc.value = ''
+  ui.toast(message || '图片处理失败，请更换图片重试', 'err')
+}
+
 async function onCropConfirm(dataUrl) {
   cropOpen.value = false
   revokeObjectUrl()
   cropSrc.value = ''
-  await users.uploadAvatarData(dataUrl)
+  avatarUploading.value = true
+  try {
+    await users.uploadAvatarData(dataUrl)
+  } finally {
+    avatarUploading.value = false
+  }
 }
 
 async function save() {
