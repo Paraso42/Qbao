@@ -7,7 +7,7 @@
     <div class="uc-layout">
       <aside class="uc-sidebar">
         <div class="uc-profile">
-          <div v-if="avatarUrl" class="uc-avatar"><img :src="avatarUrl" alt=""></div>
+          <div v-if="avatarUrl && !avatarBroken" class="uc-avatar"><img :src="avatarUrl" alt="" @error="avatarBroken = true"></div>
           <div v-else class="uc-avatar uc-avatar--initial">{{ initial }}</div>
           <div class="ucm-user-info">
             <div class="ucm-name">{{ displayName }}</div>
@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import Modal from '../../ui/Modal.vue'
 import Icon from '../../ui/Icon.vue'
 import { useUiStore } from '../../../stores/ui'
@@ -56,12 +56,15 @@ import DataTab from './DataTab.vue'
 import FilesTab from './FilesTab.vue'
 import AchievementsTab from './AchievementsTab.vue'
 import AdminTab from './AdminTab.vue'
+import { resolveMediaUrl } from '../../../services/utils'
 
 const ui = useUiStore()
 const user = useUserStore()
 const users = useUsersStore()
 
-const avatarUrl = computed(() => (user.user && (user.user.avatarUrl || user.user.avatar)) || '')
+const avatarUrl = computed(() => resolveMediaUrl((user.user && (user.user.avatarUrl || user.user.avatar)) || ''))
+const avatarBroken = ref(false)
+watch(avatarUrl, () => { avatarBroken.value = false })
 const displayName = computed(() => (user.user && (user.user.displayName || user.user.username)) || '用户')
 const initial = computed(() => displayName.value.charAt(0).toUpperCase())
 

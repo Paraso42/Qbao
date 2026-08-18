@@ -4,7 +4,7 @@
     <div v-if="store.friendList.length === 0" class="chat-room-empty">暂无好友<br>点击左上角 ➕ 添加好友</div>
     <div v-for="friend in store.friendList" :key="friend.id" class="chat-friend-item">
       <div class="chat-avatar">
-        <img v-if="friend.avatar_url && !failedImgs[friend.avatar_url]" :src="friend.avatar_url" @error="imgError(friend.avatar_url)" />
+        <img v-if="friend.avatarSrc && !failedImgs[friend.avatarSrc]" :src="friend.avatarSrc" @error="imgError(friend.avatarSrc)" />
         <span v-else>{{ friend.initial }}</span>
       </div>
       <div class="chat-friend-info">

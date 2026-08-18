@@ -9,6 +9,7 @@ import { useUserStore } from './user'
 import { useUiStore } from './ui'
 import { fetchWithAuth } from '../services/api'
 import * as chatApi from '../services/chatApi'
+import { resolveMediaUrl } from '../services/utils'
 
 const POLL_INTERVAL = 15000
 
@@ -90,6 +91,7 @@ export const useChatStore = defineStore('chat', () => {
           name,
           initial: name.charAt(0).toUpperCase(),
           otherAvatar,
+          otherAvatarSrc: resolveMediaUrl(otherAvatar),
           preview: lastMsgPreview(room),
           time: formatTime(room.last_message ? room.last_message.created_at : ''),
           unread: parseInt(room.unread_count) || 0,
@@ -109,6 +111,7 @@ export const useChatStore = defineStore('chat', () => {
           ...f,
           name,
           initial: (name || '?').charAt(0).toUpperCase(),
+          avatarSrc: resolveMediaUrl(f.avatar_url),
           online: diff < 5 * 60 * 1000
         }
       })
@@ -118,7 +121,8 @@ export const useChatStore = defineStore('chat', () => {
     return requests.value.map((r) => ({
       ...r,
       name: r.display_name || r.username,
-      initial: (r.display_name || r.username || '?').charAt(0).toUpperCase()
+      initial: (r.display_name || r.username || '?').charAt(0).toUpperCase(),
+      avatarSrc: resolveMediaUrl(r.avatar_url)
     }))
   })
 

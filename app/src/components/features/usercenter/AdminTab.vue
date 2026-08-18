@@ -201,6 +201,7 @@
 import { ref, computed } from 'vue'
 import { useUsersStore } from '../../../stores/users'
 import { useUiStore } from '../../../stores/ui'
+import { resolveMediaUrl } from '../../../services/utils'
 
 const users = useUsersStore()
 const ui = useUiStore()
@@ -282,7 +283,7 @@ const udStats = computed(() => {
   }
 })
 
-function avatarUrlOf(u) { return (u && (u.avatarUrl || u.avatar)) || '' }
+function avatarUrlOf(u) { return resolveMediaUrl((u && (u.avatarUrl || u.avatar)) || '') }
 function initialOf(u) { return ((u && (u.displayName || u.username)) || '?').charAt(0).toUpperCase() }
 function fmtTime(ts) { try { return new Date(ts).toLocaleString('zh-CN') } catch (e) { return '' } }
 

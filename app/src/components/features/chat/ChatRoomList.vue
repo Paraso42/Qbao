@@ -10,7 +10,7 @@
       @click="store.openRoom(room.id)"
     >
       <div class="chat-avatar" :class="room.type">
-        <img v-if="room.otherAvatar && !failedImgs[room.otherAvatar]" :src="room.otherAvatar" @error="imgError(room.otherAvatar)" />
+        <img v-if="room.otherAvatarSrc && !failedImgs[room.otherAvatarSrc]" :src="room.otherAvatarSrc" @error="imgError(room.otherAvatarSrc)" />
         <span v-else>{{ room.initial }}</span>
       </div>
       <div class="chat-room-info">
