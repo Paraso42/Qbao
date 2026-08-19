@@ -41,6 +41,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import Modal from '../../ui/Modal.vue'
+import { avatarCropSource } from '../../../services/utils'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -168,17 +169,8 @@ function confirm() {
   if (!img || !fit) return
   let dataUrl = null
   try {
-    const s = zoom.value / 100
-    const displayW = fit.displayW * s
-    const displayH = fit.displayH * s
-    const naturalW = fit.naturalW
-    const naturalH = fit.naturalH
-    const imgCenterX = fit.offsetX + displayW / 2
-    const imgCenterY = fit.offsetY + displayH / 2
-    const vpCenter = VIEWPORT / 2
-    const srcX = (vpCenter - imgCenterX) / displayW * naturalW
-    const srcY = (vpCenter - imgCenterY) / displayH * naturalH
-    const srcSize = VIEWPORT / displayW * naturalW
+    // 所见即所得：导出区域 = 视口内当前显示的内容（含圆形容器外的透明区由 drawImage 裁掉）
+    const { srcX, srcY, srcSize } = avatarCropSource(fit, zoom.value, VIEWPORT)
 
     const canvas = document.createElement('canvas')
     canvas.width = OUTPUT
