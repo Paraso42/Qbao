@@ -152,6 +152,10 @@ export function createSyncEngine(ctx) {
   let _syncInFlight = false
   let _syncTimer = null
   let _syncRetryTimer = null
+  let _pollTimer = null
+  let _visBound = false
+  let _lastPullAt = 0
+  let _pollTick = null
 
   function updateStatus() {
     if (ctx.onStatus) {
@@ -169,11 +173,58 @@ export function createSyncEngine(ctx) {
     updateStatus()
   }
 
+  // —— 拉取云端并合并到本地（pull）——
+  // 幂等：本地优先 + 实体级并集，任何一侧数据都不丢。
+  // 返回 { changed, addedCount }；changed 表示本地状态被合并更新。
+  async function pullAndMerge() {
+    if (!ctx.isOnline() || !getToken()) return { changed: false, addedCount: 0 }
+    try {
+      const res = await fetchWithAuth('/data')
+      if (!res || !res.ok) return { changed: false, addedCount: 0 }
+      const cloud = await res.json().catch(() => null)
+      if (!cloud || !cloud.state_json) return { changed: false, addedCount: 0 }
+      const cloudState = migrateState(cloud.state_json)
+      const mergedRes = mergeStates(ctx.getState(), cloudState)
+      const merged = mergedRes.state
+      if (typeof cloud.rev === 'number' && cloud.rev > 0) _syncRev = cloud.rev
+      let changed = false
+      try {
+        changed = JSON.stringify(merged) !== JSON.stringify(ctx.getState())
+      } catch (e) { changed = true }
+      if (changed) {
+        ctx.replaceState(merged)
+        persistMergedState(merged)
+        _lastPullAt = Date.now()
+        if (mergedRes.conflictAddedCount > 0 && ctx.notify) {
+          ctx.notify('已从云端同步其他设备新增的 ' + mergedRes.conflictAddedCount + ' 道题目')
+        }
+        return { changed: true, addedCount: mergedRes.conflictAddedCount }
+      }
+      return { changed: false, addedCount: 0 }
+    } catch (e) {
+      console.warn('[sync] pullAndMerge failed:', e && e.message)
+      return { changed: false, addedCount: 0 }
+    }
+  }
+
   async function flushSync() {
     if (_syncInFlight || !ctx.isOnline() || !getToken()) return
     _syncInFlight = true
     updateStatus()
     try {
+      // 推送前先校验云端版本（轻量 /data/rev）：云端有其他端新写入才拉全量合并，
+      // 杜绝"旧状态带最新 rev 直接覆盖云端"导致的数据丢失，同时避免每次全量传输。
+      let cloudRev = null
+      try {
+        const revRes = await fetchWithAuth('/data/rev')
+        if (revRes && revRes.ok) {
+          const r = await revRes.json().catch(() => null)
+          if (r && typeof r.rev === 'number' && r.rev > 0) cloudRev = r.rev
+        }
+      } catch (e) { /* 忽略：rev 接口不可用则按旧行为直接推送 */ }
+      if (cloudRev !== null && cloudRev !== _syncRev) {
+        await pullAndMerge()
+      }
       stripAiSecretsFromState(ctx.getState())
       const body = { state_json: ctx.getState() }
       if (_syncRev) body.rev = _syncRev
@@ -251,7 +302,51 @@ export function createSyncEngine(ctx) {
     if (getSyncPending() && ctx.isOnline() && getToken()) flushSync()
   }
 
+  // —— 轮询：检测其他端写入（轻量 rev 检查，变化才拉全量合并） ——
+  async function pollTick() {
+    if (_syncInFlight || !ctx.isOnline() || !getToken()) return
+    try {
+      const res = await fetchWithAuth('/data/rev')
+      if (!res || !res.ok) {
+        // 旧服务器无 /data/rev 接口 → 退化为全量拉取合并
+        if (res && res.status === 404) await pullAndMerge()
+        return
+      }
+      const r = await res.json().catch(() => null)
+      if (!r) return
+      const cloudRev = (typeof r.rev === 'number' && r.rev > 0) ? r.rev : null
+      // 云端有新写入（rev 变化）→ 拉取合并；本地有未推送内容 → 立即推送
+      if (cloudRev !== null && cloudRev !== _syncRev) {
+        await pullAndMerge()
+      }
+      if (getSyncPending()) flushSync()
+    } catch (e) {
+      console.warn('[sync] poll tick failed:', e && e.message)
+    }
+  }
+
+  function startPolling(intervalMs) {
+    if (_pollTimer) return
+    _pollTimer = setInterval(() => { _pollTick = pollTick().catch(() => {}) }, intervalMs || 20000)
+  }
+
+  // 焦点/可见性：切回页面立即同步（快速发现其他端变化 + 补推未同步内容）
+  function bindVisibilityLifecycle() {
+    if (_visBound) return
+    _visBound = true
+    const onVisible = () => { pollTick().catch(() => {}) }
+    window.addEventListener('focus', onVisible)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onVisible()
+      else if (getSyncPending() && ctx.isOnline()) flushSync()
+    })
+  }
+
   function setRev(rev) { if (typeof rev === 'number' && rev > 0) _syncRev = rev }
 
-  return { scheduleSync, flushSync, resumePendingSync, updateStatus, setRev, getRev: () => _syncRev }
+  return {
+    scheduleSync, flushSync, resumePendingSync, updateStatus, setRev,
+    pullAndMerge, startPolling, bindVisibilityLifecycle,
+    getRev: () => _syncRev
+  }
 }

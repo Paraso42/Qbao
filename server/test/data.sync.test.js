@@ -16,6 +16,7 @@ describe('data 同步（rev 乐观锁）', () => {
     cloud = { state_json: { banks: [{ id: 'b1', name: '旧' }] }, synced_at: new Date().toISOString(), rev: 5 };
     installFakePool([
       [/SELECT state_json, synced_at, rev FROM user_data/, async () => ({ rows: cloud ? [cloud] : [] })],
+      [/SELECT rev, synced_at FROM user_data/, async () => ({ rows: cloud ? [{ rev: cloud.rev, synced_at: cloud.synced_at }] : [] })],
       [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
       [/UPDATE user_data SET state_json = \$2, rev = rev \+ 1.*RETURNING rev/, async (sql, params) => {
         if (params[2] === cloud.rev) {
@@ -39,6 +40,21 @@ describe('data 同步（rev 乐观锁）', () => {
     const res = await request(app).get('/api/v1/data').set('Authorization', 'Bearer ' + token);
     expect(res.status).toBe(200);
     expect(res.body.state_json).toEqual({});
+    expect(res.body.rev).toBe(1);
+  });
+
+  it('GET /data/rev 返回轻量版本号', async () => {
+    const res = await request(app).get('/api/v1/data/rev').set('Authorization', 'Bearer ' + token);
+    expect(res.status).toBe(200);
+    expect(res.body.rev).toBe(5);
+    expect(res.body.synced_at).toBeTruthy();
+    expect(res.body.state_json).toBeUndefined();
+  });
+
+  it('GET /data/rev 无数据 → rev=1', async () => {
+    cloud = null;
+    const res = await request(app).get('/api/v1/data/rev').set('Authorization', 'Bearer ' + token);
+    expect(res.status).toBe(200);
     expect(res.body.rev).toBe(1);
   });
 
