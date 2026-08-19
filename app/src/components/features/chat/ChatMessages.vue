@@ -41,7 +41,7 @@
           <!-- 文件消息 -->
           <div v-else-if="m.msg_type === 'file'" class="chat-msg-content">
             <div class="chat-msg-file" @click="openFile(m.fileUrl)">
-              <span class="chat-msg-file-icon">📄</span>
+              <span class="chat-msg-file-icon"><Icon name="file" :size="22" /></span>
               <div class="chat-msg-file-info">
                 <div class="chat-msg-file-name">{{ (m.file_info || {}).name || '文件' }}</div>
                 <div v-if="(m.file_info || {}).size" class="chat-msg-file-size">{{ formatFileSize((m.file_info || {}).size) }}</div>
@@ -53,16 +53,16 @@
           <div v-else-if="m.msg_type === 'quiz_share' || m.msg_type === 'bank_share'" class="chat-msg-content">
             <div class="chat-msg-quiz-share">
               <div class="chat-quiz-share-header">
-                <span class="chat-quiz-share-icon">📝</span>
+                <span class="chat-quiz-share-icon"><Icon name="edit" :size="17" /></span>
                 <span class="chat-quiz-share-title">{{ m.typeName }}</span>
               </div>
               <div class="chat-quiz-share-from">来自：{{ (m.quiz_data || {}).fromUserName || '好友' }}</div>
-              <div v-if="m.q && m.q.tag" class="chat-quiz-share-tag">🏷️ {{ m.q.tag }}</div>
+              <div v-if="m.q && m.q.tag" class="chat-quiz-share-tag"><Icon name="tag" :size="11" /> {{ m.q.tag }}</div>
               <div v-if="m.q" class="chat-quiz-share-question" v-html="renderMarkdown(m.q.question || '')"></div>
 
               <!-- 已作答结果（单选/判断） -->
               <div v-if="m.result && m.result.answered && m.q && (m.q.type === 'single' || m.q.type === 'judge')" class="chat-quiz-result" :class="m.result.correct ? 'correct' : 'wrong'">
-                <div class="chat-quiz-result-head">{{ m.result.correct ? '✅ 回答正确！' : '❌ 回答错误' }}</div>
+                <div class="chat-quiz-result-head"><Icon :name="m.result.correct ? 'check' : 'x'" :size="13" /> {{ m.result.correct ? '回答正确！' : '回答错误' }}</div>
                 <div class="chat-quiz-result-opts">
                   <div v-for="(opt, oi) in (m.q.options || [])" :key="oi" class="chat-quiz-result-opt" :class="resultOptionClass(m, oi)" v-html="resultLabels[oi] + '. ' + renderMarkdown(opt)"></div>
                 </div>
@@ -77,11 +77,11 @@
                   </div>
                 </div>
                 <div class="chat-quiz-result-meta">作答人：{{ m.result.answeredBy || '好友' }} · 来自：{{ (m.quiz_data || {}).fromUserName || '好友' }}</div>
-                <div v-if="m.q.explanation" class="chat-quiz-result-explain" v-html="'📖 ' + renderMarkdown(m.q.explanation)"></div>
+                <div v-if="m.q.explanation" class="chat-quiz-result-explain"><Icon name="book" :size="11" /> <span v-html="renderMarkdown(m.q.explanation)"></span></div>
               </div>
               <!-- 已作答结果（主观题） -->
               <div v-else-if="m.result && m.result.answered" class="chat-quiz-result correct">
-                <div class="chat-quiz-result-head">✅ 已作答（主观题）</div>
+                <div class="chat-quiz-result-head"><Icon name="check" :size="13" /> 已作答（主观题）</div>
                 <div class="answer-line"><b>你的答案：</b><span v-html="renderMarkdown(m.result.chosenAnswerText || m.result.chosenAnswer || '')"></span></div>
                 <div v-if="m.result.correctAnswerText" class="answer-line"><b>参考答案：</b><span v-html="renderMarkdown(m.result.correctAnswerText)"></span></div>
               </div>
@@ -91,8 +91,8 @@
                   <button v-for="(opt, oi) in m.q.options" :key="oi" class="chat-quiz-option-btn" :disabled="submitting[m.id]" @click="answerOption(m, oi)" v-html="resultLabels[oi] + '. ' + renderMarkdown(opt)"></button>
                 </div>
                 <div v-else-if="m.q && m.q.type === 'judge'" class="chat-quiz-answer-judge">
-                  <button class="chat-quiz-option-btn" :disabled="submitting[m.id]" @click="answerOption(m, 0)">✅ 正确</button>
-                  <button class="chat-quiz-option-btn" :disabled="submitting[m.id]" @click="answerOption(m, 1)">❌ 错误</button>
+                  <button class="chat-quiz-option-btn" :disabled="submitting[m.id]" @click="answerOption(m, 0)"><Icon name="check" :size="12" /> 正确</button>
+                  <button class="chat-quiz-option-btn" :disabled="submitting[m.id]" @click="answerOption(m, 1)"><Icon name="x" :size="12" /> 错误</button>
                 </div>
                 <div v-else class="chat-quiz-answer-text">
                   <input v-model="textAnswers[m.id]" type="text" class="chat-quiz-text-input" placeholder="输入答案..." />
@@ -100,7 +100,7 @@
                 </div>
               </div>
               <!-- 发送方：等待作答 -->
-              <div v-else class="chat-quiz-waiting">⏳ 等待好友作答...</div>
+              <div v-else class="chat-quiz-waiting"><Icon name="clock" :size="12" /> 等待好友作答...</div>
             </div>
           </div>
           <!-- 文本消息 -->
@@ -126,6 +126,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '../../../stores/chat'
 import { useUserStore } from '../../../stores/user'
+import Icon from '../../ui/Icon.vue'
 import { renderMarkdown, formatFileSize, resolveMediaUrl } from '../../../services/utils'
 
 const store = useChatStore()
@@ -443,7 +444,7 @@ onMounted(scrollToBottom)
 }
 .chat-quiz-result.correct { background: var(--color-success-light); border: 1px solid var(--color-success); }
 .chat-quiz-result.wrong { background: var(--color-danger-light); border: 1px solid var(--color-danger); }
-.chat-quiz-result-head { font-size: var(--fs-sm); font-weight: 600; margin-bottom: 8px; }
+.chat-quiz-result-head { font-size: var(--fs-sm); font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
 .chat-quiz-result-opts { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
 .chat-quiz-result-opt { font-size: 11px; padding: 3px 6px; border-radius: var(--radius-sm); }
 .chat-quiz-result-opt.opt-correct { background: var(--color-success-light); color: var(--color-success); }
@@ -461,6 +462,9 @@ onMounted(scrollToBottom)
   padding: 6px;
   background: var(--surface-hover);
   border-radius: var(--radius-sm);
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
 }
 
 /* 作答界面 */
@@ -470,6 +474,9 @@ onMounted(scrollToBottom)
 .chat-quiz-answer-judge .chat-quiz-option-btn { flex: 1; }
 .chat-quiz-answer-text { display: flex; gap: 6px; }
 .chat-quiz-option-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   text-align: left;
   padding: 6px 10px;
   border: 1px solid var(--border-default);
@@ -513,6 +520,9 @@ onMounted(scrollToBottom)
   padding: 6px 8px;
   background: var(--surface-hover);
   border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 /* 图片预览 */

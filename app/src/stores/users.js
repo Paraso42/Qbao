@@ -109,7 +109,7 @@ export const useUsersStore = defineStore('users', () => {
         user.user = next
         setStoredUser(next)
       }
-      ui.toast('✅ 头像已更新，各界面已同步显示', 'ok')
+      ui.toast('头像已更新，各界面已同步显示', 'ok')
       return { ok: true, avatarUrl: av && av.user && av.user.avatarUrl }
     } catch (e) {
       ui.toast('头像上传失败: ' + (e.message || '请重试'), 'err')

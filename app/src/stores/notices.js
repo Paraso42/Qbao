@@ -8,10 +8,10 @@ import { useDataStore } from './data'
 import { getNotices } from '../services/noticesApi'
 
 const TYPE_MAP = {
-  tip: { icon: '💡', color: '#4facfe' },
-  notice: { icon: '📢', color: '#f5a623' },
-  warning: { icon: '⚠️', color: '#e94560' },
-  chat: { icon: '⭐', color: '#2ed573' }
+  tip: { icon: 'info', color: '#4facfe' },
+  notice: { icon: 'bell', color: '#f5a623' },
+  warning: { icon: 'warning', color: '#e94560' },
+  chat: { icon: 'star', color: '#2ed573' }
 }
 
 export const useNoticesStore = defineStore('notices', () => {

@@ -9,6 +9,7 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || process.env
   process.exit(1);
 }
 const { startAiTaskWorker, markStaleTasksFailed } = require('./src/services/aiTaskService');
+const { startExpiryJob } = require('./src/services/pointsService');
 const { createApp } = require('./app');
 
 const PORT = process.env.PORT || 3000;
@@ -19,4 +20,6 @@ createApp().listen(PORT, () => {
     startAiTaskWorker();
     console.log('AI task worker started');
   });
+  // 积分：学期清零（每年 2/1、8/1）× 每日低峰对账定时任务
+  startExpiryJob();
 });

@@ -3,7 +3,8 @@
 const crypto = require('crypto');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware');
-const { hashPassword, comparePassword } = require('../auth');
+const { hashPassword, comparePassword, verifyToken } = require('../auth');
+const pointsService = require('../services/pointsService');
 const { asyncHandler, ApiError } = require('../lib/errorHandler');
 const { validate } = require('../lib/validate');
 const { createShareSchema, shareCodeParamsSchema, sharePasswordQuerySchema } = require('../schemas/share.schema');
@@ -60,7 +61,26 @@ module.exports = function (app) {
       if (!ok) throw new ApiError(403, '密码错误');
     }
 
-    await pool.query('UPDATE shared_banks SET download_count = download_count + 1 WHERE id = $1', [s.id]);
+    // 可选登录态：有有效 token 时记录下载者（用于分享奖励；分享无需登录仍可下载）
+    let downloaderId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.indexOf('Bearer ') === 0) {
+      const decoded = verifyToken(authHeader.slice(7));
+      if (decoded) downloaderId = decoded.sub;
+    }
+
+    const upd = await pool.query(
+      'UPDATE shared_banks SET download_count = download_count + 1 WHERE id = $1 RETURNING download_count',
+      [s.id]
+    );
+    const newCount = parseInt((upd.rows[0] && upd.rows[0].download_count) || 0);
+
+    // 分享奖励：仅登录用户下载他人分享时 +2（单库封顶；失败不阻塞下载）
+    if (downloaderId && Number(downloaderId) !== Number(s.owner_id) && newCount > 0) {
+      pointsService.awardShareDownload(pool, s.owner_id, s.id, newCount)
+        .catch((e) => console.warn('[points] share download award failed:', e.message));
+    }
+
     res.json({ name: s.name, questions: s.questions, createdAt: s.created_at });
   }));
 

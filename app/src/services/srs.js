@@ -90,7 +90,7 @@ export function buildSrsExam(state) {
   const eid = 'srs_' + Date.now().toString(36)
   const genExam = {
     id: eid,
-    name: '📅 间隔复习 ' + new Date().toLocaleDateString('zh-CN'),
+    name: '间隔复习 ' + new Date().toLocaleDateString('zh-CN'),
     type: 'srs',
     subjectId: sid,
     questions,

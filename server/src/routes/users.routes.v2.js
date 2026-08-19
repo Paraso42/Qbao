@@ -35,6 +35,7 @@ function userRow(row) {
     lastActiveAt: row.last_active_at,
     isOnline: !!(row.is_online),
     isBanned: row.is_banned,
+    storagePoints: parseInt(row.storage_points) || 0,
   };
 }
 
@@ -178,7 +179,7 @@ module.exports = function (app) {
 
     const dataR = await pool.query(
       `SELECT id, username, display_name, role, created_at, avatar_url, last_login_at,
-              last_active_at, is_banned,
+              last_active_at, is_banned, storage_points,
               (last_active_at > NOW() - INTERVAL '5 minutes') AS is_online
        FROM users${whereSql}
        ORDER BY created_at DESC
@@ -214,7 +215,7 @@ module.exports = function (app) {
     const uid = req.params.id;
     const ur = await pool.query(
       `SELECT id, username, display_name, role, created_at, avatar_url, last_login_at,
-              last_active_at, is_banned,
+              last_active_at, is_banned, storage_points,
               (last_active_at > NOW()-INTERVAL '5 minutes') AS is_online
        FROM users WHERE id = $1`,
       [uid]

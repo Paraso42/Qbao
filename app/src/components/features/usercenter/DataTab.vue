@@ -5,18 +5,18 @@
 <template>
   <div class="data-tab">
     <div class="section">
-      <h4>💾 本地备份</h4>
+      <h4><Icon name="save" :size="16" />本地备份</h4>
       <p class="hint">将答题数据导出为 JSON 文件保存到本地，需要时可上传恢复。</p>
       <div class="actions">
-        <button class="btn btn-primary btn-small" @click="onBackup">⬇️ 下载备份</button>
-        <button class="btn btn-warning btn-small" @click="pickRestore">⬆️ 上传恢复</button>
+        <button class="btn btn-primary btn-small" @click="onBackup"><Icon name="download" :size="13" /> 下载备份</button>
+        <button class="btn btn-warning btn-small" @click="pickRestore"><Icon name="upload" :size="13" /> 上传恢复</button>
         <input ref="fileInputRef" type="file" accept=".json,application/json" hidden @change="onRestoreFile">
       </div>
       <p class="tip">提示：建议定期下载备份文件并妥善保管。</p>
     </div>
 
     <div class="section">
-      <h4>☁️ 云同步</h4>
+      <h4><Icon name="cloud" :size="16" />云同步</h4>
       <p class="sync-line">
         <template v-if="user.isOnline">
           云端同步状态：<span class="ok">已启用</span><span v-if="sync.syncing">（有未同步的更改）</span>
@@ -28,7 +28,7 @@
     </div>
 
     <div class="section">
-      <h4>🕘 恢复记录</h4>
+      <h4><Icon name="clock" :size="16" />恢复记录</h4>
       <div v-if="users.backupHistory.length === 0" class="empty">暂无备份 / 回档记录</div>
       <ul v-else class="history-list">
         <li v-for="(h, i) in users.backupHistory" :key="i">
@@ -46,6 +46,7 @@ import { useUserStore } from '../../../stores/user'
 import { useUsersStore } from '../../../stores/users'
 import { useUiStore } from '../../../stores/ui'
 import { useSyncStore } from '../../../stores/sync'
+import Icon from '../../ui/Icon.vue'
 
 const user = useUserStore()
 const users = useUsersStore()

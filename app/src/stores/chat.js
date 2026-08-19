@@ -535,7 +535,7 @@ export const useChatStore = defineStore('chat', () => {
       const labels2 = ['A', 'B', 'C', 'D', 'E', 'F']
       const fbCorrect = correctAnswerIdx >= 0 ? labels2[correctAnswerIdx] : ''
       const fbYour = chosenAnswerIdx >= 0 ? labels2[chosenAnswerIdx] : ''
-      const resultText = (correct ? '✅ 回答正确！' : '❌ 回答错误') +
+      const resultText = (correct ? '回答正确！' : '回答错误') +
         '\n作答人：' + ((user.user && (user.user.displayName || user.user.username)) || '') +
         '\n你的答案：' + fbYour + '. ' + (chosenAnswerText || '') +
         '\n标准答案：' + fbCorrect + '. ' + (correctAnswerText || '')

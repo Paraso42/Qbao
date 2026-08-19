@@ -669,11 +669,11 @@ export const useAiStore = defineStore('ai', () => {
   // —— 资料文件添加/删除 ——
   function getExtIcon(name) {
     const ext = (name || '').split('.').pop().toLowerCase()
-    if (ext === 'pdf') return '📄'
-    if (ext === 'doc' || ext === 'docx') return '📝'
-    if (ext === 'ppt' || ext === 'pptx') return '📊'
-    if (ext === 'txt' || ext === 'md') return '📃'
-    return '📎'
+    if (ext === 'pdf') return 'file'
+    if (ext === 'doc' || ext === 'docx') return 'edit'
+    if (ext === 'ppt' || ext === 'pptx') return 'chart'
+    if (ext === 'txt' || ext === 'md') return 'file'
+    return 'paperclip'
   }
 
   async function addMaterialFiles(chapterId, fileList) {

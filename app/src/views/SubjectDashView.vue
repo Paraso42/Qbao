@@ -468,7 +468,7 @@ function compose() {
   es.value._checkedCids = checkedCids.value.slice()
   es.value._examCumSliders = cumSliders.value.slice()
   data.saveState()
-  ui.toast('✅ 大考卷已生成：共 ' + result.exam.questions.length + ' 题', 'ok')
+  ui.toast('大考卷已生成：共 ' + result.exam.questions.length + ' 题', 'ok')
   quiz.startExam(result.exam.id)
 }
 

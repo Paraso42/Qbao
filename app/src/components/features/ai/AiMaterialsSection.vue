@@ -6,7 +6,7 @@
 
     <div v-if="materials.length > 0" class="am-list">
       <div v-for="(m, i) in materials" :key="m.id" class="am-file">
-        <span class="am-icon">{{ extIcon(m.name) }}</span>
+        <span class="am-icon"><Icon :name="extIcon(m.name)" :size="15" /></span>
         <span class="am-name" :title="m.name">{{ m.name }}</span>
         <span class="am-size">{{ formatSize(m.size) }}</span>
         <button class="am-del" title="删除" @click="ai.removeMaterial(chapterId, i)">×</button>
@@ -31,7 +31,7 @@
       <div class="pool-list">
         <EmptyState v-if="!poolLoading && poolFiles.length === 0" icon="folder" title="文件池为空" hint="先在用户中心的「文件管理」上传文件" />
         <div v-for="f in poolFiles" :key="f.id" class="pool-item" @click="assign(f)">
-          <span class="pool-icon">📎</span>
+          <span class="pool-icon"><Icon name="paperclip" :size="15" /></span>
           <div class="pool-main">
             <div class="pool-name">{{ f.originalName }}</div>
             <div class="pool-meta">{{ formatSize(f.fileSize) }}</div>
@@ -71,11 +71,11 @@ const materials = computed(() => ai.getChapterMaterials(props.chapterId))
 
 function extIcon(name) {
   const ext = (name || '').split('.').pop().toLowerCase()
-  if (ext === 'pdf') return '📄'
-  if (ext === 'doc' || ext === 'docx') return '📝'
-  if (ext === 'ppt' || ext === 'pptx') return '📊'
-  if (ext === 'txt' || ext === 'md') return '📃'
-  return '📎'
+  if (ext === 'pdf') return 'file'
+  if (ext === 'doc' || ext === 'docx') return 'edit'
+  if (ext === 'ppt' || ext === 'pptx') return 'chart'
+  if (ext === 'txt' || ext === 'md') return 'file'
+  return 'paperclip'
 }
 function formatSize(bytes) { return ai.formatFileSize(bytes) }
 

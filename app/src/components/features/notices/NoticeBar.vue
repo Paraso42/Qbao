@@ -7,7 +7,7 @@
   <div v-show="store.visible" class="notice-bar-wrap" ref="wrapRef"
        @mouseenter="store.pauseRotation()" @mouseleave="store.resumeRotation()" @click="onClick">
     <div class="notice-bar" :class="{ scroll: scrolling, fading: store.transitioning }" :style="scrollStyle" ref="barRef">
-      <span class="notice-icon" :style="{ color: store.currentMeta.color }">{{ store.currentMeta.icon }}</span>
+      <span class="notice-icon" :style="{ color: store.currentMeta.color }"><Icon :name="store.currentMeta.icon" :size="13" /></span>
       <span class="notice-text">{{ store.current ? store.current.content : '' }}</span>
     </div>
   </div>
@@ -16,6 +16,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useNoticesStore } from '../../../stores/notices'
+import Icon from '../../ui/Icon.vue'
 
 const store = useNoticesStore()
 const wrapRef = ref(null)

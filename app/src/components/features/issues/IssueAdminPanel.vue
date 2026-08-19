@@ -7,7 +7,7 @@
     <div class="fb-card-header"><span>用户反馈</span></div>
 
     <div class="fb-issue-list">
-      <div v-if="store.adminIssues.length === 0" class="fb-issue-list-empty">暂无用户反馈 🎉</div>
+      <div v-if="store.adminIssues.length === 0" class="fb-issue-list-empty">暂无用户反馈</div>
       <template v-else>
         <!-- 已完成（closed）— 最上方 -->
         <div v-if="groups.closed.length > 0" class="fb-collapse-section">

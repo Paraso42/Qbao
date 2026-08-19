@@ -59,10 +59,10 @@ export function formatDuration(ms) {
 }
 
 export function fileIconFor(mimeType) {
-  if (/pdf/.test(mimeType)) return '📄'
-  if (/word|doc/.test(mimeType)) return '📝'
-  if (/presentation|ppt/.test(mimeType)) return '📊'
-  if (/image/.test(mimeType)) return '🖼️'
-  if (/text|markdown/.test(mimeType)) return '📃'
-  return '📎'
+  if (/pdf/.test(mimeType)) return 'file'
+  if (/word|doc/.test(mimeType)) return 'edit'
+  if (/presentation|ppt/.test(mimeType)) return 'chart'
+  if (/image/.test(mimeType)) return 'image'
+  if (/text|markdown/.test(mimeType)) return 'file'
+  return 'paperclip'
 }

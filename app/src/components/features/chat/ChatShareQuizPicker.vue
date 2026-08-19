@@ -9,13 +9,17 @@
         </div>
         <div class="picker-breadcrumb">
           <button v-if="drill.level !== 'subject'" class="picker-back" @click="drillBack()">← 返回</button>
+          <Icon :name="crumbIcon" :size="12" />
           <span>{{ breadcrumb }}</span>
         </div>
         <input v-model="filter" class="chat-user-search-input" placeholder="搜索题目（可在任意层级搜索）..." />
         <div class="picker-list">
           <div v-for="item in viewItems" :key="item.key" class="chat-quiz-select-item" @click="onItemClick(item)">
             <div class="chat-quiz-select-info">
-              <div class="chat-quiz-select-name">{{ item.name }}</div>
+              <div class="chat-quiz-select-name">
+                <Icon v-if="item.icon" :name="item.icon" :size="13" />
+                <span>{{ item.name }}</span>
+              </div>
               <div class="chat-quiz-select-meta">{{ item.meta }}</div>
             </div>
             <span v-if="item.arrow" class="picker-arrow">▶</span>
@@ -31,6 +35,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useChatStore } from '../../../stores/chat'
 import { useDataStore } from '../../../stores/data'
+import Icon from '../../ui/Icon.vue'
 import { useUiStore } from '../../../stores/ui'
 
 const store = useChatStore()
@@ -43,7 +48,7 @@ const drill = reactive({ level: 'subject', subjectId: null, chapterId: null, qui
 const filter = ref('')
 
 const typeMap = { single: '单选题', judge: '判断题', term: '名词解释', short: '简答题' }
-const typeIcon = { single: '📋', judge: '⚖️', term: '📖', short: '✍️' }
+const typeIcon = { single: 'radio', judge: 'scale', term: 'book', short: 'edit' }
 const levelLabels = { subject: '选择科目', chapter: '选择章节', quizset: '选择轮次', question: '选择题目' }
 
 // 构建科目→章节→轮次→题目 下钻树 + 扁平搜索列表（语义同 legacy chatShowShareQuiz）
@@ -88,17 +93,24 @@ function buildTree() {
 
 const title = computed(() => levelLabels[drill.level] || '选择题目')
 
+const crumbIcon = computed(() => {
+  if (drill.level === 'subject') return 'books'
+  if (drill.level === 'chapter') return 'book'
+  if (drill.level === 'quizset') return 'edit'
+  return 'file'
+})
+
 const breadcrumb = computed(() => {
-  if (drill.level === 'subject') return '📚 全部科目'
+  if (drill.level === 'subject') return '全部科目'
   const subj = tree.value.find((s) => s.id === drill.subjectId)
-  let text = subj ? ('📚 ' + subj.name) : ''
+  let text = subj ? subj.name : ''
   if (drill.level === 'chapter') return text + ' › 选择章节'
   const ch = subj && subj.chapters.find((c) => c.id === drill.chapterId)
-  if (ch && (drill.level === 'quizset' || drill.level === 'question')) text += ' › 📖 ' + ch.name
+  if (ch && (drill.level === 'quizset' || drill.level === 'question')) text += ' › ' + ch.name
   if (drill.level === 'quizset') return text + ' › 选择轮次'
   if (drill.level === 'question') {
     const qs = ch && ch.quizSets[drill.quizSetIdx]
-    if (qs) text += ' › 📝 ' + qs.name
+    if (qs) text += ' › ' + qs.name
     return text + ' › 选择题目'
   }
   return text
@@ -116,13 +128,13 @@ const viewItems = computed(() => {
       })
       .map((item) => {
         const q = item.question
-        const icon = typeIcon[q.type] || '📝'
+        const icon = typeIcon[q.type] || 'file'
         return {
           key: 'q' + item.flatIdx,
           type: 'question',
           flatIdx: item.flatIdx,
           icon,
-          name: icon + ' ' + (q.question || '').substring(0, 50),
+          name: (q.question || '').substring(0, 50),
           meta: (typeMap[q.type] || q.type) + ' · ' + item.path,
           arrow: false
         }
@@ -132,7 +144,7 @@ const viewItems = computed(() => {
     return tree.value.map((subj) => {
       let totalQ = 0
       subj.chapters.forEach((ch) => ch.quizSets.forEach((qs) => { totalQ += qs.questions.length }))
-      return { key: 's' + subj.id, type: 'subject', subjectId: subj.id, icon: '📚', name: '📚 ' + subj.name, meta: subj.chapters.length + ' 个章节 · ' + totalQ + ' 题', arrow: true }
+      return { key: 's' + subj.id, type: 'subject', subjectId: subj.id, icon: 'books', name: subj.name, meta: subj.chapters.length + ' 个章节 · ' + totalQ + ' 题', arrow: true }
     })
   }
   if (drill.level === 'chapter') {
@@ -141,7 +153,7 @@ const viewItems = computed(() => {
     return subj.chapters.map((ch) => {
       let totalQ = 0
       ch.quizSets.forEach((qs) => { totalQ += qs.questions.length })
-      return { key: 'c' + ch.id, type: 'chapter', chapterId: ch.id, icon: '📖', name: '📖 ' + ch.name, meta: ch.quizSets.length + ' 个轮次 · ' + totalQ + ' 题', arrow: true }
+      return { key: 'c' + ch.id, type: 'chapter', chapterId: ch.id, icon: 'book', name: ch.name, meta: ch.quizSets.length + ' 个轮次 · ' + totalQ + ' 题', arrow: true }
     })
   }
   if (drill.level === 'quizset') {
@@ -149,7 +161,7 @@ const viewItems = computed(() => {
     const ch = subj && subj.chapters.find((c) => c.id === drill.chapterId)
     if (!ch) return []
     return ch.quizSets.map((qs, qi) => ({
-      key: 'qs' + qi, type: 'quizset', quizSetIdx: qi, icon: '📝', name: '📝 ' + qs.name, meta: qs.questions.length + ' 题', arrow: true
+      key: 'qs' + qi, type: 'quizset', quizSetIdx: qi, icon: 'edit', name: qs.name, meta: qs.questions.length + ' 题', arrow: true
     }))
   }
   if (drill.level === 'question') {
@@ -159,13 +171,13 @@ const viewItems = computed(() => {
     if (!qs) return []
     return qs.questions.map((qw) => {
       const q = qw.question
-      const icon = typeIcon[q.type] || '📝'
+      const icon = typeIcon[q.type] || 'file'
       return {
         key: 'q' + qw.flatIdx,
         type: 'question',
         flatIdx: qw.flatIdx,
         icon,
-        name: icon + ' Q' + (qw.qIndex + 1) + '. ' + (q.question || '').substring(0, 60),
+        name: 'Q' + (qw.qIndex + 1) + '. ' + (q.question || '').substring(0, 60),
         meta: typeMap[q.type] || q.type,
         arrow: false
       }
@@ -241,6 +253,9 @@ onMounted(() => {
   color: var(--text-secondary);
   margin-bottom: 8px;
   min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .picker-back {
   background: none;
@@ -280,7 +295,7 @@ onMounted(() => {
 }
 .chat-quiz-select-item:hover { background: var(--surface-hover); }
 .chat-quiz-select-info { flex: 1; min-width: 0; }
-.chat-quiz-select-name { font-size: var(--fs-sm); font-weight: 500; color: var(--text-primary); }
+.chat-quiz-select-name { font-size: var(--fs-sm); font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 5px; }
 .chat-quiz-select-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .picker-arrow { color: var(--text-muted); font-size: 16px; }
 .chat-user-search-empty {

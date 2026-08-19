@@ -93,3 +93,21 @@ CREATE INDEX IF NOT EXISTS idx_issues_user_id ON issues(user_id);
 CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
 CREATE INDEX IF NOT EXISTS idx_issue_messages_issue_id ON issue_messages(issue_id);
 ALTER TABLE issue_messages ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb;
+-- ============ 积分系统（v3.29） ============
+CREATE TABLE IF NOT EXISTS points_ledger (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  delta INTEGER NOT NULL,
+  balance_after INTEGER NOT NULL,
+  reason VARCHAR(32) NOT NULL,
+  ref_type VARCHAR(32),
+  ref_id VARCHAR(128),
+  note VARCHAR(500) NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, ref_type, ref_id)
+);
+CREATE INDEX IF NOT EXISTS idx_points_ledger_user_time ON points_ledger(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_points_ledger_user_reason ON points_ledger(user_id, reason, created_at);
+ALTER TABLE answer_sessions ADD COLUMN IF NOT EXISTS points_awarded_stats JSONB;
+CREATE INDEX IF NOT EXISTS idx_ai_request_log_user_time ON ai_request_log(user_id, created_at);
+

@@ -5,7 +5,7 @@
 <template>
   <div class="account-tab">
     <div class="section">
-      <h4>📷 头像</h4>
+      <h4><Icon name="image" :size="16" />头像</h4>
       <div class="avatar-upload-area">
         <div class="avatar-preview">
           <img v-if="avatarUrl && !avatarBroken" :src="avatarUrl" alt="" @error="avatarBroken = true">
@@ -19,12 +19,12 @@
     </div>
 
     <div class="section">
-      <h4>✏️ 显示名称</h4>
+      <h4><Icon name="edit" :size="16" />显示名称</h4>
       <input v-model="displayName" class="input" type="text" placeholder="输入显示名称">
     </div>
 
     <div class="section">
-      <h4>🔒 修改密码</h4>
+      <h4><Icon name="lock" :size="16" />修改密码</h4>
       <div class="pw-fields">
         <input v-model="oldPassword" class="input" type="password" placeholder="当前密码" autocomplete="current-password">
         <input v-model="newPassword" class="input" type="password" placeholder="新密码（至少6位）" autocomplete="new-password">
@@ -33,15 +33,16 @@
     </div>
 
     <div class="section">
-      <h4>📦 存储积分</h4>
+      <h4><Icon name="folder" :size="16" />存储积分</h4>
       <div class="storage-row">
         <span class="storage-num">{{ users.storagePoints }}</span>
-        <span class="storage-hint">积分可用于延长文件池存储时间（10积分/7天）</span>
+        <span class="storage-hint">积分可用于文件池续期（10积分/7天），可在积分页查看明细与获取方式</span>
+        <button class="btn btn-text btn-small" @click="users.setTab('points')">查看明细 →</button>
       </div>
     </div>
 
     <button class="btn btn-primary account-save" :disabled="users.accountBusy" @click="save">
-      💾 {{ users.accountBusy ? '保存中…' : '保存更改' }}
+      <Icon name="save" :size="15" /> {{ users.accountBusy ? '保存中…' : '保存更改' }}
     </button>
 
     <AvatarCropDialog :open="cropOpen" :src="cropSrc" @close="onCropClose" @confirm="onCropConfirm" @error="onCropError" />
@@ -53,6 +54,7 @@ import { ref, computed, watch } from 'vue'
 import { useUserStore } from '../../../stores/user'
 import { useUsersStore } from '../../../stores/users'
 import { useUiStore } from '../../../stores/ui'
+import Icon from '../../ui/Icon.vue'
 import AvatarCropDialog from './AvatarCropDialog.vue'
 import { resolveMediaUrl } from '../../../services/utils'
 
@@ -180,5 +182,5 @@ async function save() {
 .storage-row { display: flex; align-items: center; gap: var(--space-md); }
 .storage-num { font-size: var(--fs-2xl); font-weight: 700; color: var(--color-primary); }
 .storage-hint { font-size: var(--fs-sm); color: var(--text-secondary); }
-.account-save { width: 100%; }
+.account-save { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 </style>

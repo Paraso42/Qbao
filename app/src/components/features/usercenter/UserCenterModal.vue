@@ -36,6 +36,7 @@
         <AccountTab v-if="users.activeTab === 'account'" />
         <DataTab v-else-if="users.activeTab === 'data'" />
         <FilesTab v-else-if="users.activeTab === 'files'" />
+        <PointsTab v-else-if="users.activeTab === 'points'" />
         <AchievementsTab v-else-if="users.activeTab === 'achievements'" />
         <AdminTab v-else-if="users.activeTab === 'admin'" />
         <AccountTab v-else />
@@ -54,6 +55,7 @@ import { useUsersStore } from '../../../stores/users'
 import AccountTab from './AccountTab.vue'
 import DataTab from './DataTab.vue'
 import FilesTab from './FilesTab.vue'
+import PointsTab from './PointsTab.vue'
 import AchievementsTab from './AchievementsTab.vue'
 import AdminTab from './AdminTab.vue'
 import { resolveMediaUrl } from '../../../services/utils'
@@ -73,6 +75,7 @@ const navItems = computed(() => {
     { id: 'account', label: '账号管理', icon: 'user' },
     { id: 'data', label: '数据管理', icon: 'download' },
     { id: 'files', label: '文件管理', icon: 'folder' },
+    { id: 'points', label: '积分', icon: 'coins' },
     { id: 'achievements', label: '成就', icon: 'trophy' }
   ]
   if (users.isAdmin) items.push({ id: 'admin', label: '管理员专区', icon: 'users' })
