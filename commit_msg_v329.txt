@@ -1,0 +1,13 @@
+v3.29.0 积分系统上线 + 全站 SVG 图标统一
+
+- 积分系统（v3.29）：注册/每日登录/答题/成就/分享下载赚取；文件池续期 10 积分/7天、
+  AI 出题免费 10 次/日超出 2 积分、AI 解析免费 10 次/日超出 1 积分；points_ledger 台账
+  幂等记账、学期清零（2/1、8/1）+ 提前 7 天警示、每日对账；AI 任务每用户排队上限 3；
+  管理员积分管理区；用户中心积分页（余额/明细/获取/消耗）
+- 迁移：server/sql/migration_v3.29_points.sql（points_ledger + answer_sessions 列 + 索引）
+- 前端：PointsTab/pointsApi/points store；积分相关 emoji 全部替换为 SVG 图标；
+  成就 20 个逐一定制 SVG 徽章；聊天/AI/用户中心全站图标统一为内联 SVG sprite；
+  修复 FilesTab 文件图标第二处未替换导致裸露文本 paperclip 的 Bug；
+  文件操作按钮层级统一；上传交互明确主路径
+- 版本：app/server/desktop 同步 3.29.0；CHANGELOG/ARCHITECTURE 更新
+- 测试：服务端 27 文件 122 用例全绿，前端 6 文件 23 用例全绿，构建通过

@@ -13,6 +13,7 @@ const { validateQuestionSet } = require('../services/aiQuestionValidator');
 const { finalizeAiQuestions } = require('../services/aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('../services/chapterSessionGuard');
 const { cleanupExpiredFiles } = require('../services/filePoolService');
+const pointsService = require('../services/pointsService');
 const { aiQuestionSchema } = require('../lib/aiQuestionSchema');
 const aiQuestionParser = require('../services/aiQuestionParser');
 
@@ -142,6 +143,12 @@ module.exports = function (app) {
 
   app.post('/api/v1/ai/upload', requireAuth, upload.array('files', 10), async (req, res) => {
     try {
+      // 积分配额：每日免费解析次数内不扣分；超出后按次预扣（失败不阻塞上传主流程）
+      await pointsService.checkAndChargeAiQuota(pool, req.userId, 'upload').catch((e) => {
+        if (e instanceof ApiError) throw e;
+        console.warn('[points] ai upload quota check failed:', e.message);
+      });
+
       if (!req.files || req.files.length === 0) return res.status(422).json({ error: '未上传文件' });
       const results = [];
       for (const file of req.files) {
@@ -154,6 +161,8 @@ module.exports = function (app) {
         }
       }
       const text = results.filter(r => r.type === 'text').map(r => r.content).join('\n\n');
+      // 配额计数（model='upload' 计入 ai_request_log，供每日免费额度核算）
+      logAiRequest(req.userId, 'upload', 'ok').catch(() => {});
       res.json({ text, images: [], fileCount: results.length, items: results.map(r => ({ name: r.name, type: r.type })) });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
@@ -166,6 +175,13 @@ module.exports = function (app) {
       const providerName = target.providerConfig.id;
       const { textContent, typeCounts, prompt, chapterHistory, chapterId, selfCheck } = req.body;
       const useStream = parsed.useStream;
+
+      // 积分配额（防滥用）：每日免费次数内不扣分；超出后按次预扣 2 分（余额不足 → 400）。
+      // 失败仅当 ApiError（积分不足）时抛出；数据库瞬时错误不阻塞出题。
+      await pointsService.checkAndChargeAiQuota(pool, req.userId, 'generate').catch((e) => {
+        if (e instanceof ApiError) throw e;
+        console.warn('[points] ai quota check failed:', e.message);
+      });
 
       // 章节未完成规则校验（与任务队列一致）：仍有未做完的题目不允许继续出题（409）
       await assertChapterCanGenerate(req.userId, chapterId || null);

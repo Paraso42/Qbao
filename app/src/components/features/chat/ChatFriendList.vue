@@ -1,7 +1,7 @@
 <!-- 对应 legacy chat.js：chatRenderFriendList（好友列表） -->
 <template>
   <div class="chat-room-list">
-    <div v-if="store.friendList.length === 0" class="chat-room-empty">暂无好友<br>点击左上角 ➕ 添加好友</div>
+    <div v-if="store.friendList.length === 0" class="chat-room-empty">暂无好友<br>点击左上角「添加好友」</div>
     <div v-for="friend in store.friendList" :key="friend.id" class="chat-friend-item">
       <div class="chat-avatar">
         <img v-if="friend.avatarSrc && !failedImgs[friend.avatarSrc]" :src="friend.avatarSrc" @error="imgError(friend.avatarSrc)" />

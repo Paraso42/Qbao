@@ -63,6 +63,7 @@
               <Icon name="sparkle" :size="15" /> 开始出题
             </button>
           </div>
+          <p v-if="aiQuotaHint" class="quota-hint">{{ aiQuotaHint }}</p>
         </template>
         <template v-else>
           <h4>把提示词复制给 AI</h4>
@@ -90,6 +91,7 @@ import { useUiStore } from '../stores/ui'
 import { useQuizStore } from '../stores/quiz'
 import { useAiStore } from '../stores/ai'
 import { useUserStore } from '../stores/user'
+import { usePointsStore } from '../stores/points'
 import { generatePromptText } from '../services/strategy'
 import ChapterStrategyCard from '../components/features/strategy/ChapterStrategyCard.vue'
 import AiMaterialsSection from '../components/features/ai/AiMaterialsSection.vue'
@@ -102,6 +104,7 @@ const ui = useUiStore()
 const quiz = useQuizStore()
 const ai = useAiStore()
 const user = useUserStore()
+const points = usePointsStore()
 
 const hasSubject = computed(() => subjects.list.length > 0)
 const ch = computed(() => data.getCh())
@@ -177,6 +180,24 @@ const genStatus = computed(() => {
   if (hasTask.value) return '该章节已有任务在队列中'
   if (hasUnfinishedSet.value) return '本章节还有未做完的题目，请先完成本轮答题'
   return '已准备就绪，共 ' + materials.value.length + ' 份资料'
+})
+
+// AI 出题配额提示（points 接口数据；仅提示，服务端为准）
+let quotaLoaded = false
+const aiQuotaHint = computed(() => {
+  if (!quotaLoaded) {
+    quotaLoaded = true
+    points.loadQuota()
+  }
+  const q = points.quota
+  if (!q) return ''
+  if (q.aiGenerateUsed < q.aiGenerateFree) {
+    return 'AI 出题今日免费额度余 ' + (q.aiGenerateFree - q.aiGenerateUsed) + ' 次'
+  }
+  if (points.balance >= q.aiGenerateOverCost) {
+    return '今日免费额度已用完，本次出题将消耗 ' + q.aiGenerateOverCost + ' 积分'
+  }
+  return '今日免费额度已用完且积分不足，AI 出题将无法进行（可在用户中心「积分」页查看获取方式）'
 })
 
 function generate() {
@@ -273,6 +294,7 @@ async function copyPrompt() {
   margin-bottom: var(--space-sm);
 }
 .trad-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+.quota-hint { font-size: var(--fs-xs); color: var(--text-secondary); margin-top: var(--space-sm); }
 .gen-area {
   margin-top: var(--space-lg);
   padding-top: var(--space-lg);

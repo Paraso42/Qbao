@@ -18,6 +18,8 @@ const {
 const { ApiError } = require('../lib/errorHandler');
 const { finalizeAiQuestions } = require('./aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('./chapterSessionGuard');
+const pointsService = require('./pointsService');
+const P = require('../config/points');
 
 const TASK_STATUS = {
   QUEUED: 'queued',
@@ -63,6 +65,23 @@ function formatTask(row) {
 async function createAiTask(userId, { providerName, model, apiKey, body }) {
   // 章节未完成规则校验（与 /ai/generate 一致）：未做完题目不允许继续出题
   await assertChapterCanGenerate(userId, body.chapterId || null);
+
+  // 队列公平：每用户同时 queued+running 任务数上限（防一人占满串行 worker）
+  const queueCount = await pool.query(
+    "SELECT COUNT(*)::int AS c FROM ai_tasks WHERE user_id = $1 AND status IN ('queued', 'running')",
+    [userId]
+  );
+  if ((queueCount.rows[0] && queueCount.rows[0].c) >= P.AI_TASK_USER_LIMIT) {
+    throw new ApiError(429, 'AI 出题排队任务已达上限（' + P.AI_TASK_USER_LIMIT + '），请等待完成或取消旧任务');
+  }
+
+  // 积分配额：与 /ai/generate 共享每日免费次数，超出后按次扣分（余额不足 → 400）
+  try {
+    await pointsService.checkAndChargeAiQuota(pool, userId, 'generate');
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    console.warn('[points] ai task quota check failed:', e.message);
+  }
 
   const target = resolveAiTarget(providerName, model);
   const request = {

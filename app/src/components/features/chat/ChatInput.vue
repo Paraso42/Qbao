@@ -24,7 +24,7 @@
     </div>
     <div v-if="pendingFile" class="chat-file-preview">
       <div class="chat-file-preview-item">
-        <span>📄 {{ pendingFile.name }}</span>
+        <span><Icon name="file" :size="13" /> {{ pendingFile.name }}</span>
         <button class="chat-file-preview-remove" @click="removeFile()">✕</button>
       </div>
     </div>
@@ -33,17 +33,17 @@
     <!-- 分享车 -->
     <div v-if="store.quizCart.length > 0" class="chat-quiz-cart">
       <div class="chat-cart-header">
-        <span>🛒 分享车 ({{ store.quizCart.length }}题)</span>
+        <span><Icon name="cart" :size="14" /> 分享车 ({{ store.quizCart.length }}题)</span>
         <button class="chat-cart-clear" @click="store.clearQuizCart()">清空</button>
       </div>
       <div class="chat-cart-items">
         <div v-for="(item, i) in store.quizCart" :key="item.flatIdx" class="chat-cart-item">
-          <span class="chat-cart-item-icon">{{ iconOf(item.question) }}</span>
+          <span class="chat-cart-item-icon"><Icon :name="iconOf(item.question)" :size="13" /></span>
           <span class="chat-cart-item-text">{{ (item.question.question || '').substring(0, 30) }}</span>
           <button class="chat-cart-item-remove" @click="store.removeFromQuizCart(i)">×</button>
         </div>
       </div>
-      <button class="chat-cart-share-btn" @click="store.shareQuizCart()">📤 一键分享</button>
+      <button class="chat-cart-share-btn" @click="store.shareQuizCart()"><Icon name="share" :size="13" /> 一键分享</button>
     </div>
 
     <div class="chat-input-row">
@@ -78,14 +78,14 @@ const imageInput = ref(null)
 const fileInput = ref(null)
 const inputEl = ref(null)
 
-const typeIcon = { single: '📋', judge: '⚖️', term: '📖', short: '✍️' }
+const typeIcon = { single: 'radio', judge: 'scale', term: 'book', short: 'edit' }
 
 const canSend = computed(() => {
   return draft.value.trim() !== '' || pendingImages.value.length > 0 || pendingFile.value !== null
 })
 
 function iconOf(q) {
-  return typeIcon[q.type] || '📝'
+  return typeIcon[q.type] || 'file'
 }
 
 function triggerImage() { imageInput.value && imageInput.value.click() }

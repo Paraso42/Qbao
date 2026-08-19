@@ -86,6 +86,14 @@ server/  Node.js + Express API（端口 3000）
 17. **迁移工具化**：node-pg-migrate / drizzle 替代手写 SQL 人工执行。
 18. **发布流程**：CHANGELOG + git tag + GitHub Release，自动打包 app/ 静态资源。
 
+## 5.5 积分系统（v3.29）
+
+- 余额缓存：`users.storage_points`（v3 预留）；台账：`points_ledger`（delta/balance_after/reason/ref_type/ref_id，唯一键幂等）。
+- 规则集中在 `server/src/config/points.js`（注册/每日登录/答题/成就/分享奖励；文件续期与 AI 超额消耗）。
+- 服务：`server/src/services/pointsService.js`；API：`GET /points/{ledger,balance,rules,quota}`、`POST /points/claims`，管理员 `/users/:id/points/{ledger,adjust}`。
+- 生命周期：每年 2/1、8/1 学期清零（进程定时器 + advisory lock，幂等记账）；每日 03:00 余额对账（台账为准）。
+- 防滥用：AI 任务每用户排队 ≤3、AI 每日免费额度 + 积分超额、答题每日上限 30、一次性事件唯一约束。
+
 ## 6. 迁移与兼容性注意
 
 - 2026-07 目录重组（`backend→server`、前端→`app/`）后，**生产部署路径需同步更新**（见 DEPLOY.md）；代码内部相对路径逻辑未变。

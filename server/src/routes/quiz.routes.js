@@ -5,6 +5,17 @@ const { requireAuth } = require('../middleware');
 const { asyncHandler, ApiError } = require('../lib/errorHandler');
 const { validate } = require('../lib/validate');
 const { postSessionSchema, listSessionsQuerySchema, idParamsSchema } = require('../schemas/quiz.schema');
+const pointsService = require('../services/pointsService');
+
+// 完成结算：按 objCorrect 增量发分（每日上限截断；失败不阻塞接口）
+async function awardQuizPoints(userId, chapterId, stats) {
+  try {
+    return await pointsService.awardQuizCompletion(pool, userId, chapterId, stats);
+  } catch (e) {
+    console.warn('[points] quiz award failed:', e.message);
+    return null;
+  }
+}
 
 function formatSession(row) {
   return {
@@ -33,7 +44,9 @@ module.exports = function (app) {
           'UPDATE answer_sessions SET status = \'completed\', questions = $1::jsonb, user_answers = $2::jsonb, stats = $3::jsonb, updated_at = NOW() WHERE id = $4 RETURNING id, chapter_id, subject_id, session_name, questions, user_answers, stats, status, created_at, updated_at',
           [JSON.stringify(questions || []), JSON.stringify(userAnswers || []), JSON.stringify(stats || {}), row.id]
         );
-        return res.json({ session: formatSession(updRes.rows[0]) });
+        const updSession = formatSession(updRes.rows[0]);
+        const updAward = await awardQuizPoints(req.userId, chapterId, stats || updSession.stats);
+        return res.json({ session: updSession, pointsAwarded: updAward ? updAward.points : 0 });
       }
       // 无 in_progress 会话可完成 — 直接以 completed 建
       const compResult = await pool.query(
@@ -41,7 +54,9 @@ module.exports = function (app) {
         [req.userId, chapterId, subjectId || null, sessionName || '',
          JSON.stringify(questions || []), JSON.stringify(userAnswers || []), JSON.stringify(stats || {})]
       );
-      return res.json({ session: formatSession(compResult.rows[0]) });
+      const compSession = formatSession(compResult.rows[0]);
+      const compAward = await awardQuizPoints(req.userId, chapterId, stats || compSession.stats);
+      return res.json({ session: compSession, pointsAwarded: compAward ? compAward.points : 0 });
     }
 
     // in_progress：拒绝凭空创建"空题"会话（防 K3：有未做完的假象却进不去答题界面）。
