@@ -52,3 +52,5 @@ desktop/node_modules/
 desktop/release/
 desktop/config.local.json
 desktop/dist/
+# ---- 本地 AI 端到端测试脚本（含敏感信息，永不提交）----
+e2e-ai-scenarios/
