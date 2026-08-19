@@ -7,8 +7,7 @@ import { useUserStore } from '../stores/user'
 import { useSyncStore } from '../stores/sync'
 import { useUiStore } from '../stores/ui'
 import { createSyncEngine } from '../services/sync'
-import { fetchWithAuth, getToken } from '../services/api'
-import { migrateState, CLOUD_STORAGE_PREFIX } from '../services/persistence'
+import { getToken } from '../services/api'
 import { useQuizStore } from '../stores/quiz'
 import { applyFontSizes } from './fontSizes'
 
@@ -47,6 +46,10 @@ export function initApp(pinia) {
     restoreFromCloud().then(() => engine.resumePendingSync())
   }
 
+  // 跨端快速同步：定期轮询云端版本 + 焦点/可见性即时拉取
+  engine.startPolling(20000)
+  engine.bindVisibilityLifecycle()
+
   // 答题引擎：页面生命周期同步（beforeunload/visibilitychange）
   const quiz = useQuizStore(pinia)
   quiz.bindLifecycle()
@@ -57,27 +60,12 @@ export function initApp(pinia) {
   watch(() => data.state.settings, () => applyFontSizes(data.state.settings), { deep: true })
 }
 
-// 登录/恢复后：新设备（无本地缓存）从云端恢复；本地优先语义同 legacy DataStoreInit。
+// 启动/恢复后：总是拉取云端并合并（本地优先并集，云端独有实体并入）。
+// 修复：旧逻辑仅在本地无缓存时恢复，导致"桌面端生成 → 网页端本地缓存旧 → 永不显示"。
 async function restoreFromCloud() {
-  const data = useDataStore()
   const user = useUserStore()
   if (!user.isOnline || !getToken()) return
-  const cloudKey = CLOUD_STORAGE_PREFIX + user.userId
-  try {
-    const res = await fetchWithAuth('/data')
-    if (!res) return
-    const cloud = await res.json()
-    if (cloud && typeof cloud.rev === 'number') engine.setRev(cloud.rev)
-    if (cloud && cloud.state_json && cloud.synced_at) {
-      const localSaved = localStorage.getItem(cloudKey)
-      if (!localSaved) {
-        data.replaceState(migrateState(cloud.state_json))
-        localStorage.setItem(cloudKey, JSON.stringify(data.state))
-      }
-    }
-  } catch (e) {
-    console.warn('[boot] cloud load err', e)
-  }
+  await engine.pullAndMerge()
 }
 
 function applyDarkMode() {

@@ -30,6 +30,13 @@ module.exports = function (app) {
     res.json({ state_json: row.state_json, synced_at: row.synced_at, rev: row.rev });
   }));
 
+  // GET /api/v1/data/rev — 轻量版本号轮询（客户端 20s 轮询用，避免全量传输）
+  app.get('/api/v1/data/rev', requireAuth, asyncHandler(async (req, res) => {
+    const r = await pool.query('SELECT rev, synced_at FROM user_data WHERE user_id = $1', [req.userId]);
+    if (r.rows.length === 0) return res.json({ rev: 1, synced_at: null });
+    res.json({ rev: r.rows[0].rev, synced_at: r.rows[0].synced_at });
+  }));
+
   // PUT /api/v1/data — 全量写入，可选乐观锁（校验先于鉴权：畸形请求直接 422）
   app.put('/api/v1/data', validate({ body: putDataSchema }), requireAuth, asyncHandler(async (req, res) => {
       // state_json 已在解构处完成 AI Key 脱敏。

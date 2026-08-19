@@ -62,4 +62,48 @@ describe('mergeStates', () => {
     // 冲突新增数 = 合并后 - 云端原数量（云端 1 + quizSets 1 → 题库 2 + sets 2 = 4；before=2）
     expect(result.conflictAddedCount).toBe(2)
   })
+
+  it('网页端旧缓存 + 云端桌面端新题：合并后能看到新章节（启动拉取场景）', () => {
+    const q1 = { question: '桌面端生成的题', type: 'single', options: ['a', 'b', 'c', 'd'], answer: 1, tag: '网络', strategy: 'new' }
+    const q2 = { question: '网页端本地旧题', type: 'single', options: ['a', 'b', 'c', 'd'], answer: 0, tag: '基础', strategy: 'new' }
+    const local = {
+      subjects: { s1: { id: 's1', name: '旧科目', chapterIds: ['c1'] } },
+      chapters: { c1: { id: 'c1', name: '旧章节', questions: [q2], userAnswers: [0], quizSets: [] } },
+      history: []
+    }
+    const cloud = {
+      subjects: {
+        s1: { id: 's1', name: '旧科目', chapterIds: ['c1'] },
+        s2: { id: 's2', name: '桌面新科目', chapterIds: ['c2'] }
+      },
+      chapters: {
+        c1: { id: 'c1', name: '旧章节', questions: [q1, q2], userAnswers: [0, 0], quizSets: [] },
+        c2: { id: 'c2', name: '桌面新章节', questions: [q1], userAnswers: [0], quizSets: [] }
+      },
+      history: []
+    }
+    const m = mergeStates(local, cloud).state
+    expect(m.subjects.s2).toBeTruthy()
+    expect(m.chapters.c2).toBeTruthy()
+    expect(m.chapters.c1.questions.length).toBe(2)
+    expect(m.chapters.c1.questions.some((q) => q.question === '桌面端生成的题')).toBe(true)
+    expect(m.chapters.c1.questions.some((q) => q.question === '网页端本地旧题')).toBe(true)
+  })
+
+  it('推送前合并：云端有桌面端新题时，本地旧状态推送不丢失云端题目（pull-before-push 场景）', () => {
+    const cloudQ = { question: '桌面端新题', type: 'single', options: ['a', 'b', 'c', 'd'], answer: 0, tag: 'x', strategy: 'new' }
+    const localQ = { question: '本地已修改旧题', type: 'single', options: ['a', 'b', 'c', 'd'], answer: 0, tag: 'x', strategy: 'new' }
+    // 本地状态 = 网页端旧缓存（不含桌面端新题）
+    const local = {
+      chapters: { c1: { id: 'c1', name: '章节1', questions: [localQ], userAnswers: [0], quizSets: [] } }
+    }
+    // 云端 = 桌面端推送后的最新状态
+    const cloud = {
+      chapters: { c1: { id: 'c1', name: '章节1', questions: [localQ, cloudQ], userAnswers: [0, 1], quizSets: [] } }
+    }
+    const m = mergeStates(local, cloud).state
+    // 合并后推送的必然是包含云端题目的并集 → 云端题不被覆盖丢
+    expect(m.chapters.c1.questions.map((q) => q.question).sort()).toEqual(['本地已修改旧题', '桌面端新题'])
+    expect(m.chapters.c1.userAnswers).toHaveLength(2)
+  })
 })
