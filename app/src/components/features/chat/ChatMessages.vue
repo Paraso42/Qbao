@@ -299,7 +299,7 @@ onMounted(scrollToBottom)
   width: 36px;
   height: 36px;
   min-width: 36px;
-  border-radius: var(--radius-md);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -311,7 +311,7 @@ onMounted(scrollToBottom)
 }
 .chat-msg-avatar.mine { background: var(--gradient-primary); }
 .chat-msg-avatar.other { background: linear-gradient(135deg, var(--exam-color-4), var(--exam-color-5)); }
-.chat-msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.chat-msg-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 
 .chat-msg-body { display: flex; flex-direction: column; min-width: 0; }
 .chat-msg-mine .chat-msg-body { align-items: flex-end; }

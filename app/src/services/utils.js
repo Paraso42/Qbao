@@ -116,3 +116,23 @@ export async function fetchWithRetry(url, options, maxAttempts = 3, retryDelayMs
 }
 
 export function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
+
+// 头像裁剪导出参数（AvatarCropDialog 使用）：把正方形裁剪视口（边长 viewport）按“所见即所得”
+// 映射到图片自然坐标。fit 为 cover 适配后的几何 { naturalW, naturalH, displayW, displayH, offsetX, offsetY }，
+// zoomPct 为当前缩放百分比。返回 { srcX, srcY, srcSize, displayW, displayH }：
+// - 视口左上角 (0,0) 对应图片自然坐标 (srcX, srcY)（可为负，drawImage 会裁剪图片外的透明区域）
+// - srcSize 为视口边长对应的图片自然边长；导出中心恒等于视口中心映射点
+export function avatarCropSource(fit, zoomPct, viewport = 280) {
+  const s = zoomPct / 100
+  const displayW = fit.displayW * s
+  const displayH = fit.displayH * s
+  // 归一化 -0 → 0（避免 canvas drawImage 源矩形出现 -0）
+  const zero = (v) => (v === 0 ? 0 : v)
+  return {
+    srcX: zero(-fit.offsetX / displayW * fit.naturalW),
+    srcY: zero(-fit.offsetY / displayH * fit.naturalH),
+    srcSize: viewport / displayW * fit.naturalW,
+    displayW,
+    displayH
+  }
+}
