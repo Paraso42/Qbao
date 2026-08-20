@@ -9,6 +9,7 @@ import { useUserStore } from './user'
 import { useUiStore } from './ui'
 import * as pointsApi from '../services/pointsApi'
 import * as filesApi from '../services/filesApi'
+import { setStoredUser } from '../services/api'
 
 const RULES_TTL = 24 * 3600 * 1000
 
@@ -48,7 +49,8 @@ export const usePointsStore = defineStore('points', () => {
     if (typeof n === 'number' && user.user) {
       const next = { ...user.user, storagePoints: n }
       user.user = next
-      try { localStorage.setItem('qbao_user', JSON.stringify(next)) } catch (e) {}
+      // T18: 统一走 setStoredUser（原裸 localStorage 写入绕过缓存一致层）
+      setStoredUser(next)
     }
   }
 

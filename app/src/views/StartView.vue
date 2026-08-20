@@ -132,9 +132,13 @@ const currentSet = computed(() => data.getCurrentQuizSet())
 const setAnswered = computed(() => {
   const qs = currentSet.value
   if (!qs || !qs.userAnswers) return 0
-  return qs.userAnswers.filter((a) => a !== undefined && a !== -1).length
+  return qs.userAnswers.filter((a) => a !== undefined && a !== null && a !== -1).length
 })
-const setTotal = computed(() => (currentSet.value ? currentSet.value.questions.length : 0))
+const setTotal = computed(() => {
+  const qs = currentSet.value
+  if (!qs || !qs.questions || !Array.isArray(qs.questions)) return 0
+  return qs.questions.length
+})
 const showQuickBtn = computed(() => setTotal.value > 0)
 const setFinished = computed(() => setAnswered.value >= setTotal.value)
 const quickLabel = computed(() => (setFinished.value ? '查看报告' : setAnswered.value > 0 ? '继续答题' : '开始刷题'))
@@ -158,7 +162,7 @@ const hasTask = computed(() => (ch.value ? ai.hasTaskForChapter(ch.value.id) : f
 // 本章节仍有未做完的题目 → 不允许继续出题（K1 规则；服务端同样有 409 兜底）
 const hasUnfinishedSet = computed(() => {
   const qs = data.getCurrentQuizSet()
-  if (!qs || !qs.questions || qs.questions.length === 0) return false
+  if (!qs || !qs.questions || !Array.isArray(qs.questions) || qs.questions.length === 0) return false
   const unanswered = (qs.userAnswers || [])
     .filter((a) => a === undefined || a === null || a === -1).length
   return unanswered > 0

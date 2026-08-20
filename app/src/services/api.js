@@ -21,6 +21,7 @@ export async function fetchWithAuth(path, options = {}) {
   const fetchOpts = { method: options.method, headers }
   if (options.body) fetchOpts.body = options.body
   if (options.signal) fetchOpts.signal = options.signal
+  if (options.keepalive) fetchOpts.keepalive = true // T10: 页面关闭前尽力推送
   const res = await fetch(API_BASE + path, fetchOpts)
   if (res.status === 401) { clearStoredAuth(); return null }
   return res
@@ -36,10 +37,10 @@ export function netErrorMessage() {
 export function showServerSetupDialog() {
   const bridge = desktopBridge()
   if (!bridge || typeof bridge.setServer !== 'function') return
-  const url = window.prompt('设置服务器地址（如 http://114.55.210.82）', 'http://')
+  const url = window.prompt('设置服务器地址（如 https://your-server.example）', 'https://')
   if (url == null) return
   const trimmed = String(url).trim()
-  if (!/^https?:\/\//.test(trimmed)) { window.alert('请输入完整地址，如 http://114.55.210.82'); return }
+  if (!/^https?:\/\//.test(trimmed)) { window.alert('请输入完整地址，如 https://your-server.example'); return }
   bridge.setServer(trimmed, '服务器')
     .then((r) => { if (r && r.ok !== false) return; window.alert('保存失败: ' + ((r && r.error) || '未知错误')) })
     .catch((e) => window.alert('保存失败: ' + e.message))

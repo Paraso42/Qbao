@@ -108,7 +108,8 @@ export const useAiStore = defineStore('ai', () => {
     if (typeof selfCheck === 'boolean') cfg.selfCheck = selfCheck
     if (typeof useServerQueue === 'boolean') cfg.useServerQueue = useServerQueue
     if (typeof taskInterval === 'number') cfg.taskInterval = taskInterval
-    cfg.streamMode = true
+    // v3.30.1：流式输出暂时停用（见 executeTask 注释）；不再强制开启
+    // cfg.streamMode = true
     data.saveState()
   }
 
@@ -443,32 +444,47 @@ export const useAiStore = defineStore('ai', () => {
   // —— 服务端任务路径 ——
   async function executeServerTask(task, opts) {
     const ac = opts.ac
-    const createData = await createAiServerTask({
-      apiKey: opts.apiKey,
-      provider: opts.provider,
-      model: opts.model,
-      body: {
-        textContent: opts.uploadData.text,
-        typeCounts: opts.typeCounts,
-        prompt: opts.finalPrompt,
-        chapterHistory: opts.chapterHistory,
-        chapterId: task.chapterId,
-        selfCheck: ac.selfCheck === true
-      }
-    })
-    task.serverTaskId = createData.task.id
-    data.saveState()
+    // 修复：刷新恢复的任务已带 serverTaskId → 复用已有服务端任务，
+    // 不再重复创建（此前每次刷新都会新建一个服务端任务，额外占满队列）
+    let serverTaskId = task.serverTaskId
+    if (!serverTaskId) {
+      const createData = await createAiServerTask({
+        apiKey: opts.apiKey,
+        provider: opts.provider,
+        model: opts.model,
+        body: {
+          textContent: opts.uploadData.text,
+          typeCounts: opts.typeCounts,
+          prompt: opts.finalPrompt,
+          chapterHistory: opts.chapterHistory,
+          chapterId: task.chapterId,
+          selfCheck: ac.selfCheck === true
+        }
+      })
+      serverTaskId = createData.task.id
+      task.serverTaskId = serverTaskId
+      data.saveState()
+      // T11: 服务端任务创建后启动自动轮询（本地 runner 中断/刷新后仍能自动续跑并导入结果）
+      startServerTaskPolling()
+    } else {
+      console.log('[ai] 恢复服务端任务 #' + serverTaskId + '（复用，不重复创建）')
+    }
 
     const startedAt = Date.now()
     while (true) {
       // 本地已取消（cancelTask 已把任务标记为 failed）→ 停止轮询，不再空等
       if (task.status !== 'running') return
       await sleep(2000)
-      const serverTask = await getAiServerTask(task.serverTaskId)
+      const serverTask = await getAiServerTask(serverTaskId)
       if (serverTask.status === 'completed') {
         const result = serverTask.result || {}
         const questions = normalizeQuestions(Array.isArray(result.questions) ? result.questions : [])
-        data.createQuizSetForChapter(questions, task.chapterId)
+        // 幂等：若 8s 轮询 reconcile 已导入过，不再重复创建 quizSet（重复 set 会导致
+        // currentQuizSetIdx 越界/答题入口错乱）
+        if (!isServerTaskImported(serverTaskId)) {
+          data.createQuizSetForChapter(questions, task.chapterId)
+          markServerTaskImported(serverTaskId)
+        }
         task.questionCount = questions.length
         finishTask(task, data.state.chapters[task.chapterId])
         return
@@ -503,35 +519,39 @@ export const useAiStore = defineStore('ai', () => {
         return
       }
 
-      let questions = null
-      if (ac.streamMode === true) {
-        questions = await streamGenerate(task, opts)
-        if (!questions || questions.length === 0) {
-          questions = await nonStreamGenerate(task, opts, task.promptText)
-          // 流式 0 题 + 兜底成功：把兜底题目灌入流式预创建的空 set，
-          // 否则 executeTask 会因 streamSetRef 存在而跳过 createQuizSetForChapter，题目全部丢失
-          if (questions && questions.length > 0 && task.streamSetRef &&
-              (!task.streamSetRef.questions || task.streamSetRef.questions.length === 0)) {
-            task.streamSetRef.questions = questions.slice()
-            task.streamSetRef.userAnswers = new Array(questions.length).fill(undefined)
-            task.streamSetRef.currentIdx = 0
-            const ch2 = data.state.chapters[task.chapterId]
-            if (ch2) {
-              if (!ch2.questions) ch2.questions = []
-              questions.forEach((q) => ch2.questions.push(q))
-              if (!ch2.userAnswers) ch2.userAnswers = []
-              ch2.userAnswers = ch2.userAnswers.concat(questions.map(() => undefined))
-            }
-          }
-        }
-      } else {
-        questions = await nonStreamGenerate(task, opts, task.promptText)
-      }
+      // v3.30.1：流式输出暂时停用（保留代码便于将来恢复）。
+      // 原因：AI 二次校准（selfCheck）在流式下无法生效——边生成边刷题没有质量保证，
+      // 用户答题节奏快于生成，二次校准失去价值；一律改为"生成完成 → 校验 → 一次性导入"。
+      // 恢复方式：取消下方注释，并把末尾 createQuizSetForChapter 改回条件调用。
+      // let questions = null
+      // if (ac.streamMode === true) {
+      //   questions = await streamGenerate(task, opts)
+      //   if (!questions || questions.length === 0) {
+      //     questions = await nonStreamGenerate(task, opts, task.promptText)
+      //     if (questions && questions.length > 0 && task.streamSetRef &&
+      //         (!task.streamSetRef.questions || task.streamSetRef.questions.length === 0)) {
+      //       task.streamSetRef.questions = questions.slice()
+      //       task.streamSetRef.userAnswers = new Array(questions.length).fill(undefined)
+      //       task.streamSetRef.currentIdx = 0
+      //       const ch2 = data.state.chapters[task.chapterId]
+      //       if (ch2) {
+      //         if (!ch2.questions) ch2.questions = []
+      //         questions.forEach((q) => ch2.questions.push(q))
+      //         if (!ch2.userAnswers) ch2.userAnswers = []
+      //         ch2.userAnswers = ch2.userAnswers.concat(questions.map(() => undefined))
+      //       }
+      //     }
+      //   }
+      // } else {
+      //   questions = await nonStreamGenerate(task, opts, task.promptText)
+      // }
+      const questions = await nonStreamGenerate(task, opts, task.promptText)
 
       applyStrategyCompliance(task, questions)
-      if (!(ac.streamMode === true && task.streamSetRef)) {
-        data.createQuizSetForChapter(questions, task.chapterId)
-      }
+      // if (!(ac.streamMode === true && task.streamSetRef)) {
+      //   data.createQuizSetForChapter(questions, task.chapterId)
+      // }
+      data.createQuizSetForChapter(questions, task.chapterId)
       task.questionCount = questions.length
       processPoolDiagnostics(task)
       finishTask(task, ch)
@@ -614,6 +634,18 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   // 将服务端任务与本地队列关联（按 serverTaskId），本地运行中任务若已由服务端完成则同步状态
+  // 修复：自动导入后记录 importedServerTaskIds（持久化），列表不再显示可重复导入的任务
+  function markServerTaskImported(id) {
+    if (!id) return
+    if (!data.state.importedServerTaskIds) data.state.importedServerTaskIds = []
+    if (!data.state.importedServerTaskIds.includes(id)) {
+      data.state.importedServerTaskIds.push(id)
+      // 仅保留最近 100 条，防止无限增长
+      if (data.state.importedServerTaskIds.length > 100) {
+        data.state.importedServerTaskIds = data.state.importedServerTaskIds.slice(-100)
+      }
+    }
+  }
   function reconcileServerTasks() {
     const queue = data.state.aiTaskQueue || []
     serverTasks.value.forEach((st) => {
@@ -621,11 +653,15 @@ export const useAiStore = defineStore('ai', () => {
       if (!local) return
       if (st.status === 'completed' && local.status !== 'completed') {
         const questions = normalizeQuestions((st.result && Array.isArray(st.result.questions)) ? st.result.questions : [])
-        if (questions.length > 0) data.createQuizSetForChapter(questions, local.chapterId)
+        // 幂等：并发/重复轮询只导入一次
+        if (questions.length > 0 && !isServerTaskImported(st.id)) {
+          data.createQuizSetForChapter(questions, local.chapterId)
+          markServerTaskImported(st.id)
+        }
         local.status = 'completed'
         local.questionCount = questions.length
         local.completedAt = Date.now()
-        local.serverTaskId = undefined
+        // 保留 serverTaskId：本地任务区过滤 serverTaskId，服务端任务才不落本地列表
         data.saveState()
         ui.toast(local.chapterName + ' 服务端任务完成，已导入 ' + questions.length + ' 题', 'ok')
       } else if (st.status === 'failed' || st.status === 'canceled') {
@@ -636,14 +672,62 @@ export const useAiStore = defineStore('ai', () => {
         }
       }
     })
+    // 已导入/已结束的任务不再占列表（防止重复导入按钮）
+    serverTasks.value = serverTasks.value.filter((st) => {
+      if (st.status === 'completed' && isServerTaskImported(st.id)) return false
+      return true
+    })
+  }
+  function isServerTaskImported(id) {
+    return !!(data.state.importedServerTaskIds && data.state.importedServerTaskIds.includes(id))
+  }
+
+  // —— T11: 服务端任务自动轮询续跑 ——
+  // 修复 P1-5：此前 serverPollTimer 声明未用，刷新后不自动续跑；
+  // 现在只要有 queued/running 服务端任务就自动轮询并 reconcile，
+  // 全部结束（且队列弹窗关闭）后自动停止。
+  const SERVER_POLL_MS = 8000
+
+  function hasActiveServerTasks() {
+    return (serverTasks.value || []).some((st) => st.status === 'queued' || st.status === 'running')
+  }
+
+  async function pollServerTasksOnce() {
+    try {
+      await refreshServerTasks()
+    } catch (e) {
+      console.warn('[ai] server poll tick failed:', e && e.message)
+    }
+    if (!hasActiveServerTasks() && !queueDialogOpen.value) stopServerTaskPolling()
+  }
+
+  function startServerTaskPolling() {
+    if (serverPollTimer.value) return
+    serverPollTimer.value = setInterval(pollServerTasksOnce, SERVER_POLL_MS)
+    if (serverPollTimer.value && typeof serverPollTimer.value.unref === 'function') {
+      serverPollTimer.value.unref()
+    }
+  }
+
+  function stopServerTaskPolling() {
+    if (serverPollTimer.value) clearInterval(serverPollTimer.value)
+    serverPollTimer.value = null
   }
 
   async function importServerTaskResult(serverTask) {
+    if (isServerTaskImported(serverTask.id)) {
+      ui.toast('该任务已导入过，请勿重复导入', 'info')
+      serverTasks.value = serverTasks.value.filter((st) => st.id !== serverTask.id)
+      return null
+    }
     const questions = normalizeQuestions((serverTask.result && Array.isArray(serverTask.result.questions)) ? serverTask.result.questions : [])
     if (questions.length === 0) { ui.toast('该任务没有可导入的题目', 'err'); return }
     if (!data.state.chapters[serverTask.chapterId]) { ui.toast('章节已删除，无法导入', 'err'); return }
     const set = data.createQuizSetForChapter(questions, serverTask.chapterId)
+    markServerTaskImported(serverTask.id)
     data.saveState()
+    // 导入后立即从列表移除，按钮消失
+    serverTasks.value = serverTasks.value.filter((st) => st.id !== serverTask.id)
     ui.toast('已导入 ' + questions.length + ' 题', 'ok')
     return set
   }
@@ -661,9 +745,11 @@ export const useAiStore = defineStore('ai', () => {
   function openQueueDialog() {
     queueDialogOpen.value = true
     refreshServerTasks()
+    startServerTaskPolling()
   }
   function closeQueueDialog() {
     queueDialogOpen.value = false
+    if (!hasActiveServerTasks()) stopServerTaskPolling()
   }
 
   // —— 资料文件添加/删除 ——
@@ -750,7 +836,12 @@ export const useAiStore = defineStore('ai', () => {
     const data2 = await res.json()
     const f = data2.file
     const materials = getChapterMaterials(chapterId)
-    materials.push({ name: f.originalName, size: f.fileSize, addedAt: Date.now(), id: generateMaterialId(), _poolFile: true })
+      // 同一章节重复关联同一池文件 → 幂等提示，不重复添加（多章节关联后更易误点）
+  if (materials.some((m) => m._poolFile && m.name === f.originalName && m.size === f.fileSize)) {
+    ui.toast('该文件已关联本章节', 'info')
+    return
+  }
+  materials.push({ name: f.originalName, size: f.fileSize, addedAt: Date.now(), id: generateMaterialId(), _poolFile: true })
     saveChapterMaterials(chapterId, materials)
     const ch = data.state.chapters[chapterId]
     if (ch) ch._hasNewFilesSinceLastGen = true
@@ -767,6 +858,7 @@ export const useAiStore = defineStore('ai', () => {
     enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter,
     refreshServerTasks, importServerTaskResult, cancelServerTask,
     openQueueDialog, closeQueueDialog,
+    startServerTaskPolling, stopServerTaskPolling, hasActiveServerTasks, isServerTaskImported,
     addMaterialFiles, removeMaterial, assignPoolFileToChapter, reconcilePoolMaterials, getExtIcon,
     formatFileSize
   }

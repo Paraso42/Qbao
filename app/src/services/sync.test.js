@@ -106,4 +106,42 @@ describe('mergeStates', () => {
     expect(m.chapters.c1.questions.map((q) => q.question).sort()).toEqual(['本地已修改旧题', '桌面端新题'])
     expect(m.chapters.c1.userAnswers).toHaveLength(2)
   })
+
+  it('T9 chapterMaterials 章节级并集：多端资料元数据不丢、按 id 去重', () => {
+    const local = {
+      chapterMaterials: {
+        c1: [
+          { id: 'pool_1', name: '本地池文件A.pdf', size: 10, addedAt: 1, _poolFile: true },
+          { id: 'upload_2', name: '本地上传B.docx', size: 20, addedAt: 2 },
+        ],
+      },
+    }
+    const cloud = {
+      chapterMaterials: {
+        c1: [
+          { id: 'pool_1', name: '云端池文件A.pdf', size: 10, addedAt: 1, _poolFile: true },
+          { id: 'pool_9', name: '云端池文件C.pptx', size: 30, addedAt: 3, _poolFile: true },
+        ],
+        c2: [{ id: 'pool_1', name: '同一池文件分配到另一章节', size: 10, addedAt: 1, _poolFile: true }],
+      },
+    }
+    const m = mergeStates(local, cloud).state
+    // c1：云端在前、本地补漏，pool_1 去重保留云端条目
+    expect(m.chapterMaterials.c1.map((x) => x.id)).toEqual(['pool_1', 'pool_9', 'upload_2'])
+    // c2 只有云端
+    expect(m.chapterMaterials.c2.map((x) => x.id)).toEqual(['pool_1'])
+    // 同一 id 出现在不同章节 → 两章都保留（章节内去重，非全局）
+    expect(m.chapterMaterials.c1[0].id).toBe('pool_1')
+    expect(m.chapterMaterials.c2[0].id).toBe('pool_1')
+  })
+
+  it('T9 本地独有的章节资料在合并后保留（云端无 chapterMaterials 时）', () => {
+    const local = {
+      chapterMaterials: { c1: [{ id: 'upload_7', name: '本地独有.txt', size: 5, addedAt: 4 }] },
+    }
+    const cloud = { chapters: {} }
+    const m = mergeStates(local, cloud).state
+    expect(m.chapterMaterials.c1).toHaveLength(1)
+    expect(m.chapterMaterials.c1[0].id).toBe('upload_7')
+  })
 })

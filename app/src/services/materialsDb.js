@@ -3,16 +3,23 @@ const MATERIALS_DB_NAME = 'qbao_materials_db'
 const MATERIALS_DB_VERSION = 1
 const MATERIALS_STORE = 'materials'
 
+// T12: 复用同一个 IndexedDB 连接（原实现每次操作都重开连接，开销大且版本升级期易竞态）
+let _dbPromise = null
+
 function _openMaterialsDb() {
-  return new Promise(function (resolve, reject) {
+  if (_dbPromise) return _dbPromise
+  _dbPromise = new Promise(function (resolve, reject) {
     var req = indexedDB.open(MATERIALS_DB_NAME, MATERIALS_DB_VERSION)
     req.onupgradeneeded = function () {
       var db = req.result
       if (!db.objectStoreNames.contains(MATERIALS_STORE)) db.createObjectStore(MATERIALS_STORE, { keyPath: 'id' })
     }
     req.onsuccess = function () { resolve(req.result) }
-    req.onerror = function () { reject(req.error) }
+    req.onerror = function () { _dbPromise = null; reject(req.error) }
+    req.onblocked = function () { reject(new Error('IndexedDB 升级被其他页面阻塞')) }
   })
+  _dbPromise.catch(function () { _dbPromise = null }) // 打开失败后可重试
+  return _dbPromise
 }
 
 export async function idbStoreMaterial(materialId, dataUrl) {
