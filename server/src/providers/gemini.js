@@ -64,7 +64,7 @@ async function chatCompletions(apiKey, model, messages, options) {
   try {
     var res = await fetch(BASE_URL + '/models/' + m + ':generateContent?key=' + key, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Connection': 'close' },
       body: JSON.stringify(body),
       signal: controller.signal
     });
@@ -120,12 +120,13 @@ async function chatCompletions(apiKey, model, messages, options) {
 }
 
 async function streamChatCompletions(apiKey, model, messages, options, onEvent, signal) {
-  var key = apiKey || process.env.GEMINI_API_KEY || '';
-  var m = model || 'gemini-2.5-flash';
+  const { forEachSseData } = require('./sse');
+  const key = apiKey || process.env.GEMINI_API_KEY || '';
+  const m = model || 'gemini-2.5-flash';
 
-  var converted = convertMessages(messages);
+  const converted = convertMessages(messages);
 
-  var body = {
+  const body = {
     contents: converted.contents,
     generationConfig: {
       temperature: options.temperature || 0.7,
@@ -138,62 +139,78 @@ async function streamChatCompletions(apiKey, model, messages, options, onEvent, 
     body.systemInstruction = converted.systemInstruction;
   }
 
-  var start = Date.now();
+  // T7: 统一超时 + 外部取消 — 超时/取消均通过 AbortController 中止 fetch
+  const controller = new AbortController();
+  const timeoutMs = options.timeout_ms || 300000;
+  const timeout = setTimeout(function () { controller.abort(); }, timeoutMs);
+  const abortFromCaller = function () { controller.abort(); };
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', abortFromCaller, { once: true });
+  }
+
+  const start = Date.now();
   console.log('[gemini] streaming to', BASE_URL + '/models/' + m + ':streamGenerateContent',
     'model=' + m);
 
-  var res = await fetch(BASE_URL + '/models/' + m + ':streamGenerateContent?alt=sse&key=' + key, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal
-  });
+  try {
+    const res = await fetch(BASE_URL + '/models/' + m + ':streamGenerateContent?alt=sse&key=' + key, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Connection': 'close' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
 
-  console.log('[gemini] stream response status=' + res.status);
-  if (!res.ok) {
-    var errText = await res.text();
-    throw new Error(res.status + ' ' + errText.substring(0, 200));
-  }
+    console.log('[gemini] stream response status=' + res.status);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(res.status + ' ' + errText.substring(0, 200));
+    }
 
-  var fullContent = '';
-  var deltaCount = 0;
-  var decoder = new TextDecoder();
-  var reader = res.body.getReader();
+    let fullContent = '';
+    let deltaCount = 0;
 
-  while (true) {
-    var r = await reader.read();
-    if (r.done) break;
-    var chunk = decoder.decode(r.value, { stream: true });
-    var lines = chunk.split('\n');
-    for (var j = 0; j < lines.length; j++) {
-      var line = lines[j];
-      if (!line.startsWith('data: ')) continue;
-      var data = line.slice(6);
-      if (data === '[DONE]') continue;
+    // T7: 统一 SSE 解析（sse.js 跨 chunk 缓冲，兼容 "data:" 与 "data: " 两种格式）
+    await forEachSseData(res, function (data) {
+      let parsed;
       try {
-        var parsed = JSON.parse(data);
-        // Gemini format: candidates[0].content.parts[0].text
-        var candidate = parsed.candidates && parsed.candidates[0];
-        if (candidate && candidate.content && candidate.content.parts) {
-          var text = '';
-          for (var k = 0; k < candidate.content.parts.length; k++) {
-            if (candidate.content.parts[k].text) text += candidate.content.parts[k].text;
-          }
-          if (text) {
-            fullContent += text;
-            deltaCount++;
-            if (onEvent) {
-              onEvent({ type: 'delta', content: text, full: fullContent, deltaCount: deltaCount });
-            }
+        parsed = JSON.parse(data);
+      } catch (e) { return; }
+      // Gemini format: candidates[0].content.parts[0].text
+      const candidate = parsed.candidates && parsed.candidates[0];
+      if (candidate && candidate.content && candidate.content.parts) {
+        let text = '';
+        for (let k = 0; k < candidate.content.parts.length; k++) {
+          if (candidate.content.parts[k].text) text += candidate.content.parts[k].text;
+        }
+        if (text) {
+          fullContent += text;
+          deltaCount++;
+          if (onEvent) {
+            onEvent({ type: 'delta', content: text, full: fullContent, deltaCount });
           }
         }
-      } catch (e) { /* skip */ }
-    }
-  }
+      }
+    });
 
-  var elapsed = Date.now() - start;
-  console.log('[gemini] stream done, totalMs=' + elapsed + ', contentLen=' + fullContent.length);
-  return { content: fullContent, elapsed: elapsed };
+    const elapsed = Date.now() - start;
+    console.log('[gemini] stream done, totalMs=' + elapsed + ', contentLen=' + fullContent.length);
+    return { content: fullContent, elapsed };
+  } catch (e) {
+    clearTimeout(timeout);
+    if (signal) signal.removeEventListener('abort', abortFromCaller);
+    const ms = Date.now() - start;
+    if (e.name === 'AbortError') {
+      if (signal && signal.aborted) {
+        console.log('[gemini] stream aborted by caller after ' + ms + 'ms');
+        throw new Error('已取消');
+      }
+      console.log('[gemini] stream TIMEOUT after ' + ms + 'ms');
+      throw new Error('AI响应超时（超过5分钟），可能是内容过长或网络慢。请减少资料后重试。');
+    }
+    console.log('[gemini] stream error after ' + ms + 'ms - ' + e.message);
+    throw e;
+  }
 }
 
 function supportsJsonSchema(_model) {

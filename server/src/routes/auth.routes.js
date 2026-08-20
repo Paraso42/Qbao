@@ -21,8 +21,10 @@ module.exports = function (app) {
   // POST /api/v1/auth/register
   app.post('/api/v1/auth/register', validate({ body: registerSchema }), asyncHandler(async (req, res) => {
     const { username, password, displayName } = req.body;
+    // T3 整改：仅当库中无管理员且用户名在 ADMIN_USERNAMES 环境变量中时才授予 admin；
+    // 杜绝「首个注册用户自动成为管理员」的提权风险（公网可达时尤甚）。
     const adminResult = await pool.query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1");
-      const role = adminResult.rows.length === 0 ? 'admin' : 'user';
+    const role = (adminResult.rows.length === 0 && isAdminUsername(username)) ? 'admin' : 'user';
     const hash = await hashPassword(password);
     const name = (displayName || username).trim();
     let result;

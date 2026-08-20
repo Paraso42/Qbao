@@ -5,7 +5,10 @@ const jwt = require('jsonwebtoken');
 const SALT_ROUNDS = 10;
 const JWT_EXPIRES = '30d';
 
-const ADMIN_USERNAMES = (process.env.ADMIN_USERNAMES || '').split(',').map(s => s.trim()).filter(Boolean);
+// T3 整改：ADMIN_USERNAMES 惰性读取（每次调用读 env，便于运维热改与测试动态设置）
+function getAdminUsernames() {
+  return (process.env.ADMIN_USERNAMES || '').split(',').map(s => s.trim()).filter(Boolean);
+}
 
 async function hashPassword(plain) {
   return bcrypt.hash(plain, SALT_ROUNDS);
@@ -16,7 +19,7 @@ async function comparePassword(plain, hash) {
 }
 
 function isAdminUsername(username) {
-  return ADMIN_USERNAMES.includes(username);
+  return getAdminUsernames().includes(username);
 }
 
 function signToken(userId, role) {

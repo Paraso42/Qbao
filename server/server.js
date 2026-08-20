@@ -1,6 +1,8 @@
 'use strict';
 
 // 进程入口：加载环境变量、组装应用、监听端口。
+// 服务器无 IPv6 出网时，Node fetch（AI Provider 请求）默认 IPv6 优先会黑洞超时 → 强制 IPv4 优先。
+require('dns').setDefaultResultOrder('ipv4first');
 require('dotenv').config({ path: __dirname + '/.env' });
 
 // 启动即校验 JWT 密钥，避免使用示例值导致全员可伪造 token。

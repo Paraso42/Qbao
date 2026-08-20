@@ -21,6 +21,9 @@ const {
   updateQuizSchema,
 } = require('../schemas/chat.schema');
 
+const { CHAT_ALLOWED_EXTS, IMAGE_ALLOWED_EXTS } = require('../config/files');
+const { isTrustedUpload } = require('../lib/fileSniff');
+
 const chatUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'chat');
 if (!fs.existsSync(chatUploadDir)) fs.mkdirSync(chatUploadDir, { recursive: true });
 
@@ -36,7 +39,40 @@ const chatUpload = multer({
     },
   }),
   limits: { fileSize: 50 * 1024 * 1024 },
+  // T2 整改：扩展名白名单 + 图片/pdf magic bytes 校验，杜绝改后缀的
+  // HTML/SVG 以同源静态方式被浏览器执行（存储型 XSS）。
+  fileFilter: function (req, file, cb) {
+    let origName = file.originalname || '';
+    try { origName = Buffer.from(origName, 'latin1').toString('utf8'); } catch (_) {}
+    const ext = path.extname(origName || '').toLowerCase();
+    if (!CHAT_ALLOWED_EXTS.includes(ext)) {
+      const error = new Error('不支持的文件类型' + (ext ? '：' + ext : '') + '；仅支持图片/PDF/Office/文本/zip');
+      error.status = 422;
+      return cb(error);
+    }
+    cb(null, true);
+  },
 });
+
+// 在落盘后二次校验真实内容（multer fileFilter 阶段读不到完整文件，
+// 这里在 handler 内对已落盘文件做 magic bytes 校验；不匹配则删除并 422）。
+async function validateUploadedFile(file) {
+  if (!file || !file.path || !fs.existsSync(file.path)) return null;
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (IMAGE_ALLOWED_EXTS.includes(ext) || ext === '.pdf') {
+    const fd = fs.openSync(file.path, 'r');
+    const buf = Buffer.alloc(16);
+    fs.readSync(fd, buf, 0, 16, 0);
+    fs.closeSync(fd);
+    if (!isTrustedUpload(buf, ext)) {
+      try { fs.unlinkSync(file.path); } catch (_) {}
+      const error = new Error('文件内容与扩展名不符，已拒绝上传');
+      error.status = 422;
+      throw error;
+    }
+  }
+  return file;
+}
 
 module.exports = function (app) {
   // 文件下载/预览。路径做 basename 校验，防止穿越。
@@ -48,6 +84,12 @@ module.exports = function (app) {
     const filePath = path.join(chatUploadDir, filename);
     if (!fs.existsSync(filePath)) throw new ApiError(404, '文件不存在或已删除');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    // T2：非图片类型一律作为附件下载（防 .html/.svg 等被浏览器内联渲染）
+    const ext = path.extname(filename).toLowerCase();
+    if (!IMAGE_ALLOWED_EXTS.includes(ext)) {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment; filename="' + filename.replace(/"/g, '') + '"');
+    }
     res.sendFile(filePath);
   }));
 
@@ -459,6 +501,8 @@ module.exports = function (app) {
 
   app.post('/api/v1/chat/upload', requireAuth, chatUpload.single('file'), asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(422, '请选择文件');
+    // T2：magic bytes 二次校验（fileFilter 只拦扩展名，此处验真实内容）
+    await validateUploadedFile(req.file);
     res.json({
       url: '/api/v1/chat/files/' + req.file.filename,
       name: req.file.originalname,

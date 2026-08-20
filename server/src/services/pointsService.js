@@ -177,30 +177,49 @@ async function awardDailyLoginIfNewDay(db, userId) {
 // 答题结算（在 status=completed 写入会话后调用）：
 // 按 answer_sessions.points_awarded_stats 的 correct 增量发分；每日上限截断；
 // 快照始终推进到当前 correct（当日超限部分不再补发）。
+// T5 整改：真实 pool（带 connect）→ 启用行级锁事务，杜绝并发 completed 请求
+// 读到同一旧快照重复发分；fake db（测试）无 connect → 走直连原逻辑，保持单元可测。
 async function awardQuizCompletion(db, userId, chapterId, stats) {
-  if (!stats || typeof stats !== 'object') return { awarded: false };
+  if (!stats || typeof stats !== 'object') return { awarded: false, points: 0 };
   const correct = Math.max(0, parseInt(stats.objCorrect != null ? stats.objCorrect : stats.correct) || 0);
-  if (correct <= 0) return { awarded: false };
-  const snapQ = await db.query(
-    'SELECT points_awarded_stats FROM answer_sessions WHERE user_id = $1 AND chapter_id = $2',
-    [userId, chapterId]
-  );
-  if (snapQ.rows.length === 0) return { awarded: false };
-  const prev = snapQ.rows[0].points_awarded_stats;
-  const prevCorrect = parseInt((prev && prev.correct) || 0);
-  const delta = correct - prevCorrect;
-  if (delta <= 0) return { awarded: false };
-  const used = await sumSince(db, userId, 'quiz_answer', localStartOfDay());
-  const quota = Math.max(0, P.QUIZ_DAILY_CAP - used);
-  const pts = Math.min(delta * P.QUIZ_CORRECT_POINTS, quota);
-  const result = pts > 0
-    ? await awardPoints(db, userId, pts, { reason: 'quiz_answer', note: '答题奖励（客观题正确）' })
-    : { awarded: false };
-  await db.query(
-    'UPDATE answer_sessions SET points_awarded_stats = $3::jsonb WHERE user_id = $1 AND chapter_id = $2',
-    [userId, chapterId, JSON.stringify({ correct, awardedPoints: pts, awardedAt: new Date().toISOString() })]
-  );
-  return { awarded: result.awarded, points: pts, balance: result.balance };
+  if (correct <= 0) return { awarded: false, points: 0 };
+  const client = typeof db.connect === 'function' ? await db.connect() : null;
+  const q = client || db;
+  try {
+    if (client) await q.query('BEGIN');
+    const snapQ = await q.query(
+      'SELECT points_awarded_stats FROM answer_sessions WHERE user_id = $1 AND chapter_id = $2 FOR UPDATE',
+      [userId, chapterId]
+    );
+    if (snapQ.rows.length === 0) {
+      if (client) await q.query('COMMIT');
+      return { awarded: false, points: 0 };
+    }
+    const prev = snapQ.rows[0].points_awarded_stats;
+    const prevCorrect = parseInt((prev && prev.correct) || 0);
+    const delta = correct - prevCorrect;
+    if (delta <= 0) {
+      if (client) await q.query('COMMIT');
+      return { awarded: false, points: 0 };
+    }
+    const used = await sumSince(q, userId, 'quiz_answer', localStartOfDay());
+    const quota = Math.max(0, P.QUIZ_DAILY_CAP - used);
+    const pts = Math.min(delta * P.QUIZ_CORRECT_POINTS, quota);
+    const result = pts > 0
+      ? await awardPoints(q, userId, pts, { reason: 'quiz_answer', note: '答题奖励（客观题正确）' })
+      : { awarded: false };
+    await q.query(
+      'UPDATE answer_sessions SET points_awarded_stats = $3::jsonb WHERE user_id = $1 AND chapter_id = $2',
+      [userId, chapterId, JSON.stringify({ correct, awardedPoints: pts, awardedAt: new Date().toISOString() })]
+    );
+    if (client) await q.query('COMMIT');
+    return { awarded: result.awarded, points: pts, balance: result.balance };
+  } catch (e) {
+    if (client) await q.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    if (client) client.release();
+  }
 }
 
 // 分享下载奖励：每次 +2，单库封顶；幂等键 = 第 N 次下载（去重回放）
@@ -361,32 +380,43 @@ async function runExpiryCheck(now = new Date()) {
 }
 
 // 每日低峰对账：storage_points = SUM(ledger.delta)（台账为准，修正余额漂移）
+// T5 整改：keyset 游标分页循环，修复只扫前 500 用户的问题（大用户量下全量对账）。
 async function reconcileAll(batchSize = 500) {
-  const users = await pool.query(
-    'SELECT id, storage_points FROM users WHERE storage_points <> 0 OR id IN (SELECT DISTINCT user_id FROM points_ledger) LIMIT $1',
-    [batchSize]
-  );
+  const safeBatch = Math.max(1, Math.min(5000, parseInt(batchSize) || 500));
+  let lastId = 0;
+  let scanned = 0;
   let fixed = 0;
-  for (const u of users.rows) {
-    const r = await pool.query(
-      'SELECT COALESCE(SUM(delta), 0)::int AS s FROM points_ledger WHERE user_id = $1',
-      [u.id]
+  for (;;) {
+    const users = await pool.query(
+      'SELECT id, storage_points FROM users WHERE id > $1 AND (storage_points <> 0 OR id IN (SELECT DISTINCT user_id FROM points_ledger)) ORDER BY id LIMIT $2',
+      [lastId, safeBatch]
     );
-    const sum = parseInt(r.rows[0].s) || 0;
-    const cur = parseInt(u.storage_points) || 0;
-    if (sum !== cur) {
-      await pool.query('UPDATE users SET storage_points = $1 WHERE id = $2', [sum, u.id]);
-      fixed++;
-      console.log('[points] reconcile user=' + u.id + ' ' + cur + ' -> ' + sum);
+    if (users.rows.length === 0) break;
+    for (const u of users.rows) {
+      const r = await pool.query(
+        'SELECT COALESCE(SUM(delta), 0)::int AS s FROM points_ledger WHERE user_id = $1',
+        [u.id]
+      );
+      const sum = parseInt(r.rows[0].s) || 0;
+      const cur = parseInt(u.storage_points) || 0;
+      if (sum !== cur) {
+        await pool.query('UPDATE users SET storage_points = $1 WHERE id = $2', [sum, u.id]);
+        fixed++;
+        console.log('[points] reconcile user=' + u.id + ' ' + cur + ' -> ' + sum);
+      }
     }
+    scanned += users.rows.length;
+    lastId = users.rows[users.rows.length - 1].id;
+    if (users.rows.length < safeBatch) break;
   }
-  return { scanned: users.rows.length, fixed };
+  return { scanned, fixed };
 }
 
 const EXPIRY_TICK_MS = 60 * 60 * 1000;
 let expiryTimer = null;
 
 // 进程内定时器：每小时检查清零日；每日 03:00 附近执行对账。
+// T8: unref — 不阻止进程退出/优雅停机（HTTP server 本身维持事件循环）。
 function startExpiryJob() {
   if (expiryTimer) return expiryTimer;
   expiryTimer = setInterval(() => {
@@ -396,8 +426,15 @@ function startExpiryJob() {
       reconcileAll().catch((e) => console.error('[points] reconcile failed:', e.message));
     }
   }, EXPIRY_TICK_MS);
+  if (typeof expiryTimer.unref === 'function') expiryTimer.unref();
   runExpiryCheck().catch((e) => console.error('[points] expiry check failed:', e.message));
   return expiryTimer;
+}
+
+// T8: 显式停止（测试/优雅停机用）
+function stopExpiryJob() {
+  if (expiryTimer) clearInterval(expiryTimer);
+  expiryTimer = null;
 }
 
 module.exports = {
@@ -409,5 +446,5 @@ module.exports = {
   // 消耗/配额
   checkAndChargeAiQuota, getQuotaStatus,
   // 生命周期
-  runExpiryCheck, reconcileAll, startExpiryJob,
+  runExpiryCheck, reconcileAll, startExpiryJob, stopExpiryJob,
 };

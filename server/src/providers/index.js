@@ -42,42 +42,6 @@ const OPENAI_COMPATIBLE_PROVIDERS = {
   }),
 };
 
-const PROVIDERS = {
-  ecnu: {
-    id: 'ecnu',
-    name: 'ECNU (华师大)',
-    models: [
-      { id: 'ecnu-plus', name: 'ecnu-plus', streaming: true, jsonSchema: true },
-      { id: 'ecnu-max', name: 'ecnu-max', streaming: true, jsonSchema: true }
-    ]
-  },
-  deepseek: {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    models: [
-      { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', streaming: true, jsonSchema: false },
-      { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', streaming: true, jsonSchema: false }
-    ]
-  },
-  openai: {
-    id: 'openai',
-    name: 'OpenAI ChatGPT',
-    models: [
-      { id: 'gpt-4o', name: 'gpt-4o', streaming: true, jsonSchema: true },
-      { id: 'gpt-4o-mini', name: 'gpt-4o-mini', streaming: true, jsonSchema: true },
-      { id: 'gpt-4.1', name: 'gpt-4.1', streaming: true, jsonSchema: true }
-    ]
-  },
-  gemini: {
-    id: 'gemini',
-    name: 'Google Gemini',
-    models: [
-      { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash', streaming: true, jsonSchema: false },
-      { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro', streaming: true, jsonSchema: false }
-    ]
-  }
-};
-
 function getProvider(name) {
   if (!name) return OPENAI_COMPATIBLE_PROVIDERS.ecnu;
   const id = name.toLowerCase();
@@ -114,4 +78,4 @@ function getModelConfig(providerName, modelId) {
   return getModelCatalogEntry(providerName, modelId);
 }
 
-module.exports = { getProvider, getProviderByModel, getProviderConfig, getAllProviders, getModelConfig, resolveProvider, PROVIDERS };
+module.exports = { getProvider, getProviderByModel, getProviderConfig, getAllProviders, getModelConfig, resolveProvider };

@@ -6,7 +6,8 @@ const { pool } = require('./db');
 const tokenBlacklist = new Map();
 
 // 每 10 分钟清理过期黑名单条目
-setInterval(() => {
+// T8: unref — 不阻止进程退出/优雅停机（HTTP server 本身维持事件循环）
+const blacklistCleanupTimer = setInterval(() => {
   const now = Date.now();
   let cleaned = 0;
   for (const [id, expireAt] of tokenBlacklist) {
@@ -14,6 +15,7 @@ setInterval(() => {
   }
   if (cleaned > 0) console.log('tokenBlacklist cleanup: removed ' + cleaned + ' expired tokens');
 }, 10 * 60 * 1000);
+if (typeof blacklistCleanupTimer.unref === 'function') blacklistCleanupTimer.unref();
 
 // 封禁缓存：userId -> { banned: boolean, expires: timestamp }
 // 5 分钟 TTL，避免每个请求查数据库
@@ -72,24 +74,16 @@ async function requireAuth(req, res, next) {
 
   req.userId = decoded.sub;
   req.userRole = decoded.role || 'user';
-    if (req.userRole !== 'admin') {
-      const banned = await isUserBanned(req.userId);
-      if (banned) return res.status(403).json({ error: '账号已被封禁' });
-      updateLastActive(req.userId);
-      next();
-      return;
-    }
-
-  // 管理员豁免封禁检查
   if (req.userRole !== 'admin') {
-    isUserBanned(req.userId).then(banned => {
-      if (banned && !res.headersSent) {
-        res.status(403).json({ error: '账号已被封禁' });
-      }
-    });
+    // 非管理员：封禁检查 + 活跃时间更新（管理员豁免封禁）
+    const banned = await isUserBanned(req.userId);
+    if (banned) return res.status(403).json({ error: '账号已被封禁' });
+    updateLastActive(req.userId);
+    next();
+    return;
   }
 
-  // 异步更新活跃时间
+  // 管理员：豁免封禁检查，仅异步更新活跃时间
   updateLastActive(req.userId);
 
   next();
