@@ -1,0 +1,10 @@
+title = "Qbao gitleaks 配置"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+description = "服务端测试专用假密钥（sk-test-key-* / test-secret-*），真实密钥不豁免"
+regexes = ["sk-test-key-[a-zA-Z0-9]+", "test-secret-[a-zA-Z0-9]+"]
