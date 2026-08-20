@@ -24,7 +24,8 @@ Qbao/
 ├── server/         # Node.js 后端
 │   ├── src/        # routes/ providers/ 中间件
 │   ├── sql/        # 数据库迁移
-│   ├── scripts/    # 诊断脚本
+│   ├── scripts/    # 诊断/迁移/引导脚本（run_migration.js、bootstrap_admin.js）
+│   ├── deploy/     # systemd 单元 + prepare_dirs.sh + 部署说明
 │   └── init.sql    # 建库脚本
 ├── docs/           # 架构/部署/开发文档（公开）
 ├── tools/          # 一次性维护脚本（默认不上传，见 tools/README）
@@ -73,9 +74,17 @@ node server/scripts/diagnose_api.js <api_key> [model] [jwt_token]
 
 ## 6. 测试与 CI
 
-- 当前无自动化测试；GitHub Actions 仅做语法检查与依赖安装（`.github/workflows/ci.yml`）。
-- 补测试的方向见 docs/ARCHITECTURE.md §5-11。
+- **后端**：`cd server && npx vitest run --pool=forks --poolOptions.forks.maxForks=2`（29 文件 / 140+ 用例；forks+maxForks=2 为稳定性参数，CI 已固定）。fake pool 不依赖真实数据库。
+- **前端**：`cd app && npx vitest run`（服务层单测，7 文件 31 用例）。
+- **构建**：`cd app && npm run build`（Vite singlefile → dist/index.html，含 CSP；CI 冒烟校验）。
+- **CI**（`.github/workflows/ci.yml`）：gitleaks 密钥扫描 → 后端语法+测试 → 前端构建冒烟+单测 → 双方 npm audit（高危告警不阻断）。
+- 新增/修改逻辑时按模块补测试：routes 用 supertest + installFakePool；纯函数直接单测。
 
 ## 7. 数据库变更
+
+- 新增迁移文件放 `server/sql/`，命名 `NNN_描述.sql`（序号递增），SQL 保持幂等（IF NOT EXISTS）。
+- 本地执行：`cd server && node scripts/run_migration.js`（自动应用未执行项并记入 schema_migrations）。
+- 查看待执行：`node scripts/run_migration.js --list`；旧库手工迁移过：先 `node scripts/run_migration.js --mark-applied`。
+
 
 新表/字段变更：在 `server/sql/` 新增 `migration_vX.Y.sql`（幂等写法：`ALTER TABLE ... IF NOT EXISTS` 或先判断），新装环境按文件名顺序执行即可。

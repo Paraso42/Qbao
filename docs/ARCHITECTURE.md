@@ -47,26 +47,26 @@ server/  Node.js + Express API（端口 3000）
 
 ## 3. 后端（server/）
 
-- **框架**：Express 4 + pg 连接池；12 个路由模块、约 60 个端点（见 routes/ 下 auth/data/backup/ai/share/notices/users/quiz/files/issues/chat）。
+- **框架**：Express 4 + pg 连接池；13 个路由模块（auth/data/backup/ai/aiTasks/share/notices/users/points/quiz/files/issues/chat，v1 死代码已删，T14）。
 - **鉴权**：JWT（30 天）+ bcrypt 密码哈希；`requireAuth` / `requireAdmin` 中间件；`express-rate-limit` 全局与登录限流。
-- **AI 层**：`providers/` 每供应商一个适配器（ecnu / deepseek / openai / gemini），统一「流式 / 严格 JSON」两轴能力开关；用户自配 API Key，经请求头 `x-ai-api-key` 传入后端。
+- **AI 层**：`providers/` 统一实现（openaiCompatible 工厂覆盖 ecnu/deepseek/openai + 独立 gemini 适配器，T14 删除死 provider），能力目录在 `providers/catalog.js`；用户自配 API Key，经请求头 `x-ai-api-key` 传入后端；**成功才计费**（T6）。
 - **数据**：核心业务数据整包存 `user_data.state_json JSONB`，`GET/PUT /api/v1/data` 全量读写；答题会话、聊天、反馈、公告、文件、分享各有独立表。
-- **上传**：multer 多实例。共享文件池/聊天图片/头像落在仓库根 `uploads/`，AI 临时文件落在 `server/uploads/`（不一致，见 §5-6）。
+- **上传**：multer 多实例；所有上传统一落在仓库根 `uploads/`（chat/issues/pool/avatars 四目录，T16 收敛）；上传类型白名单 + 魔数嗅探 + 下载附件头（T2）。
 
 ## 4. 数据模型要点
 
-`users`（账号）、`user_data`（整包业务状态 JSONB）、`backups`（用户备份）、`shared_banks`（题库分享）、`ai_request_log`（AI 调用审计）、`answer_sessions`（按章节答题会话）、`user_files`（资料文件池）、`issues / issue_messages`（反馈工单）等；建表脚本 `server/init.sql` + `server/sql/migration_v*.sql`。
+`users`（账号）、`user_data`（整包业务状态 JSONB）、`backups`（用户备份）、`shared_banks`（题库分享）、`ai_request_log`（AI 调用审计）、`answer_sessions`（按章节答题会话）、`user_files`（资料文件池）、`issues / issue_messages`（反馈工单）、`points_ledger`（积分台账）等；建表脚本 `server/init.sql` + 版本化迁移 `server/sql/NNN_*.sql`（T17：schema_migrations 追踪，`node scripts/run_migration.js` 执行）。
 
 ## 5. 已知技术债与重构方向（初步判断）
 
 ### P0 — 安全与正确性（优先）
 
-1. **CORS 全开**：`cors({ origin: true })` 反射任意 Origin。同源部署场景应改为白名单或直接关闭。
-2. **上传安全**：有大小上限但缺 MIME 白名单与图片重编码（防伪造类型/恶意内容）。
+1. **CORS 全开**：~~`cors({ origin: true })` 反射任意 Origin~~ **（已落地白名单）**。
+2. **上传安全**：~~缺 MIME 白名单~~ **（T2 已完成：扩展名白名单 + 魔数嗅探 + 下载附件头 + 移除 /uploads 静态映射）**。
 3. **全量同步冲突**：~~`user_data` 单行 JSONB 全量覆盖是 last-write-wins~~ **（v3.25 已加 rev 乐观锁 + 409 冲突实体级合并，见 js/sync.js）**。遗留：合并粒度仍为实体级并集（同 id 本地优先），按字段时间戳的精确裁决、以及按实体拆表，留待后续。同步放大写问题仍在（每次全量 PUT）。
 4. **统一错误处理**：~~路由内大量手工 try/catch~~ **（v3.26 已完成核心部分：`src/lib/` ApiError + errorHandler + asyncHandler，全局兜底 404/400/413/500，auth/data/quiz 已迁移）**。其余路由（ai/share/files/issues/chat/users/backup/notices）仍为手工 try/catch，逐步迁移。
 5. **请求校验缺失**：~~大部分端点直接信任入参~~ **（v3.26 已引入 zod：`src/lib/validate.js` + `src/schemas/`，auth/data/quiz 已接入）**。其余路由待接入。
-6. **上传目录不一致**：统一 `server/uploads/`（或独立数据卷），static 服务与 multer 指向同一处。
+6. **上传目录不一致**：~~统一 server/uploads/~~ **（T16 已完成：全部收敛到仓库根 `uploads/`，部署侧 `server/deploy/prepare_dirs.sh` 初始化属主）**。
 
 ### P1 — 可维护性
 
@@ -83,7 +83,7 @@ server/  Node.js + Express API（端口 3000）
 14. **容器化**：Docker Compose（nginx + server + postgres）一键部署。
 15. **CI/CD**：CI 现有语法检查，逐步加测试、构建产物、自动部署。
 16. **可观测性**：结构化日志（pino）、错误上报（Sentry/自建）、健康与指标端点。
-17. **迁移工具化**：node-pg-migrate / drizzle 替代手写 SQL 人工执行。
+17. **迁移工具化**：~~手写 SQL 人工执行~~ **（T17 已完成：`schema_migrations` 版本化 + `node scripts/run_migration.js` 自动应用未执行项）**。
 18. **发布流程**：CHANGELOG + git tag + GitHub Release，自动打包 app/ 静态资源。
 
 ## 5.5 积分系统（v3.29）
@@ -92,9 +92,11 @@ server/  Node.js + Express API（端口 3000）
 - 规则集中在 `server/src/config/points.js`（注册/每日登录/答题/成就/分享奖励；文件续期与 AI 超额消耗）。
 - 服务：`server/src/services/pointsService.js`；API：`GET /points/{ledger,balance,rules,quota}`、`POST /points/claims`，管理员 `/users/:id/points/{ledger,adjust}`。
 - 生命周期：每年 2/1、8/1 学期清零（进程定时器 + advisory lock，幂等记账）；每日 03:00 余额对账（台账为准）。
-- 防滥用：AI 任务每用户排队 ≤3、AI 每日免费额度 + 积分超额、答题每日上限 30、一次性事件唯一约束。
+- 防滥用：AI 任务每用户排队 ≤3、AI 每日免费额度 + 积分超额（**成功才扣费**，T6）、答题每日上限 30、一次性事件唯一约束。
+- 并发正确性（T5）：答题结算走行级锁事务（FOR UPDATE + 幂等快照）；余额对账 keyset 游标全量分页。
 
 ## 6. 迁移与兼容性注意
 
 - 2026-07 目录重组（`backend→server`、前端→`app/`）后，**生产部署路径需同步更新**（见 DEPLOY.md）；代码内部相对路径逻辑未变。
 - 2026-07 已重写 Git 历史（清除服务器地址等敏感信息）：**其他机器上的克隆必须删除后重新克隆**，不可 `git pull`。
+- 2026-08 整改的行为调整：① 无 rev 的 PUT /data 仅在服务器无数据时允许（旧客户端需升级，T13）；② AI 计费改为成功时扣取（T6）；③ 管理员引导改 `ADMIN_USERNAMES` 环境变量（T3）。
