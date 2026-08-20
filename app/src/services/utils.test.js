@@ -40,10 +40,10 @@ describe('resolveMediaUrl', () => {
   })
 
   it('桌面版：API_BASE 为绝对 URL 时取其 origin', async () => {
-    globalThis.window = { __QBAO_RUNTIME__: { apiBase: 'http://114.55.210.82:9178/api/v1', isDesktop: true } }
+    globalThis.window = { __QBAO_RUNTIME__: { apiBase: 'https://api.example.com/api/v1', isDesktop: true } }
     const resolveMediaUrl = await freshResolve()
-    expect(resolveMediaUrl('avatars/2.jpg')).toBe('http://114.55.210.82:9178/avatars/2.jpg')
-    expect(resolveMediaUrl('/uploads/avatars/2.jpg')).toBe('http://114.55.210.82:9178/uploads/avatars/2.jpg')
+    expect(resolveMediaUrl('avatars/2.jpg')).toBe('https://api.example.com/avatars/2.jpg')
+    expect(resolveMediaUrl('/uploads/avatars/2.jpg')).toBe('https://api.example.com/uploads/avatars/2.jpg')
   })
 
   it('空值/未知相对路径兜底', async () => {
@@ -51,6 +51,24 @@ describe('resolveMediaUrl', () => {
     expect(resolveMediaUrl('')).toBe('')
     expect(resolveMediaUrl(null)).toBe('')
     expect(resolveMediaUrl('other/path')).toBe('other/path')
+  })
+
+  it('T4 伪协议防护：javascript:/vbscript:/data:text/html 均返回空串', async () => {
+    const resolveMediaUrl = await freshResolve()
+    expect(resolveMediaUrl('javascript:alert(1)')).toBe('')
+    expect(resolveMediaUrl('vbscript:msgbox(1)')).toBe('')
+    expect(resolveMediaUrl('data:text/html,<script>alert(1)</script>')).toBe('')
+    expect(resolveMediaUrl('JaVaScRiPt:alert(1)')).toBe('')
+    expect(resolveMediaUrl('  javascript:alert(1)')).toBe('')
+  })
+
+  it('T4 白名单：仅图片类 data: 与 blob: 放行', async () => {
+    const resolveMediaUrl = await freshResolve()
+    expect(resolveMediaUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
+    expect(resolveMediaUrl('data:image/webp;base64,AAAA')).toBe('data:image/webp;base64,AAAA')
+    expect(resolveMediaUrl('blob:https://qbao.example/abc')).toBe('blob:https://qbao.example/abc')
+    expect(resolveMediaUrl('data:application/javascript;base64,AAAA')).toBe('')
+    expect(resolveMediaUrl('data:image/svg+xml;base64,AAAA')).toBe('')
   })
 })
 

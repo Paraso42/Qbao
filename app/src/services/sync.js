@@ -5,7 +5,7 @@
 // ============================================================
 import { fetchWithAuth, getToken, getStoredUser } from './api'
 import { stripAiSecretsFromState } from './aiKeys'
-import { migrateState, STORAGE_KEY, CLOUD_STORAGE_PREFIX } from './persistence'
+import { migrateState, STORAGE_KEY, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite } from './persistence'
 
 export const SYNC_PENDING_KEY = 'qbao_sync_pending'
 const LAST_SYNC_KEY = 'qbao_lastSync'
@@ -44,6 +44,32 @@ function mergeQuizSets(localSets, cloudSets) {
   }
   ;(cloudSets || []).forEach(pushSet)
   ;(localSets || []).forEach(pushSet)
+  return out
+}
+
+// 章节资料并集：云端在前、本地补漏，按材料 id 按章节内去重。
+// 注意：同一池文件可分配到多个章节（id=pool_xxx 会出现在多个章节），
+// 因此去重必须限定在章节内，不能全局去重（T9）。
+function mergeChapterMaterials(localCm, cloudCm) {
+  const cids = new Set([...Object.keys(cloudCm || {}), ...Object.keys(localCm || {})])
+  const out = {}
+  cids.forEach((cid) => {
+    const seen = new Set()
+    const arr = []
+    const push = (list) => {
+      ;(list || []).forEach((m) => {
+        if (!m || typeof m !== 'object') return
+        const mid = m.id != null ? String(m.id) : null
+        const key = mid != null ? mid : JSON.stringify(m)
+        if (seen.has(key)) return
+        seen.add(key)
+        arr.push(JSON.parse(JSON.stringify(m)))
+      })
+    }
+    push((cloudCm || {})[cid])
+    push((localCm || {})[cid])
+    if (arr.length) out[cid] = arr
+  })
   return out
 }
 
@@ -86,6 +112,14 @@ function mergeChapter(localCh, cloudCh) {
   ;['currentQuizSetIdx', 'currentIdx', 'strategy', '_hasNewFilesSinceLastGen', '_lastGenTime'].forEach((k) => {
     if (typeof L[k] !== 'undefined' && L[k] !== null) out[k] = L[k]
   })
+  // 越界归正：quizSets 去重合并后数量可能减少，本地 currentQuizSetIdx 指向不存在的 set
+  if (Array.isArray(out.quizSets) && out.quizSets.length > 0) {
+    if (typeof out.currentQuizSetIdx !== 'number' || out.currentQuizSetIdx < 0 || out.currentQuizSetIdx >= out.quizSets.length) {
+      out.currentQuizSetIdx = out.quizSets.length - 1
+    }
+  } else {
+    out.currentQuizSetIdx = 0
+  }
   return out
 }
 
@@ -103,6 +137,10 @@ export function mergeStates(localState, cloudState) {
     Object.keys(l).forEach(function (id) { c[id] = l[id] })
     m[k] = c
   })
+  // chapterMaterials：资料元数据并集（云端在前、本地补漏，按章节内 id 去重）（T9）
+  if (L.chapterMaterials || m.chapterMaterials) {
+    m.chapterMaterials = mergeChapterMaterials(L.chapterMaterials, m.chapterMaterials)
+  }
   // chapters：章节级并集合并；记录本次合并新增的题目数（供提示）
   {
     const c = m.chapters || {}
@@ -135,9 +173,14 @@ export function mergeStates(localState, cloudState) {
 }
 
 export function persistMergedState(merged) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+  // 账号隔离（与 persistence.saveState 一致）：登录态只写账号键
+  // v3.30：只存骨架，大字段进 IndexedDB（与 saveState 同策略）
   const user = getStoredUser()
-  if (user && user.id) localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, JSON.stringify(merged))
+  const target = (user && user.id) ? CLOUD_STORAGE_PREFIX + user.id : STORAGE_KEY
+  try {
+    localStorage.setItem(target, JSON.stringify(buildSkeleton(merged)))
+    scheduleFullIdbWrite(merged)
+  } catch (e) { console.warn('[sync] persistMergedState err', e) }
 }
 
 // ctx: {
@@ -150,6 +193,8 @@ export function persistMergedState(merged) {
 export function createSyncEngine(ctx) {
   let _syncRev = null
   let _syncInFlight = false
+  // 启动门闩：本地 IDB 回填 + 云端恢复完成前禁止推送（防止骨架态覆盖云端题目数据）
+  let _syncingReady = false
   let _syncTimer = null
   let _syncRetryTimer = null
   let _pollTimer = null
@@ -208,6 +253,7 @@ export function createSyncEngine(ctx) {
   }
 
   async function flushSync() {
+    if (!_syncingReady) { setSyncPending(true); updateStatus(); return }
     if (_syncInFlight || !ctx.isOnline() || !getToken()) return
     _syncInFlight = true
     updateStatus()
@@ -293,6 +339,7 @@ export function createSyncEngine(ctx) {
     if (!ctx.isOnline() || !getToken()) return
     setSyncPending(true)
     updateStatus()
+    if (!_syncingReady) return // 启动未就绪：保留 pending，就绪后 resumePendingSync 补推
     if (_syncTimer) clearTimeout(_syncTimer)
     _syncTimer = setTimeout(() => { flushSync() }, 2000)
   }
@@ -344,9 +391,30 @@ export function createSyncEngine(ctx) {
 
   function setRev(rev) { if (typeof rev === 'number' && rev > 0) _syncRev = rev }
 
+  // T10: 页面关闭/隐藏前尽力推送未同步状态（fetch keepalive，短请求不受页面销毁影响）。
+  // 未完成的全量推送会由本地 pending 标记 + localStorage 云端副本在下次启动时补推。
+  let _unloadBound = false
+  function bindUnloadKeepalive() {
+    if (_unloadBound || typeof window === 'undefined') return
+    _unloadBound = true
+    const flushOnUnload = () => {
+      if (!_syncingReady || _syncInFlight || !getSyncPending() || !ctx.isOnline() || !getToken()) return
+      try {
+        stripAiSecretsFromState(ctx.getState())
+        const body = { state_json: ctx.getState() }
+        if (typeof _syncRev === 'number' && _syncRev > 0) body.rev = _syncRev
+        fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body), keepalive: true }).catch(() => {})
+      } catch (e) { /* best-effort */ }
+    }
+    window.addEventListener('beforeunload', flushOnUnload)
+    window.addEventListener('pagehide', flushOnUnload)
+  }
+
+  function setSyncingReady(v) { _syncingReady = !!v }
+
   return {
     scheduleSync, flushSync, resumePendingSync, updateStatus, setRev,
-    pullAndMerge, startPolling, bindVisibilityLifecycle,
+    pullAndMerge, startPolling, bindVisibilityLifecycle, bindUnloadKeepalive, setSyncingReady,
     getRev: () => _syncRev
   }
 }

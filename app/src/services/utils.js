@@ -5,10 +5,17 @@ export function isObjType(t) { return t === 'single' || t === 'judge' }
 
 // 将服务端返回的相对媒体 URL（avatars/…、/avatars/…、uploads/…、/uploads/…）
 // 解析为可访问的绝对 URL：网页版取当前 origin，桌面版（file://）取 API_BASE origin。
-// 绝对 URL（http(s)/data/blob）原样返回。
+// 绝对 URL 仅放行白名单协议（http/https、图片 data:、blob:），其余带 scheme 的
+// 伪协议（javascript:/vbscript:/data:text/html 等）一律返回空串，防止被注入
+// 到 src/href（T4 整改）。无 scheme 的相对路径保持原语义。
 export function resolveMediaUrl(url) {
   if (!url || typeof url !== 'string') return ''
-  if (/^(https?:|data:|blob:)/i.test(url)) return url
+  if (/^(https?:|blob:)/i.test(url)) return url
+  if (/^data:image\/(png|jpe?g|gif|webp);/i.test(url)) return url
+  // 形如 "scheme:..." 的非白名单协议（伪协议）→ 拒绝。
+  // 先 trim 再检测：浏览器解析 href/src 时会忽略首尾空白，防 "  javascript:..." 绕过。
+  const trimmed = url.trim()
+  if (trimmed && /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return ''
   let origin = ''
   if (/^https?:/i.test(API_BASE)) {
     try { origin = new URL(API_BASE).origin } catch (e) { origin = '' }

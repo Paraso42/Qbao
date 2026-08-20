@@ -45,13 +45,13 @@
         </div>
 
         <!-- 导航点 + 图例 -->
-        <div v-if="as.questions.length > 1" class="quiz-legend">
+        <div v-if="as.questions && as.questions.length > 1" class="quiz-legend">
           <span class="lg-item"><span class="lg-dot current"></span>当前</span>
           <span class="lg-item"><span class="lg-dot"></span>未答</span>
           <span class="lg-item"><span class="lg-dot ok"></span>答对</span>
           <span class="lg-item"><span class="lg-dot bad"></span>答错</span>
         </div>
-        <div v-if="as.questions.length > 1" class="quiz-nav">
+        <div v-if="as.questions && as.questions.length > 1" class="quiz-nav">
           <span v-if="dotWindow[0] > 0" class="dots-ellipsis">…</span>
           <template v-for="(qq, i) in as.questions" :key="i">
             <button v-if="as.questions.length <= 40 || (i >= dotWindow[0] && i <= dotWindow[1])" class="dot"
@@ -66,7 +66,6 @@
           <template v-if="!hasAnswer">
             <button v-if="isObj" class="btn btn-primary" @click="submit">提交答案</button>
             <button v-else class="btn btn-primary" @click="submit">提交答案</button>
-            <button class="btn btn-secondary" @click="quiz.ignoreCurrent">我会了</button>
             <button v-if="isObj" class="btn btn-danger" @click="quiz.markDontKnow">我不会</button>
           </template>
           <template v-else>
@@ -153,7 +152,7 @@ const q = computed(() => quiz.currentQuestion)
 const idx = computed(() => {
   const s = as.value
   if (!s) return 0
-  return Math.max(0, Math.min(s.currentIdx, (s.questions.length || 1) - 1))
+  return Math.max(0, Math.min(s.currentIdx, ((s.questions && s.questions.length) || 1) - 1))
 })
 const hasAnswer = computed(() => quiz.hasAnswer)
 const currentAnswer = computed(() => quiz.currentAnswer)
@@ -225,8 +224,10 @@ const dotWindow = computed(() => {
 function dotClass(i) {
   const cls = []
   if (i === idx.value) cls.push('current')
-  if (as.value.userAnswers[i] !== undefined && as.value.userAnswers[i] !== null) {
-    cls.push(getCi(as.value.questions[i], as.value.userAnswers[i]) ? 'answered' : 'wrong')
+  const ua = as.value.userAnswers
+  const qs = as.value.questions
+  if (ua && qs && ua[i] !== undefined && ua[i] !== null) {
+    cls.push(getCi(qs[i], ua[i]) ? 'answered' : 'wrong')
   }
   return cls
 }
@@ -283,6 +284,10 @@ function shareSet() {
 watch(() => quiz.session.view, (v) => {
   if (v === 'quiz') { subjective.value = ''; wrongOnly.value = false }
 })
+
+// 修复：主观题答案复用 — 切换题目时清空输入框，防止上一题答案带入下一题
+// （已答题由 hasAnswer 分支显示历史答案，不受影响）
+watch(idx, () => { subjective.value = '' })
 
 // 键盘快捷键（同 legacy setupQuizKeyboard）
 function onKeydown(e) {

@@ -10,8 +10,7 @@ import { useUserStore } from './user'
 import { useUiStore } from './ui'
 import { fetchWithAuth } from '../services/api'
 import {
-  calcStats, syncSingleAnswerToTagMeta, autoUpdateChapterWeakTags,
-  getQuestionId, isQuestionIgnored
+  calcStats, syncSingleAnswerToTagMeta, autoUpdateChapterWeakTags
 } from '../services/questions'
 import { saveQuizHistory } from '../services/history'
 import { updateSRSAfterExam, buildSrsExam } from '../services/srs'
@@ -177,7 +176,7 @@ export const useQuizStore = defineStore('quiz', () => {
     let matchingSet = null
     for (let si = ch.quizSets.length - 1; si >= 0; si--) {
       const qs = ch.quizSets[si]
-      if (qs.questions.length === srvQs.length) {
+      if (qs && qs.questions && qs.questions.length === srvQs.length) {
         if (qs.questions[0] && srvQs[0] && qs.questions[0].question === srvQs[0].question) {
           matchingSet = qs
           break
@@ -224,8 +223,8 @@ export const useQuizStore = defineStore('quiz', () => {
     }
     if (ch.quizSets && ch.quizSets.length > 0) {
       const qs = data.getCurrentQuizSet()
-      if (qs && qs.questions.length > 0) {
-        const answered = qs.userAnswers ? qs.userAnswers.filter((a) => a !== undefined && a !== -1).length : 0
+      if (qs && qs.questions && qs.questions.length > 0) {
+        const answered = qs.userAnswers ? qs.userAnswers.filter((a) => a !== undefined && a !== null && a !== -1).length : 0
         if (answered >= qs.questions.length && qs.questions.length > 0) { endExam(); return }
         if (answered === 0 && qs.userAnswers) {
           qs.userAnswers = new Array(qs.questions.length).fill(undefined)
@@ -324,20 +323,6 @@ export const useQuizStore = defineStore('quiz', () => {
     const as = activeSet.value
     if (!as || idx < 0 || idx >= as.questions.length) return
     as.setCurrentIdx(idx)
-    data.saveState()
-  }
-
-  function ignoreCurrent() {
-    const as = activeSet.value
-    if (!as) return
-    const q = as.questions[as.currentIdx]
-    if (!q) return
-    if (!data.state.ignoredQuestions) data.state.ignoredQuestions = []
-    const qId = getQuestionId(as.setId, q)
-    if (!data.state.ignoredQuestions.includes(qId)) data.state.ignoredQuestions.push(qId)
-    if (q.type === 'single' || q.type === 'judge') as.userAnswers[as.currentIdx] = q.answer
-    else as.userAnswers[as.currentIdx] = '(已掌握)'
-    if (as.currentIdx < as.questions.length - 1) as.setCurrentIdx(as.currentIdx + 1)
     data.saveState()
   }
 
@@ -475,19 +460,14 @@ export const useQuizStore = defineStore('quiz', () => {
     openQuiz('quiz')
   }
 
-  function isIgnored(q) {
-    const as = activeSet.value
-    return as ? isQuestionIgnored(data.state, as.setId, q) : false
-  }
-
   return {
     session,
     activeSet, currentQuestion, currentAnswer, hasAnswer, stats,
     openQuiz, closeQuiz,
     startSession, selectOption, submitAnswer, nextQuestion, goToQuestion,
-    ignoreCurrent, markDontKnow, resetQuiz, endExam,
+    markDontKnow, resetQuiz, endExam,
     startSrsReview, startExam,
     restoreQuizFromServer, syncAnswerToServer, syncAnswerToServerFinal,
-    bindLifecycle, isIgnored
+    bindLifecycle
   }
 })

@@ -3,6 +3,7 @@
 // localStorage 键与数据结构保持兼容：老用户数据无缝升级。
 // ============================================================
 import { migrateLegacyAiKeysFromState, stripAiSecretsFromState, hasAnyAiApiKey } from './aiKeys'
+import * as stateDb from './stateDb'
 
 export const DEFAULT_STATE = {
   subjects: {},
@@ -30,10 +31,20 @@ function getUserStored() {
 export function loadState() {
   let state
   try {
-    // 已登录时优先加载该账号的云端数据
     const user = getUserStored()
-    const cloudKey = user ? CLOUD_STORAGE_PREFIX + user.id : null
-    const saved = (cloudKey && localStorage.getItem(cloudKey)) || localStorage.getItem(STORAGE_KEY)
+    if (user && user.id) {
+      // 已登录：只读该账号专属键，绝不回退公共键（修复多账号串号：
+      // 此前 fallback STORAGE_KEY 会把上一个账号的数据当成新账号的数据）
+      const saved = localStorage.getItem(CLOUD_STORAGE_PREFIX + user.id)
+      if (saved) {
+        state = JSON.parse(saved)
+        state = migrateState(state)
+        return state
+      }
+      return JSON.parse(JSON.stringify(DEFAULT_STATE))
+    }
+    // 未登录：读本地公共键
+    const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       state = JSON.parse(saved)
       state = migrateState(state)
@@ -41,6 +52,177 @@ export function loadState() {
     }
   } catch (e) { console.warn('[persist] load err', e) }
   return JSON.parse(JSON.stringify(DEFAULT_STATE))
+}
+
+// ============================================================
+// 骨架化（v3.30 性能整改）：localStorage 只存轻量骨架，
+// 题目/答案/大考卷/SRS/历史这些 MB 级大字段进 IndexedDB（stateDb）。
+// 内存 state 始终完整，仅持久化层分流 — 2000+ 题题库不再超 5MB、不再全量序列化卡顿。
+// ============================================================
+
+export const CHAPTER_BIG_FIELDS = ['questions', 'userAnswers', 'quizSets']
+export const STATE_BIG_FIELDS = ['srsData', 'generatedExams', 'history']
+
+// 浅拷贝剥离大字段 → 骨架（JSON.stringify 时引用会展开，体积 = 骨架大小）
+export function buildSkeleton(state) {
+  const sk = {}
+  for (const k of Object.keys(state || {})) {
+    if (STATE_BIG_FIELDS.includes(k)) continue
+    if (k === 'chapters') {
+      sk.chapters = {}
+      const chs = state.chapters || {}
+      for (const cid of Object.keys(chs)) {
+        const ch = chs[cid]
+        if (!ch || typeof ch !== 'object') { sk.chapters[cid] = ch; continue }
+        const chSk = {}
+        for (const f of Object.keys(ch)) {
+          if (!CHAPTER_BIG_FIELDS.includes(f)) chSk[f] = ch[f]
+        }
+        sk.chapters[cid] = chSk
+      }
+    } else {
+      sk[k] = state[k]
+    }
+  }
+  return sk
+}
+
+// 判断 state 是否含大字段（旧版完整存储/合并结果）
+export function hasBigFields(state) {
+  if (!state) return false
+  if (state.srsData || state.generatedExams || state.history) return true
+  const chs = state.chapters || {}
+  for (const cid of Object.keys(chs)) {
+    const ch = chs[cid]
+    if (ch && (Array.isArray(ch.questions) || Array.isArray(ch.quizSets))) return true
+  }
+  return false
+}
+
+let _idbWritePending = false
+// 空闲时全量写大字段到 IndexedDB（requestIdleCallback 不阻塞交互；节流合并高频保存）
+export function scheduleFullIdbWrite(state) {
+  if (_idbWritePending || typeof state !== 'object' || !state) return
+  _idbWritePending = true
+  const run = () => {
+    _idbWritePending = false
+    try {
+      const chList = []
+      const chs = state.chapters || {}
+      for (const cid of Object.keys(chs)) {
+        const ch = chs[cid]
+        if (ch && (ch.questions || ch.quizSets)) {
+          // JSON round-trip：解除 Vue reactive proxy（IDB 结构化克隆不接受 Proxy）
+          chList.push({ cid, data: JSON.parse(JSON.stringify({
+            questions: ch.questions || [],
+            userAnswers: ch.userAnswers || [],
+            quizSets: ch.quizSets || [],
+          })) })
+        }
+      }
+      const globalData = JSON.parse(JSON.stringify({
+        srsData: state.srsData || {},
+        generatedExams: state.generatedExams || {},
+        history: state.history || [],
+      }))
+      stateDb.saveChapters(chList)
+      stateDb.saveGlobal(globalData)
+    } catch (e) { console.warn('[persist] idb write err', e) }
+  }
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 3000 })
+  else setTimeout(run, 600)
+}
+
+// —— 活动会话快速恢复（修复刷新后答题入口消失/进度丢失）——
+// 答题中的会话（当前章节的当前 quizSet 的答案/进度）每次 saveState 同步写 localStorage
+// 小键（几 KB ~ 几十 KB），不依赖 IndexedDB 空闲写入，刷新/关闭必达。
+export const ACTIVE_SESSION_KEY = 'qbao_active_session'
+
+function extractActiveSession(state) {
+  try {
+    const cid = state && state.currentChapterId
+    const ch = cid && state.chapters && state.chapters[cid]
+    if (!ch || !Array.isArray(ch.quizSets) || ch.quizSets.length === 0) return null
+    const idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0)
+      ? ch.currentQuizSetIdx : ch.quizSets.length - 1
+    const set = ch.quizSets[idx]
+    if (!set || !Array.isArray(set.questions)) return null
+    return {
+      cid,
+      qsIdx: idx,
+      questions: set.questions,
+      userAnswers: set.userAnswers || [],
+      currentIdx: typeof set.currentIdx === 'number' ? set.currentIdx : 0,
+    }
+  } catch (e) { return null }
+}
+
+function saveActiveSession(state) {
+  const session = extractActiveSession(state)
+  if (!session) return
+  try {
+    // 用 JSON 序列化（剥离 reactive proxy），体积 = 当前 quizSet 大小（通常 < 100KB）
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session))
+  } catch (e) { /* 骨架键已尽力；失败则依赖 IDB/云端 */ }
+}
+
+function restoreActiveSession(state) {
+  try {
+    const raw = localStorage.getItem(ACTIVE_SESSION_KEY)
+    if (!raw) return
+    const s = JSON.parse(raw)
+    const ch = state.chapters && state.chapters[s.cid]
+    if (!ch) return
+    if (!Array.isArray(ch.quizSets)) ch.quizSets = []
+    // 只回填"骨架/IDB 中缺失"的会话（避免覆盖已完整恢复的数据）
+    const existing = ch.quizSets[s.qsIdx]
+    if (existing && Array.isArray(existing.questions) && existing.questions.length > 0) {
+      // 会话已存在（IDB/云端恢复）：活动会话键每次保存必最新 → 覆盖答案/进度
+      const answers = toUndef(s.userAnswers)
+      if (answers.length === existing.questions.length) existing.userAnswers = answers
+      if (typeof s.currentIdx === 'number') existing.currentIdx = s.currentIdx
+    } else {
+      // null → undefined：JSON 序列化丢失 undefined，未答题目不能算已答
+      const answers = toUndef(s.userAnswers)
+      ch.quizSets[s.qsIdx] = {
+        questions: s.questions || [],
+        userAnswers: answers,
+        currentIdx: s.currentIdx || 0,
+        createdAt: Date.now(),
+      }
+      if (s.qsIdx >= ch.quizSets.length) ch.quizSets.length = s.qsIdx + 1
+      ch.currentQuizSetIdx = s.qsIdx
+    }
+  } catch (e) { console.warn('[persist] restoreActiveSession err', e) }
+}
+
+// 启动时从 IndexedDB 回填大字段到骨架 state（题目常驻内存，结构不变）
+const toUndef = (arr) => (Array.isArray(arr) ? arr.map((a) => (a === null ? undefined : a)) : [])
+
+export async function hydrateState(state) {
+  try {
+    const [chapters, global] = await Promise.all([stateDb.loadAllChapters(), stateDb.loadGlobal()])
+    const chs = state.chapters || {}
+    for (const cid of Object.keys(chapters)) {
+      const ch = chs[cid]
+      const d = chapters[cid]
+      if (ch && d && (!ch.questions || ch.questions.length === 0)) {
+        ch.questions = d.questions || []
+        ch.userAnswers = toUndef(d.userAnswers)
+        ch.quizSets = (d.quizSets || []).map((set) => ({
+          ...set,
+          userAnswers: toUndef(set.userAnswers),
+        }))
+      }
+    }
+    if (global) {
+      if (global.srsData && (!state.srsData || Object.keys(state.srsData).length === 0)) state.srsData = global.srsData
+      if (global.generatedExams && (!state.generatedExams || Object.keys(state.generatedExams).length === 0)) state.generatedExams = global.generatedExams
+      if (global.history && (!state.history || state.history.length === 0)) state.history = global.history
+    }
+    // 恢复活动会话（答题入口/进度）
+    restoreActiveSession(state)
+  } catch (e) { console.warn('[persist] hydrate err', e) }
 }
 
 export function sanitizeState(state) {
@@ -75,16 +257,31 @@ export function getChStrategy(state, cid) {
 
 // 持久化序列化：剥离瞬态引用与密钥字段后写入 localStorage（双键）。
 // 同步调度由调用方（data store / sync service）负责。
+// T12/P1-2: 写失败不再静默 — 体积接近上限预警、QuotaExceeded 可见化（toast）。
+
+let _persistWarn = null
+export function setPersistWarningHook(fn) { _persistWarn = fn }
+function persistWarn(msg, fatal) {
+  console.warn('[persist] ' + msg)
+  if (_persistWarn) { try { _persistWarn(msg, !!fatal) } catch (e) {} }
+}
+
+export const LOCALSTORAGE_WARN_BYTES = 4 * 1024 * 1024 // 4MB 预警（localStorage 约 5MB 上限）
+export const LOCALSTORAGE_HARD_BYTES = 5 * 1024 * 1024 // 5MB 硬上限
+
 export function saveState(state) {
+  let serialized = null
+  let qs = null
+  let origCm = null
   try {
     stripAiSecretsFromState(state)
 
-    const qs = state.quizSession
+    qs = state.quizSession
     state.quizSession = null
 
     if (state.aiTaskQueue) state.aiTaskQueue.forEach(function (t) { t._ssr = t.streamSetRef; delete t.streamSetRef })
 
-    const origCm = state.chapterMaterials
+    origCm = state.chapterMaterials
     if (origCm) {
       const cleanCm = {}
       Object.keys(origCm).forEach(function (cid) {
@@ -97,15 +294,47 @@ export function saveState(state) {
       state.chapterMaterials = cleanCm
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    const user = getUserStored()
-    if (user && user.id) localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, JSON.stringify(state))
-
+    // v3.30：序列化轻量骨架（不含题目/历史等大字段，MB → KB 级）
+    serialized = JSON.stringify(buildSkeleton(state))
+  } catch (e) {
+    persistWarn('状态序列化失败，本次数据未保存: ' + e.message, true)
+    return { ok: false }
+  } finally {
+    // 恢复瞬态字段：无论序列化成功/失败都恢复，避免内存状态被污染
     if (state.aiTaskQueue) state.aiTaskQueue.forEach(function (t) { t.streamSetRef = t._ssr; delete t._ssr })
     state.quizSession = qs
     state.chapterMaterials = origCm
+  }
+
+  const bytes = serialized.length
+  if (bytes > LOCALSTORAGE_HARD_BYTES) {
+    persistWarn('本地存储已满（超过 5MB），本次数据未保存！请删除部分题库或资料后再试', true)
+    return { ok: false }
+  }
+  if (bytes > LOCALSTORAGE_WARN_BYTES) {
+    persistWarn('本地存储接近上限（约 ' + (bytes / 1048576).toFixed(1) + 'MB/5MB），建议删除部分大题库或资料，防止数据丢失', false)
+  }
+
+  try {
+    // 账号隔离：登录态只写账号专属键（不写公共键，避免串号/污染）；
+    // 未登录才写公共键（离线本地使用）
+    const user = getUserStored()
+    if (user && user.id) {
+      localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, serialized)
+    } else {
+      localStorage.setItem(STORAGE_KEY, serialized)
+    }
+    // v3.30：大字段（题目/答案/历史）空闲时写 IndexedDB，不再占 localStorage
+    scheduleFullIdbWrite(state)
+    // 活动会话同步写（答题进度刷新不丢）
+    saveActiveSession(state)
+    return { ok: true, bytes }
   } catch (e) {
-    console.error('[persist] saveState error:', e)
+    const fatalMsg = e && e.name === 'QuotaExceededError'
+      ? '本地保存失败：存储空间已满。数据暂存内存，请清理空间或登录同步后退出'
+      : '本地保存失败：' + (e && e.message ? e.message : e)
+    persistWarn(fatalMsg, true)
+    return { ok: false }
   }
 }
 
@@ -194,6 +423,7 @@ export function migrateState(s) {
   if (!s.chapterMaterials) s.chapterMaterials = {}
   if (typeof s.aiEnabled !== 'boolean') s.aiEnabled = false
   if (!s.aiTaskQueue) s.aiTaskQueue = []
+  if (!s.importedServerTaskIds || !Array.isArray(s.importedServerTaskIds)) s.importedServerTaskIds = []
   // 页面刷新后重置 running 任务为 pending，清掉不可序列化的流引用
   s.aiTaskQueue.forEach((t) => { if (t.status === 'running') t.status = 'pending'; delete t.streamSetRef })
   // quizSession 为瞬态，不持久化

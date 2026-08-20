@@ -37,14 +37,20 @@ export const useDataStore = defineStore('data', () => {
     const ch = getCh()
     if (!ch) return null
     if (ch.quizSets && ch.quizSets.length > 0) {
-      const idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0) ? ch.currentQuizSetIdx : ch.quizSets.length - 1
+      // 越界防御：currentQuizSetIdx 指向不存在的 set（合并/去重后）→ 回退到最后一个
+      let idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0) ? ch.currentQuizSetIdx : ch.quizSets.length - 1
+      if (idx >= ch.quizSets.length) idx = ch.quizSets.length - 1
       const qs = ch.quizSets[idx]
-      return {
-        _ref: qs, _isSet: true, questions: qs.questions, userAnswers: qs.userAnswers,
-        currentIdx: qs.currentIdx, setCurrentIdx: (v) => { qs.currentIdx = v },
-        setName: ch.name, isExam: false, setId: ch.id, subjectId: null
+      if (qs && Array.isArray(qs.questions)) {
+        return {
+          _ref: qs, _isSet: true, questions: qs.questions, userAnswers: qs.userAnswers,
+          currentIdx: qs.currentIdx, setCurrentIdx: (v) => { qs.currentIdx = v },
+          setName: ch.name, isExam: false, setId: ch.id, subjectId: null
+        }
       }
+      ch.currentQuizSetIdx = idx
     }
+    if (!Array.isArray(ch.questions) || ch.questions.length === 0) return null
     return {
       _ref: ch, questions: ch.questions, userAnswers: ch.userAnswers,
       currentIdx: ch.currentIdx, setCurrentIdx: (v) => { ch.currentIdx = v },
@@ -55,8 +61,15 @@ export const useDataStore = defineStore('data', () => {
   function getCurrentQuizSet() {
     const ch = getCh()
     if (!ch || !ch.quizSets || ch.quizSets.length === 0) return null
-    const idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0) ? ch.currentQuizSetIdx : ch.quizSets.length - 1
-    return ch.quizSets[idx]
+    let idx = (typeof ch.currentQuizSetIdx === 'number' && ch.currentQuizSetIdx >= 0) ? ch.currentQuizSetIdx : ch.quizSets.length - 1
+    // 越界防御：合并/去重后 currentQuizSetIdx 可能指向不存在的 set
+    if (idx >= ch.quizSets.length) {
+      idx = ch.quizSets.length - 1
+      ch.currentQuizSetIdx = idx
+    }
+    const qs = ch.quizSets[idx]
+    if (!qs || !Array.isArray(qs.questions)) return null
+    return qs
   }
 
   function getChStrategy(cid) { return persistence.getChStrategy(state, cid) }
@@ -65,6 +78,16 @@ export const useDataStore = defineStore('data', () => {
     const ch = state.chapters[chId]
     if (!ch) return null
     if (!ch.quizSets) ch.quizSets = []
+    // 去重防御：相同题目集合（按题干+类型+答案签名）已存在则直接复用，不再新建重复轮次
+    if (Array.isArray(questions) && questions.length > 0) {
+      const sig = questions.map((q) => JSON.stringify([q.question, q.type, q.answer])).join('\u0001')
+      const dup = ch.quizSets.find((s) => s && Array.isArray(s.questions) &&
+        s.questions.map((q) => JSON.stringify([q.question, q.type, q.answer])).join('\u0001') === sig)
+      if (dup) {
+        ch.currentQuizSetIdx = ch.quizSets.indexOf(dup)
+        return dup
+      }
+    }
     const set = {
       questions: questions.slice(),
       userAnswers: new Array(questions.length).fill(undefined),

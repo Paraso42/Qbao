@@ -40,9 +40,10 @@
         </div>
         <span class="pill" :class="'pill-' + serverPillType(st.status)">{{ serverStatusText(st.status) }}</span>
         <template v-if="st.status === 'completed'">
-          <button class="btn btn-primary btn-small" @click="importTask(st)">导入题目</button>
+          <span v-if="ai.isServerTaskImported(st.id)" class="pill pill-ok">已导入</span>
+          <button v-else class="btn btn-primary btn-small" @click="importTask(st)">导入题目</button>
         </template>
-        <template v-else-if="st.status === 'queued'">
+        <template v-else-if="st.status === 'queued' || st.status === 'running'">
           <button class="btn btn-ghost btn-small" @click="ai.cancelServerTask(st.id)">取消</button>
         </template>
       </div>
@@ -69,9 +70,11 @@ const data = useDataStore()
 const ui = useUiStore()
 const quiz = useQuizStore()
 
+// 服务端任务模式下：本地任务不在此列表重复显示（完全在服务端），
+// 但保留取消能力（取消入口在服务端任务区）
 const localTasks = computed(() => {
   const queue = data.state.aiTaskQueue || []
-  return queue.slice().reverse()
+  return queue.filter((t) => !t.serverTaskId).slice().reverse()
 })
 const serverTasks = computed(() => ai.serverTasks || [])
 const streamThreshold = computed(() => (data.state.aiConfig && data.state.aiConfig.streamThreshold) || 3)
@@ -121,8 +124,9 @@ function startStreamQuiz(task) {
   quiz.openQuiz('quiz')
 }
 
-function importTask(st) {
-  ai.importServerTaskResult(st)
+async function importTask(st) {
+  // T18: await 导入完成（原未 await，toast/状态竞态）
+  await ai.importServerTaskResult(st)
 }
 
 function cancelAll() {
