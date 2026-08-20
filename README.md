@@ -3,7 +3,7 @@
 在线题库学习平台：AI 智能出题、间隔重复复习、考试模拟、好友协作学习。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-f7df1e)
+![Frontend](https://img.shields.io/badge/Frontend-Vue%203%20%2F%20Vite-42b883)
 ![Backend](https://img.shields.io/badge/Backend-Node.js%2FExpress-339933)
 ![DB](https://img.shields.io/badge/DB-PostgreSQL-4169E1)
 
@@ -29,7 +29,14 @@ cp .env.example .env   # 配置数据库、JWT_SECRET、AI Key
 npm run dev            # 后端默认 3000 端口
 ```
 
-前端是 app/ 目录下的纯静态文件，任意静态服务器托管即可（完整 nginx 配置与生产部署见 docs/DEPLOY.md）。
+前端为 Vue 3 + Vite 工程（singlefile 构建产物在 `app/dist/`）：
+
+```bash
+cd app && npm install && npm run build
+# 把 app/dist/ 发布到任意静态服务器（桌面端由 Electron 内嵌加载，无需部署）
+```
+
+完整 nginx 配置与生产部署见 docs/DEPLOY.md；数据库迁移用 `cd server && node scripts/run_migration.js`。
 
 ## 📖 文档
 
@@ -46,11 +53,13 @@ npm run dev            # 后端默认 3000 端口
 
 ```
 Qbao/
-├── app/          # 前端 SPA：index.html + css/ + js/（无框架、无构建）
+├── app/          # 前端 SPA：Vue 3 + Vite + Pinia（源码 src/，构建产物 dist/）
+├── desktop/      # Electron 桌面壳（main/preload/updater）
 ├── server/       # Node.js 后端：Express + PostgreSQL
-│   ├── src/      # 路由、鉴权中间件、AI Provider 适配器
-│   ├── sql/      # 数据库迁移脚本
-│   ├── scripts/  # AI 出题诊断脚本
+│   ├── src/      # 路由、鉴权中间件、AI Provider 适配器、服务层
+│   ├── sql/      # 版本化数据库迁移（NNN_*.sql，schema_migrations 追踪）
+│   ├── scripts/  # 迁移执行/管理员引导/AI 诊断脚本
+│   ├── deploy/   # systemd 单元 + 上传目录初始化脚本
 │   └── init.sql  # 建库脚本
 ├── docs/         # 架构/部署/开发文档
 ├── tools/        # 维护脚本（默认不上传）
@@ -59,7 +68,7 @@ Qbao/
 
 ## 🛠 技术架构
 
-纯前端 Vanilla JS SPA（无框架依赖）+ Node.js/Express 后端 API + PostgreSQL。AI 请求由后端代理到各 Provider，支持流式输出与严格 JSON 校验。
+Vue 3 + Vite + Pinia 前端（singlefile 产物，网页/Electron 桌面双形态）+ Node.js/Express 后端 API + PostgreSQL。AI 请求由后端代理到各 Provider（ECNU / DeepSeek / OpenAI / Gemini），支持流式输出与严格 JSON 校验；积分系统带台账与学期清零；多端数据经 rev 乐观锁同步。
 
 ## 📄 许可证
 

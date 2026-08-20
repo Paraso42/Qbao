@@ -22,8 +22,8 @@ git clone git@github.com:Paraso42/Qbao.git /srv/qbao
 # 2) 初始化数据库
 sudo -u postgres psql -c "CREATE DATABASE qbao"
 sudo -u postgres psql -d qbao -f /srv/qbao/server/init.sql
-# 历史版本迁移（幂等，按顺序执行）
-for f in /srv/qbao/server/sql/migration_v*.sql; do sudo -u postgres psql -d qbao -f "$f"; done
+# 历史/新增迁移（T17 版本化：schema_migrations 追踪，只执行未应用项）
+cd /srv/qbao/server && npm ci --omit=dev && node scripts/run_migration.js
 
 # 3) 配置环境变量
 cd /srv/qbao/server
@@ -45,13 +45,14 @@ pm2 save && pm2 startup
 
 ## 4. 前端部署（nginx）
 
-前端是 `app/` 下的纯静态文件。nginx 配置示例：
+前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后发布 `app/dist/`
+（singlefile：index.html + vendor/，CI 亦会构建并冒烟校验 CSP）。nginx 配置示例：
 
 ```nginx
 server {
     listen 80;
     server_name your.domain.com;
-    root /srv/qbao/app;          # 注意：静态根目录是 app/
+    root /srv/qbao/app/dist;     # 注意：静态根目录是构建产物 app/dist/
     index index.html;
 
     location /api/ {
@@ -84,14 +85,19 @@ server {
 
 ## 5. 上传目录
 
-后端运行时需要以下目录存在且可写（multer 会自动创建大部分）：
+**所有上传统一在 `<仓库根>/uploads/`**（T16 已收敛，AI 临时文件与其余通道同根）：
 
 | 目录 | 用途 |
 |------|------|
-| `<仓库根>/uploads/` | 共享文件池、聊天图片、头像（生产数据，**必须备份**） |
-| `<仓库根>/server/uploads/` | AI 出题临时文件 |
+| `uploads/pool/` | 共享文件池（AI 出题资料，生产数据，**必须备份**） |
+| `uploads/chat/` | 聊天附件 |
+| `uploads/issues/` | 反馈图片 |
+| `uploads/avatars/` | 头像 |
 
-> 两处目录不一致是已知技术债，计划统一为 `server/uploads/`（见 docs/ARCHITECTURE.md §5-6）。迁移前请勿改动。
+非 root 运行（推荐，见 §3.5）时，用 `server/deploy/prepare_dirs.sh` 初始化属主：
+```bash
+sudo bash server/deploy/prepare_dirs.sh /srv/qbao
+```
 
 ## 6. HTTPS
 
@@ -111,10 +117,10 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 ## 8. 升级流程
 
 1. `git pull`（首次从旧历史切换必须先重新克隆）。
-2. 执行 `server/sql/` 中新增的迁移脚本。
+2. 执行迁移：`cd server && node scripts/run_migration.js`（schema_migrations 自动跳过已应用项；旧库手工迁移过可先 `--mark-applied`）。
 3. `cd server && npm ci --omit=dev`（依赖有变化时）。
-4. `pm2 restart qbao-api`。
-5. 前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后，用 `app/dist/`（含 index.html + vendor/katex/）覆盖式发布到 nginx 静态目录，必要时刷新浏览器缓存。
+4. `sudo bash server/deploy/prepare_dirs.sh /srv/qbao`（目录属主修正）后重启服务。
+5. 前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后，用 `app/dist/` 覆盖式发布到 nginx 静态目录，必要时刷新浏览器缓存。
 
 ## 8.5 服务器恢复（2026-07 归档下线后重建）
 
@@ -123,7 +129,7 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 1. 重装基础环境：Node.js ≥ 18、PostgreSQL ≥ 13、Nginx、certbot（如需公网 HTTPS）、**WireGuard**（内网访问模式）。
 2. 按 §3-4 完成建库与部署（init.sql + migration_v*.sql 顺序执行）。
 3. **恢复数据库**：将本地存档 `local/Version/server_archive_20260706/qbao_full_20260706.sql` 导入（含用户账号与题库数据；聊天等已删除表不可恢复，以空库开始）。
-4. 执行新增迁移（如 migration_v3.25.sql 乐观锁 rev 列）。
+4. 执行新增迁移：`cd server && node scripts/run_migration.js`（历史已手工导入则先 `--mark-applied` 再跑，避免重复执行基线）。
 5. 验证四用户凭原账号密码登录、数据完整。
 
 ### 桌面版发布与自动更新
@@ -155,4 +161,5 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 - 修改数据库默认口令；`.env` 权限 600，JWT_SECRET 使用强随机值。
 - 防火墙仅开放 80/443；后端 3000 端口不对外。
 - AI API Key 由用户在前端自行配置，服务端不留存（`x-ai-api-key` 请求头透传）。
-- 定期 `npm audit` 检查依赖漏洞。
+- 管理员引导：首个注册用户且用户名在 `ADMIN_USERNAMES` 环境变量中时自动成为 admin（server/.env.example 有说明）。
+- 定期 `npm audit` 检查依赖漏洞；CI 已含 gitleaks 密钥扫描与产物冒烟。
