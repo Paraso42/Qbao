@@ -33,7 +33,7 @@ jobs:
           node --check desktop/preload.js
           node --check desktop/updater.js
           for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/src/lib/*.js server/src/schemas/*.js server/src/services/*.js server/scripts/*.js; do node --check "$f"; done
-      - name: 后端测试（T20: forks 参数固定）
+      - name: "后端测试（T20: forks 参数固定）"
         working-directory: server
         run: npx vitest run --pool=forks --poolOptions.forks.maxForks=2
       - name: 构建 NSIS 安装包
