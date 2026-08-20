@@ -15,9 +15,13 @@ const {
   issueStatusSchema,
 } = require('../schemas/issues.schema');
 
+const { IMAGE_ALLOWED_EXTS } = require('../config/files');
+const { isTrustedUpload } = require('../lib/fileSniff');
+
 const issueUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'issues');
 if (!fs.existsSync(issueUploadDir)) fs.mkdirSync(issueUploadDir, { recursive: true });
 
+// T2 整改：扩展名白名单（不含 .svg）+ 落盘后 magic bytes 校验，拒绝 SVG/伪装图片。
 const issueUpload = multer({
   storage: multer.diskStorage({
     destination: issueUploadDir,
@@ -28,14 +32,31 @@ const issueUpload = multer({
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-      const error = new Error('仅支持图片文件');
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!IMAGE_ALLOWED_EXTS.includes(ext)) {
+      const error = new Error('仅支持 png/jpg/jpeg/gif/webp 图片');
       error.status = 422;
       return cb(error);
     }
     cb(null, true);
   },
 });
+
+async function validateIssueImage(file) {
+  if (!file || !file.path || !fs.existsSync(file.path)) return file;
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const fd = fs.openSync(file.path, 'r');
+  const buf = Buffer.alloc(16);
+  fs.readSync(fd, buf, 0, 16, 0);
+  fs.closeSync(fd);
+  if (!isTrustedUpload(buf, ext)) {
+    try { fs.unlinkSync(file.path); } catch (_) {}
+    const error = new Error('文件内容与扩展名不符，已拒绝上传');
+    error.status = 422;
+    throw error;
+  }
+  return file;
+}
 
 function removeIssueImages(rows) {
   for (const row of rows) {
@@ -171,6 +192,8 @@ module.exports = function (app) {
 
   app.post('/api/v1/issues/upload', requireAuth, issueUpload.single('image'), asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(422, '请选择图片文件');
+    // T2：magic bytes 二次校验（fileFilter 只拦扩展名，此处验真实内容）
+    await validateIssueImage(req.file);
     res.json({ url: '/api/v1/issues/images/' + req.file.filename, name: req.file.originalname, size: req.file.size });
   }));
 
@@ -181,6 +204,8 @@ module.exports = function (app) {
 
     const filePath = path.join(issueUploadDir, filename);
     if (!fs.existsSync(filePath)) throw new ApiError(404, '图片不存在或已删除');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
     res.sendFile(filePath);
   }));
 

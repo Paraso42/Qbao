@@ -152,6 +152,28 @@ describe('pointsService 赚取事件', () => {
     expect(r.points).toBe(1);
   });
 
+  it('awardQuizCompletion T5 并发防重：真实 pool（带 connect）走事务行锁，后提交者读到已更新快照不再发分', async () => {
+    const db = makeDb();
+    db._snapshot = { correct: 5 };
+    db.connect = async () => db; // 模拟 pool.connect 返回同一 client
+    db.release = () => {}; // pool client 的 release
+    const calls = db.calls;
+    // 第一次结算：快照 correct=5 → 8，发 3 分
+    const first = await svc.awardQuizCompletion(db, 1, 'ch1', { objCorrect: 8 });
+    expect(first.points).toBe(3);
+    expect(first.awarded).toBe(true);
+    // 行锁 SQL 应带 FOR UPDATE
+    expect(calls.some((c) => /FOR UPDATE/.test(c.sql))).toBe(true);
+    // 模拟并发第二请求：此时快照已被第一请求推进到 8
+    db._snapshot = { correct: 8 };
+    const second = await svc.awardQuizCompletion(db, 1, 'ch1', { objCorrect: 8 });
+    expect(second.awarded).toBe(false);
+    expect(second.points).toBe(0);
+    // 事务边界
+    expect(calls.map((c) => c.sql).join('\n')).toContain('BEGIN');
+    expect(calls.map((c) => c.sql).join('\n')).toContain('COMMIT');
+  });
+
   it('awardShareDownload 单库封顶', async () => {
     const db = makeDb();
     db._shareEarned = 20; // 已满
@@ -217,5 +239,24 @@ describe('pointsService 清零与规则', () => {
   it('runExpiryCheck 非清零日不执行', async () => {
     const r = await svc.runExpiryCheck(new Date(2026, 6, 15));
     expect(r.reset).toBe(false);
+  });
+
+  it('startExpiryJob 幂等、unref 且可停止（T8）', () => {
+    const origConnect = pool.connect;
+    pool.connect = async () => { throw new Error('no db in test'); };
+    try {
+      const t1 = svc.startExpiryJob();
+      const t2 = svc.startExpiryJob();
+      expect(t2).toBe(t1); // 幂等：重复启动返回同一 timer
+      expect(t1).toBeTruthy();
+      expect(typeof t1.unref).toBe('function'); // Node 定时器带 unref
+      svc.stopExpiryJob();
+      const t3 = svc.startExpiryJob(); // 停止后可重启
+      expect(t3).not.toBe(t1);
+      svc.stopExpiryJob();
+      expect(svc.stopExpiryJob).toBeTypeOf('function');
+    } finally {
+      pool.connect = origConnect;
+    }
   });
 });

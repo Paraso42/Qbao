@@ -9,7 +9,8 @@ const { sanitizeStateJson, sanitizeAiConfigObject } = require('../lib/aiStateSan
 
 // v3.25: 乐观锁（rev）— 桌面/网页多端互通防覆盖。
 // 客户端 PUT/PATCH 可带 rev；不匹配返回 409 { error, current }。
-// 旧客户端不带 rev 时保持原有覆盖行为（灰度兼容）。
+// T13: 不带 rev 的 PUT 仅允许首写（服务器无该用户数据时）；
+//      已有数据时返回 409，杜绝旧客户端/裸写覆盖云端新数据。
 
 async function getRow(userId) {
   const r = await pool.query('SELECT state_json, synced_at, rev FROM user_data WHERE user_id = $1', [userId]);
@@ -61,12 +62,17 @@ module.exports = function (app) {
       }
       throw new ApiError(409, '数据版本冲突', { current: { state_json: cur.state_json, synced_at: cur.synced_at, rev: cur.rev } });
     }
-    // 兼容路径：旧客户端全量覆盖（rev 自增）
-    const r = await pool.query(
-      'INSERT INTO user_data (user_id, state_json) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET state_json = EXCLUDED.state_json, rev = user_data.rev + 1, synced_at = NOW() RETURNING rev',
+    // T13: 无 rev 保护 — 仅允许首写（服务器无行）；已有行 → 409，要求客户端升级/带 rev 重试。
+    // 用 INSERT ... ON CONFLICT DO NOTHING 原子判定：成功即首写；冲突说明已有数据。
+    const ins = await pool.query(
+      'INSERT INTO user_data (user_id, state_json) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING RETURNING rev',
       [req.userId, state_json]
     );
-    res.json({ ok: true, rev: r.rows[0].rev });
+    if (ins.rows.length) return res.json({ ok: true, rev: ins.rows[0].rev });
+    const cur = await getRow(req.userId);
+    throw new ApiError(409, '数据版本冲突：客户端未携带 rev（版本过旧），请升级后重试', {
+      current: { state_json: cur.state_json, synced_at: cur.synced_at, rev: cur.rev },
+    });
   }));
 
   // PATCH /api/v1/data/section — 部分更新（乐观锁 CAS）

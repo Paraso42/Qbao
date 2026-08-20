@@ -104,7 +104,19 @@ module.exports = function (app) {
          RETURNING *`,
         [userId, originalName, storedName, fileSize, relPath, mimeType, chapterId, poolExpiresAt]
       );
-      res.status(201).json({ file: formatFileRow(result.rows[0]) });
+      const row = result.rows[0];
+      // v3.30 多章节关联：上传时若带 chapterId，同步写入关联表
+      if (chapterId && row) {
+        try {
+          await pool.query(
+            'INSERT INTO user_files_chapters (user_id, file_id, chapter_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [userId, row.id, chapterId]
+          );
+        } catch (e) {
+          console.warn('[files] link chapter on upload failed:', e.message);
+        }
+      }
+      res.status(201).json({ file: formatFileRow(row) });
     } catch (e) {
       removeUploadedFile(req.file);
       throw e;
@@ -124,14 +136,106 @@ module.exports = function (app) {
       params.push(true);
     }
     if (req.query.chapter_id) {
+      // v3.30 多章节关联：按关联表过滤（user_id 复用 $1）
       pi++;
-      sql += ' AND chapter_id = $' + pi;
+      sql += ' AND id IN (SELECT file_id FROM user_files_chapters WHERE user_id = $1 AND chapter_id = $' + pi + ')';
       params.push(req.query.chapter_id);
     }
     sql += ' ORDER BY created_at DESC';
 
     const result = await pool.query(sql, params);
     res.json({ files: result.rows.map(formatFileRow) });
+  }));
+
+  app.delete('/api/v1/files/:id', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      'DELETE FROM user_files WHERE id = $1 AND user_id = $2 RETURNING file_path',
+      [req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) throw new ApiError(404, '文件不存在');
+
+    const absPath = path.join(UPLOAD_BASE, '..', result.rows[0].file_path);
+    try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (_) {}
+
+    res.json({ ok: true });
+  }));
+
+  app.post('/api/v1/files/:id/assign', validate({ params: idParamsSchema, body: assignFileBodySchema }), requireAuth, asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      'UPDATE user_files SET chapter_id = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
+      [req.body.chapterId, req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) throw new ApiError(404, '文件不存在或不属于你');
+
+    // v3.30 多章节关联：追加一条关联（同章节重复分配幂等），不覆盖其他章节
+    try {
+      await pool.query(
+        'INSERT INTO user_files_chapters (user_id, file_id, chapter_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        [req.userId, req.params.id, req.body.chapterId]
+      );
+    } catch (e) {
+      console.warn('[files] assign chapter link failed:', e.message);
+    }
+
+    res.json({ file: formatFileRow(result.rows[0]) });
+  }));
+
+  app.post('/api/v1/files/:id/unassign', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
+    const result = await pool.query(
+      'UPDATE user_files SET chapter_id = NULL, in_pool = true WHERE id = $1 AND user_id = $2 RETURNING *',
+      [req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) throw new ApiError(404, '文件不存在或不属于你');
+
+    // v3.30：解除该文件的全部章节关联
+    try {
+      await pool.query(
+        'DELETE FROM user_files_chapters WHERE file_id = $1 AND user_id = $2',
+        [req.params.id, req.userId]
+      );
+    } catch (e) {
+      console.warn('[files] unassign chapter links failed:', e.message);
+    }
+
+    res.json({ file: formatFileRow(result.rows[0]) });
+  }));
+
+  // POST /api/v1/files/:id/extend — 文件池续期（消耗积分 10/7天）
+  app.post('/api/v1/files/:id/extend', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
+    const fid = req.params.id;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const fr = await client.query(
+        'SELECT * FROM user_files WHERE id = $1 AND user_id = $2 AND in_pool = true',
+        [fid, req.userId]
+      );
+      if (fr.rows.length === 0) throw new ApiError(404, '文件不在文件池中或不属于你');
+
+      const file = fr.rows[0];
+      // 扣积分（余额不足 → 400，事务回滚）
+      const spend = await pointsService.spendPoints(client, req.userId, P.FILE_EXTEND_COST, {
+        reason: 'file_extend',
+        note: '文件池续期：' + file.original_name,
+      });
+
+      const baseDate = file.pool_expires_at && new Date(file.pool_expires_at) > new Date()
+        ? new Date(file.pool_expires_at)
+        : new Date();
+      const newExpiry = new Date(baseDate.getTime() + P.FILE_EXTEND_DAYS * 24 * 3600 * 1000).toISOString();
+
+      const result = await client.query(
+        'UPDATE user_files SET pool_expires_at = $1, points_extended = true WHERE id = $2 AND user_id = $3 RETURNING *',
+        [newExpiry, fid, req.userId]
+      );
+      await client.query('COMMIT');
+      res.json({ file: formatFileRow(result.rows[0]), balance: spend.balance, pointsSpent: P.FILE_EXTEND_COST });
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   }));
 
   app.delete('/api/v1/files/:id', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {

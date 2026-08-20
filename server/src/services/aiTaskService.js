@@ -20,6 +20,7 @@ const { finalizeAiQuestions } = require('./aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('./chapterSessionGuard');
 const pointsService = require('./pointsService');
 const P = require('../config/points');
+const { loadPoolTextForChapter } = require('../lib/poolText');
 
 const TASK_STATUS = {
   QUEUED: 'queued',
@@ -75,14 +76,8 @@ async function createAiTask(userId, { providerName, model, apiKey, body }) {
     throw new ApiError(429, 'AI 出题排队任务已达上限（' + P.AI_TASK_USER_LIMIT + '），请等待完成或取消旧任务');
   }
 
-  // 积分配额：与 /ai/generate 共享每日免费次数，超出后按次扣分（余额不足 → 400）
-  try {
-    await pointsService.checkAndChargeAiQuota(pool, userId, 'generate');
-  } catch (e) {
-    if (e instanceof ApiError) throw e;
-    console.warn('[points] ai task quota check failed:', e.message);
-  }
-
+  // T6：任务创建不再预扣积分——改为 worker 成功完成时才计费（checkAndChargeAiQuota），
+  // 失败/取消/重启中断不扣费；每日免费次数仍按 ai_tasks 创建记录计数（防滥用）。
   const target = resolveAiTarget(providerName, model);
   const request = {
     provider: target.providerConfig.id,
@@ -178,8 +173,15 @@ async function runTaskGeneration(task, secret, signal) {
   const target = resolveAiTarget(request.provider, request.model);
   const { counts } = normalizeTypeCounts(body.typeCounts);
   const totalQuestions = counts.single + counts.judge + counts.term + counts.short;
-  const textContent = body.textContent || '';
+  // 修复：后台任务与 /ai/generate 一致，自动并入章节分配的文件池资料。
+  // （此前仅用客户端 textContent；客户端 prepareUploadData 会排除 _poolFile 资料，
+  //   导致"文件池分配的资料 + 服务端任务队列"出题时资料为空，生成与材料无关的题目）
+  const poolText = await loadPoolTextForChapter(task.user_id, body.chapterId, body.textContent || '');
+  const textContent = poolText.text;
+  const poolFilesStatus = poolText.poolFilesStatus;
   const systemPrompt = body.prompt || DEFAULT_SYSTEM_PROMPT;
+  console.log('[ai-task] task id=' + task.id + ' chapterId=' + (body.chapterId || 'none') +
+    ' textContentLen=' + textContent.length + ' poolFiles=' + poolFilesStatus.length);
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -225,7 +227,7 @@ async function runTaskGeneration(task, secret, signal) {
     validation: finalized.baseValidation,
     selfCheck: finalized.selfCheck,
     usage: completion.usage || null,
-    poolFilesStatus: [],
+    poolFilesStatus,
   };
 }
 
@@ -343,6 +345,12 @@ async function processNextAiTask() {
         console.log('[ai-task] task id=' + task.id + ' canceled during generation, result discarded');
         taskSecrets.delete(task.id);
         return true;
+      }
+      // T6：成功计费（与 /ai/generate 一致：成功才扣，失败/取消不扣；DB 瞬时错误仅日志）
+      try {
+        await pointsService.checkAndChargeAiQuota(pool, task.user_id, 'generate');
+      } catch (e) {
+        console.warn('[points] ai task charge on success failed:', e.message);
       }
       await finishTask(task.id, result);
     } catch (e) {

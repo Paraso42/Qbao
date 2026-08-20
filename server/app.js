@@ -25,9 +25,12 @@ function createApp() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // 上传文件静态服务（头像、文件池下载）
-  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-  app.use('/avatars', express.static(path.join(__dirname, '../uploads/avatars')));
+  // 头像静态服务（公开访问，加 nosniff）。
+  // T2 整改：不再静态暴露整个 ../uploads（聊天文件/文件池/工单图片均走
+  // 各自业务端点：/api/v1/chat/files、/api/v1/issues/images，避免绕过鉴权与类型校验）。
+  app.use('/avatars', express.static(path.join(__dirname, '../uploads/avatars'), {
+    setHeaders: (res) => { res.setHeader('X-Content-Type-Options', 'nosniff'); },
+  }));
 
   const authLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: '请求过于频繁' }, keyGenerator: (req) => req.ip });
   const generalLimiter = rateLimit({ windowMs: 60000, max: 120, keyGenerator: (req) => req.ip });
@@ -35,6 +38,15 @@ function createApp() {
   app.use('/api/v1/', generalLimiter);
 
   app.get('/health', async (req, res) => {
+    try {
+      await pool.query('SELECT 1');
+      res.json({ status: 'ok', version: '2.0', db: 'connected' });
+    } catch (e) {
+      res.status(503).json({ status: 'error', db: 'disconnected' });
+    }
+  });
+  // /api/v1/health 别名：公网经 nginx 反代（/api → :3000）的探活路径
+  app.get('/api/v1/health', async (req, res) => {
     try {
       await pool.query('SELECT 1');
       res.json({ status: 'ok', version: '2.0', db: 'connected' });

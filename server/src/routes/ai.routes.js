@@ -13,9 +13,21 @@ const { validateQuestionSet } = require('../services/aiQuestionValidator');
 const { finalizeAiQuestions } = require('../services/aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('../services/chapterSessionGuard');
 const { cleanupExpiredFiles } = require('../services/filePoolService');
+const { loadPoolTextForChapter } = require('../lib/poolText');
 const pointsService = require('../services/pointsService');
 const { aiQuestionSchema } = require('../lib/aiQuestionSchema');
 const aiQuestionParser = require('../services/aiQuestionParser');
+
+// T6：AI 出题「成功计费」——仅当一次生成真正产出题目并返回成功时才扣费。
+// 失败/取消/解析失败路径不扣费；扣费 DB 瞬时错误仅记日志，不阻塞结果返回
+//（每日低峰 reconcileAll 以台账为准兜底）。
+async function chargeGenerateSuccess(userId) {
+  try {
+    await pointsService.checkAndChargeAiQuota(pool, userId, 'generate');
+  } catch (e) {
+    console.warn('[points] charge on success failed:', e.message);
+  }
+}
 
 // AI 请求审计：所有路径都记录 status，失败也不影响主流程。
 async function logAiRequest(userId, model, status) {
@@ -29,7 +41,8 @@ async function logAiRequest(userId, model, status) {
   }
 }
 
-const uploadDir = path.join(__dirname, '../../uploads');
+// T16: 上传根目录统一为仓库级 uploads/（与 chat/issues/pool/avatars 一致）
+const uploadDir = path.join(__dirname, '../../../uploads');
 const POOL_BASE = path.join(__dirname, '../../../uploads'); // shared file pool root
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const upload = multer({ dest: uploadDir, limits: { fileSize: 20 * 1024 * 1024 } });
@@ -125,47 +138,41 @@ async function extractText(filePath, ext) {
 
 module.exports = function (app) {
   // List available providers and models
-  app.get('/api/v1/ai/providers', function(req, res) {
-    try {
-      var providers = getAllProviders();
-      // Also add backward-compatible model listing
-      var allModels = [];
-      providers.forEach(function(p) {
-        p.models.forEach(function(m) {
-          allModels.push(m.id);
-        });
-      });
-      res.json({ providers: providers, models: allModels });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+  // T15: 统一错误层（原裸 try/catch 回显 e.message，泄露内部细节）
+  app.get('/api/v1/ai/providers', asyncHandler(async (req, res) => {
+    const providers = getAllProviders();
+    // Also add backward-compatible model listing
+    const allModels = [];
+    providers.forEach(function (p) {
+      p.models.forEach(function (m) { allModels.push(m.id); });
+    });
+    res.json({ providers, models: allModels });
+  }));
 
-  app.post('/api/v1/ai/upload', requireAuth, upload.array('files', 10), async (req, res) => {
-    try {
-      // 积分配额：每日免费解析次数内不扣分；超出后按次预扣（失败不阻塞上传主流程）
-      await pointsService.checkAndChargeAiQuota(pool, req.userId, 'upload').catch((e) => {
-        if (e instanceof ApiError) throw e;
-        console.warn('[points] ai upload quota check failed:', e.message);
-      });
+  // T15: 统一错误层 — 积分不足→400、multer 类型白名单→422、其余→通用 500（不泄内部细节）
+  app.post('/api/v1/ai/upload', requireAuth, upload.array('files', 10), asyncHandler(async (req, res) => {
+    // 积分配额：每日免费解析次数内不扣分；超出后按次预扣（失败不阻塞上传主流程）
+    await pointsService.checkAndChargeAiQuota(pool, req.userId, 'upload').catch((e) => {
+      if (e instanceof ApiError) throw e;
+      console.warn('[points] ai upload quota check failed:', e.message);
+    });
 
-      if (!req.files || req.files.length === 0) return res.status(422).json({ error: '未上传文件' });
-      const results = [];
-      for (const file of req.files) {
-        try {
-          const ext = path.extname(file.originalname).slice(1).toLowerCase();
-          const extracted = await extractText(file.path, ext);
-          results.push({ name: file.originalname, ...extracted });
-        } finally {
-          if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        }
+    if (!req.files || req.files.length === 0) return res.status(422).json({ error: '未上传文件' });
+    const results = [];
+    for (const file of req.files) {
+      try {
+        const ext = path.extname(file.originalname).slice(1).toLowerCase();
+        const extracted = await extractText(file.path, ext);
+        results.push({ name: file.originalname, ...extracted });
+      } finally {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
       }
-      const text = results.filter(r => r.type === 'text').map(r => r.content).join('\n\n');
-      // 配额计数（model='upload' 计入 ai_request_log，供每日免费额度核算）
-      logAiRequest(req.userId, 'upload', 'ok').catch(() => {});
-      res.json({ text, images: [], fileCount: results.length, items: results.map(r => ({ name: r.name, type: r.type })) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+    }
+    const text = results.filter(r => r.type === 'text').map(r => r.content).join('\n\n');
+    // 配额计数（model='upload' 计入 ai_request_log，供每日免费额度核算）
+    logAiRequest(req.userId, 'upload', 'ok').catch(() => {});
+    res.json({ text, images: [], fileCount: results.length, items: results.map(r => ({ name: r.name, type: r.type })) });
+  }));
 
   app.post('/api/v1/ai/generate', validate({ body: aiGenerateBodySchema }), requireAuth, async (req, res) => {
     try {
@@ -176,13 +183,8 @@ module.exports = function (app) {
       const { textContent, typeCounts, prompt, chapterHistory, chapterId, selfCheck } = req.body;
       const useStream = parsed.useStream;
 
-      // 积分配额（防滥用）：每日免费次数内不扣分；超出后按次预扣 2 分（余额不足 → 400）。
-      // 失败仅当 ApiError（积分不足）时抛出；数据库瞬时错误不阻塞出题。
-      await pointsService.checkAndChargeAiQuota(pool, req.userId, 'generate').catch((e) => {
-        if (e instanceof ApiError) throw e;
-        console.warn('[points] ai quota check failed:', e.message);
-      });
-
+      // T6：积分配额改为「成功计费」——生成成功出口（本文件各 'ok' 路径）统一调用
+      // chargeGenerateSuccess()；失败/取消/解析失败不扣费。
       // 章节未完成规则校验（与任务队列一致）：仍有未做完的题目不允许继续出题（409）
       await assertChapterCanGenerate(req.userId, chapterId || null);
 
@@ -206,70 +208,10 @@ module.exports = function (app) {
       const systemPrompt = prompt || '你是一个出题助手。请根据提供的资料生成考试题目。\n\n重要规则：\n1. 只输出纯JSON数组，不要包含任何其他文字、代码块标记或解释\n2. 每道题必须包含字段：type(值为single/judge/term/short)、question、options(数组)、answer(数字索引)、tag、strategy(值为error/review/new)、explanation\n3. 单选题(single)：options为4个选项的数组，answer为0-3的索引\n4. 判断题(judge)：options为["正确","错误"]，answer为0或1\n5. 名词解释(term)和简答题(short)：不需要options和answer\n6. 输出顺序：单选题→判断题→名词解释→简答题\n7. LaTeX公式格式：题目中含有数学符号、上下标、分式、根号、积分、求和等内容时，必须使用\$...\$包裹行内公式（如\$x_1\$、\$E=mc^2\$），使用\$\$...\$\$包裹独立公式块（如\$\$\\sum_{i=1}^{n} x_i\$\$）';
 let userText = textContent || '';
 
-      // If chapterId provided, read assigned pool files from disk
-      var poolTexts = [];
-      var poolFilesStatus = [];
-      if (chapterId) {
-        try {
-          // 过期文件池文件：先标记诊断条目，再统一清理，读取时按过期时间过滤（修复"过期文件仍被用于出题"）
-          var expiredRows = await pool.query(
-            `SELECT original_name FROM user_files WHERE user_id = $1 AND chapter_id = $2
-             AND in_pool = true AND pool_expires_at IS NOT NULL AND pool_expires_at < NOW()`,
-            [req.userId, chapterId]
-          );
-          if (expiredRows.rows.length > 0) {
-            expiredRows.rows.forEach(function (r) {
-              poolFilesStatus.push({ name: r.original_name, found: false, extracted: false, empty: true, expired: true, error: '文件池文件已过期，已删除' });
-            });
-            await cleanupExpiredFiles(req.userId);
-          }
-          var fileResult = await pool.query(
-            'SELECT * FROM user_files WHERE user_id = $1 AND chapter_id = $2 AND (pool_expires_at IS NULL OR pool_expires_at > NOW())',
-            [req.userId, chapterId]
-          );
-          for (var fi = 0; fi < fileResult.rows.length; fi++) {
-            var frow = fileResult.rows[fi];
-            var statusEntry = { name: frow.original_name, found: false, extracted: false, empty: false, error: null, warning: null };
-            var absPath = path.join(POOL_BASE, frow.file_path);
-            if (fs.existsSync(absPath)) {
-              statusEntry.found = true;
-              try {
-                var ext = path.extname(frow.original_name).slice(1).toLowerCase();
-                var extracted = await getCachedOrExtractFileText(frow, absPath, ext, extractText);
-                statusEntry.extracted = extracted.extracted;
-                statusEntry.empty = extracted.empty;
-                statusEntry.error = extracted.error || null;
-                statusEntry.warning = extracted.warning || null;
-                if (extracted && extracted.type === 'text' && extracted.content && extracted.content.trim()) {
-                  poolTexts.push('--- 文件：' + frow.original_name + ' ---\n' + extracted.content);
-                  statusEntry.contentLength = extracted.content.length;
-                } else if (extracted.warning) {
-                  console.warn('Pool file extraction warning: ' + frow.original_name + ' — ' + extracted.warning);
-                }
-              } catch (ex) {
-                statusEntry.extracted = false;
-                statusEntry.error = ex.message;
-                console.warn('Failed to extract pool file: ' + frow.original_name + ' — ' + ex.message);
-              }
-            } else {
-              statusEntry.error = 'File not found on disk';
-              console.warn('Pool file not found: ' + frow.original_name + ' at ' + absPath);
-            }
-            poolFilesStatus.push(statusEntry);
-          }
-          if (poolTexts.length > 0) {
-            userText = poolTexts.join('\n\n') + (userText ? '\n\n' + userText : '');
-            console.log('AI generate: merged ' + poolTexts.length + ' pool files, total textLen=' + userText.length);
-          } else if (poolFilesStatus.length > 0) {
-            var failReasons = poolFilesStatus.map(function(s) {
-              return s.name + ': ' + (s.error || (s.found ? 'empty content' : 'file missing'));
-            }).join('; ');
-            console.error('AI generate: ALL ' + poolFilesStatus.length + ' pool files failed extraction — ' + failReasons);
-          }
-        } catch (e2) {
-          console.warn('Pool file reading failed:', e2.message);
-        }
-      }
+      // 章节分配的文件池资料：与后台任务队列共用同一读取逻辑（多章节关联表）
+      const poolRes = await loadPoolTextForChapter(req.userId, chapterId || null, userText);
+      userText = poolRes.text;
+      const poolFilesStatus = poolRes.poolFilesStatus;
       if (!userText) userText = '请生成一些通用练习题';
 
       if (chapterHistory && chapterHistory.tagStats) {
@@ -428,6 +370,7 @@ let userText = textContent || '';
           (questions || []).forEach(function(q) { typeDist3[q.type || '?'] = (typeDist3[q.type || '?'] || 0) + 1; });
           console.log('[stream] final parse: model=' + model + ', questions=' + questions.length + ', types=' + JSON.stringify(typeDist3));
             await logAiRequest(req.userId, model, 'ok');
+        await chargeGenerateSuccess(req.userId);
             res.write('data: ' + JSON.stringify({ done: true, questions: questions, validation: streamValidation, selfCheck: finalizedFinal.selfCheck, topUp: finalizedFinal.topUp, typeShortfall: streamShortfall, usage: {}, poolFilesStatus: poolFilesStatus }) + '\n\n');
             res.end();
             res.removeListener('close', onResClose);
@@ -509,6 +452,7 @@ let userText = textContent || '';
           'INSERT INTO ai_request_log (user_id, model, status) VALUES ($1, $2, $3)',
           [req.userId, model, 'ok']
         );
+        await chargeGenerateSuccess(req.userId);
         res.json({ questions: questions, usage: completion.usage, poolFilesStatus: poolFilesStatus, validation: validation, selfCheck: finalized.selfCheck, typeShortfall: finalized.typeShortfall });
       }
     } catch (e) {
@@ -517,16 +461,11 @@ let userText = textContent || '';
           if (!res.headersSent) return res.status(e.status).json({ error: e.message });
           console.error('AI generate ApiError after headers sent:', e.status, e.message);
           return;
-          if (!res.headersSent) throw e;
-          console.error('AI generate ApiError after headers sent:', e.status, e.message);
-          return;
         }
-      console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);
+        console.error('AI generate error:', e.message, 'statusCode:', e ? e.status : undefined, 'code:', e ? e.code : undefined);
         if (!res.headersSent) return res.status(500).json({ error: '服务器内部错误' });
         console.error('AI generate error after headers sent:', e.message);
         return;
-      if (!res.headersSent) throw e;
-      else console.error('AI generate error after headers sent:', e.message);
     }
   });
 

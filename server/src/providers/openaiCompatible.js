@@ -74,6 +74,8 @@ function createOpenAICompatibleProvider(config) {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + key,
+          // 禁用 keep-alive：ECNU WAF 复用连接偶发 UND_ERR_CONNECT_TIMEOUT（生产实测）
+          'Connection': 'close',
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -137,6 +139,8 @@ function createOpenAICompatibleProvider(config) {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + key,
+          // 禁用 keep-alive：ECNU WAF 复用连接偶发 UND_ERR_CONNECT_TIMEOUT（生产实测）
+          'Connection': 'close',
         },
         body: JSON.stringify(body),
         signal: controller.signal,

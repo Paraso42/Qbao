@@ -25,7 +25,10 @@ describe('data 同步（rev 乐观锁）', () => {
         }
         return { rows: [] };
       }],
-      [/INSERT INTO user_data \(user_id, state_json\) VALUES/, async () => ({ rows: [{ rev: cloud ? cloud.rev + 1 : 1 }] })],
+      [/INSERT INTO user_data \(user_id, state_json\) VALUES/, async () => {
+        // T13: 服务器已有行 → ON CONFLICT DO NOTHING 返回空；无行 → 首写成功 rev=1
+        return { rows: cloud ? [] : [{ rev: 1 }] };
+      }],
       [/INSERT INTO user_data \(user_id, state_json, rev\)/, async () => ({ rows: [] })],
     ]);
   });
@@ -78,13 +81,25 @@ describe('data 同步（rev 乐观锁）', () => {
     expect(res.body.current.rev).toBe(5);
   });
 
-  it('旧客户端不带 rev → 兼容覆盖', async () => {
+  it('不带 rev 且服务器已有数据 → 409（T13 无 rev 保护）', async () => {
+    const res = await request(app)
+      .put('/api/v1/data')
+      .set('Authorization', 'Bearer ' + token)
+      .send({ state_json: { banks: [] } });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('rev');
+    expect(res.body.current.rev).toBe(5);
+  });
+
+  it('不带 rev 且服务器无数据（首写）→ 允许插入 rev=1', async () => {
+    cloud = null;
     const res = await request(app)
       .put('/api/v1/data')
       .set('Authorization', 'Bearer ' + token)
       .send({ state_json: { banks: [] } });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+    expect(res.body.rev).toBe(1);
   });
 
   it('缺少 state_json → 422（校验先于鉴权）', async () => {
