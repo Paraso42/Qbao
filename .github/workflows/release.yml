@@ -46,8 +46,9 @@ jobs:
         run: |
           cd desktop/release
           EXE=$(ls Qbao*Setup*.exe | head -1)
+          BLOCKMAP=$(ls *.blockmap | head -1)
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Qbao $GITHUB_REF_NAME" \
             --generate-notes \
-            "$EXE" latest.yml *.blockmap
+            "$EXE" latest.yml "$BLOCKMAP"
