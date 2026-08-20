@@ -60,6 +60,17 @@ function createWindow() {
   if (process.env.QBAO_SMOKE) {
     mainWindow.webContents.on('did-finish-load', () => { console.log('[desktop] SMOKE_OK'); setTimeout(() => app.exit(0), 1500); });
   }
+  // T21: 窗口安全 — 外部链接一律交系统浏览器（校验协议），禁止应用内新开窗口
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  // T21: 导航防护 — 只允许本地页面（file:// 打包产物）与开发模式 dev URL，其余一律拦截
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowed = (app.isPackaged && url.startsWith('file://'))
+      || (!app.isPackaged && /^http:\/\/(localhost|127\.0\.0\.1):5173/.test(url));
+    if (!allowed) event.preventDefault();
+  });
   recreatingWindow = false;
   mainWindow.on('closed', () => { mainWindow = null; });
 }

@@ -54,3 +54,13 @@ desktop/config.local.json
 desktop/dist/
 # ---- 本地 AI 端到端测试脚本（含敏感信息，永不提交）----
 e2e-ai-scenarios/
+
+# ---- 前端构建产物与本地密钥（T1 整改）----
+app/dist/
+app/.tmp/
+local/keys/
+
+# ---- 前端构建产物与本地密钥（T1 整改）----
+app/dist/
+app/.tmp/
+local/keys/
