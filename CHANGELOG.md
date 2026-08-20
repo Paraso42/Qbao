@@ -1,3 +1,31 @@
+## v3.30.1
+
+- 出题流程调整（按用户验收反馈）：
+  - **停用流式输出**：流式分支整体注释保留（可恢复），一律改为"生成完成 → 校验 → 一次性导入"，保证 AI 二次校准能在导入前生效、出题质量可控
+  - **AI 自动判定（二次校准）开关**：设置页「AI 自动判定」Toggle 由用户自行开启/关闭（开启后生成时对客观题做一次额外校验调用）
+  - **移除「我会了」**：答题界面不再提供"我会了"跳过入口（ignoreCurrent/isIgnored 逻辑同步删除，ignoredQuestions 数据字段保留兼容）；「我不会」保留；主观题判定保持不变
+- 文件池**一份文件可关联多个章节**（user_files_chapters 关联表，迁移 011_v3.30_user_file_chapters.sql）：
+  - assign 追加关联、不再顶掉原章节；unassign 解除全部关联；列表按关联表过滤
+  - AI 出题（/ai/generate 与后台任务队列共用 lib/poolText.js）按关联表读取章节资料
+- 修复：后台任务出题与材料不匹配（任务队列未合并文件池资料 → 空资料生成无关题目）、
+  服务端任务完成后误入本地任务区、重复导入产生重复轮次、合并去重后 currentQuizSetIdx 越界
+- 修复：答题入口崩溃（TypeError: reading 'length'，QuizView idx/模板/题号点防御补全、
+  getActiveSet/getCurrentQuizSet 越界回退、createQuizSetForChapter 按题目签名去重）
+- 其他：新增 favicon.svg（消除 /favicon.ico 404）
+
+## v3.30.0
+
+- **本地持久化分层（性能整改）**：localStorage 只存轻量骨架（章节元数据/策略/配置），
+  题目/答案/大考卷/SRS/历史等大字段入 IndexedDB（stateDb.js），空闲时全量写入不阻塞交互——
+  2000+ 题题库不再超 localStorage 5MB 上限、不再全量序列化卡顿
+- **答题进度可靠恢复**：活动会话键（qbao_active_session）每次保存同步写入，刷新/关闭后
+  恢复答题入口与进度；null→undefined 语义统一（未答题目不再被计为已完成）；启动同步门闩
+  防止骨架态覆盖云端数据
+- **多账号隔离**：登录态只读写账号专属存储键，杜绝账号间数据串号
+- 服务端任务队列修复：刷新不重复创建任务、导入幂等（importedServerTaskIds）、
+  服务端任务自动轮询续跑、本地/服务端任务分区显示
+- 测试：persistence 7 用例（骨架化/活动会话/null 语义/账号隔离），app 34/34、server 142/142
+
 ## v3.29.0
 
 - **积分系统上线**（激活此前预留的 `storage_points`/`points_extended` 空间）：

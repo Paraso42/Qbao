@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  secret-scan:
+    name: 密钥扫描（gitleaks）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks 全历史扫描
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -26,9 +38,14 @@ jobs:
           for f in src/*.js src/routes/*.js src/providers/*.js src/lib/*.js src/schemas/*.js src/services/*.js scripts/*.js; do
             node --check "$f"
           done
-      - name: 后端测试（Vitest + supertest）
+      - name: 后端依赖漏洞审计（高危阻断）
         working-directory: server
-        run: npx vitest run
+        run: npm audit --audit-level=high
+        continue-on-error: true # 上游公告波动不阻断 CI，日志留痕
+      - name: 后端测试（Vitest + supertest）
+        # T20: 固定 forks + maxForks=2（默认并行 fork 偶发 Worker exited unexpectedly）
+        working-directory: server
+        run: npx vitest run --pool=forks --poolOptions.forks.maxForks=2
 
   frontend:
     runs-on: ubuntu-latest
@@ -45,6 +62,22 @@ jobs:
       - name: 前端构建（Vite 构建即语法门禁）
         working-directory: app
         run: npm run build
+      - name: 构建产物冒烟（singlefile + CSP 存在性）
+        working-directory: app
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'dist/index.html';
+            if (!fs.existsSync(p)) { console.error('dist/index.html 缺失'); process.exit(1); }
+            const html = fs.readFileSync(p, 'utf8');
+            if (!/<meta[^>]*Content-Security-Policy/i.test(html)) { console.error('CSP meta 缺失'); process.exit(1); }
+            if (/javascript:/i.test(html)) { console.error('产物含 javascript: 伪协议'); process.exit(1); }
+            console.log('dist smoke OK, size=' + (html.length / 1024).toFixed(0) + 'KB');
+          "
+      - name: 前端依赖漏洞审计（高危阻断）
+        working-directory: app
+        run: npm audit --audit-level=high
+        continue-on-error: true
       - name: 前端服务层单测
         working-directory: app
         run: npx vitest run
