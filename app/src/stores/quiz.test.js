@@ -7,7 +7,6 @@ import { useQuizStore } from './quiz'
 import { useDataStore } from './data'
 import { useUiStore } from './ui'
 import { STORAGE_KEY } from '../services/persistence'
-import { getQuestionId } from '../services/questions'
 
 function makeLocalStorageStub(seed = {}) {
   const map = new Map(Object.entries(seed))
@@ -49,7 +48,6 @@ function seedState({ chapter = 'c1' } = {}) {
     currentChapterId: chapter,
     history: [],
     lastScreen: 'start',
-    srsData: {},
     achievements: { unlocked: [], history: [] },
     settings: { darkMode: false },
     aiConfig: {},
@@ -154,9 +152,6 @@ describe('quiz store 核心流转 (P1.4)', () => {
     expect(rec.correct).toBe(2)
     // 未答的第 3 题被 finalize 成 -1
     expect(rec.questions[2].userAnswer).toBe(-1)
-    // SRS 入账：3 道客观题均有记录（未答的 -1 按错误入账复习）
-    expect(Object.keys(data.state.srsData).length).toBe(3)
-    expect(data.state.srsData[getQuestionId('c1', data.state.chapters.c1.quizSets[0].questions[0])].repetitions).toBe(1)
     expect(data.state.history[0].questions[2].userAnswer).toBe(-1)
   })
 

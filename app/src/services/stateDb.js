@@ -1,7 +1,7 @@
 // ============================================================
 // stateDb.js — 大块状态数据 IndexedDB 存储（v3.30 性能整改）
 // localStorage 只存轻量骨架（章节元数据/策略/配置），
-// 题目/答案/大考卷/SRS/历史这些几 MB 的大字段放这里，
+// 题目/答案/大考卷/历史这些几 MB 的大字段放这里，
 // 彻底解决 2000+ 题题库超出 localStorage 5MB 上限 + 全量序列化卡顿。
 // 内存 state 结构不变（题目常驻），仅持久化层分流。
 // ============================================================
@@ -9,7 +9,7 @@
 const DB_NAME = 'qbao_state_db'
 const DB_VERSION = 1
 const CH_STORE = 'chapters'   // key=chapterId, value={questions,userAnswers,quizSets}
-const GL_STORE = 'global'     // key=global, value={srsData,generatedExams,history}
+const GL_STORE = 'global'     // key=global, value={generatedExams,history}
 
 let _dbPromise = null
 

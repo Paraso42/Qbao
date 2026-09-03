@@ -7,7 +7,6 @@
         <span class="quiz-ch-name">{{ setName }}</span>
         <span class="cap-chip" v-if="q">{{ typeMap[q.type] || q.type }}</span>
         <span class="quiz-header-spacer"></span>
-        <button class="btn btn-ghost btn-small" @click="shareCurrent" title="分享当前题目给好友"><Icon name="share" :size="14" /> 分享</button>
       </div>
 
       <div v-if="!as || !q" class="quiz-body">
@@ -73,6 +72,7 @@
             <button v-if="idx < as.questions.length - 1" class="btn btn-primary" @click="quiz.nextQuestion">下一题</button>
             <button v-else class="btn btn-primary" @click="quiz.endExam">查看报告</button>
           </template>
+          <button class="btn btn-ghost btn-small qa-share" @click="shareCurrent" title="分享当前题目给好友"><Icon name="share" :size="14" /> 分享</button>
           <button v-if="as.isExam" class="btn btn-danger" @click="quiz.endExam">结束</button>
         </div>
       </div>
@@ -442,6 +442,7 @@ watch(() => quiz.session.modalOpen, (open) => {
 @media (max-width: 768px) {
   .report-grid { grid-template-columns: repeat(2, 1fr); }
   .quiz-actions .btn { flex: 1; }
+.quiz-actions .qa-share { flex: 0 0 auto; margin-left: auto; align-self: center; }
   .quiz-legend { font-size: 12px; }
   .lg-dot { width: 14px; height: 14px; }
 }
