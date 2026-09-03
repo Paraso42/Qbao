@@ -8,17 +8,17 @@ import { useDataStore } from './data'
 import { useUserStore } from './user'
 import { useUiStore } from './ui'
 import {
-  fetchProvidersList, aiTest, aiUploadFiles, aiStreamGenerate,
+  fetchProvidersList, aiTest,
   createAiServerTask, getAiServerTask, listAiServerTasks, cancelAiServerTask
 } from '../services/aiApi'
 import { getAiApiKey, setAiApiKey, removeAiApiKey, hasAnyAiApiKey } from '../services/aiKeys'
 import { generatePromptText } from '../services/strategy'
-import { idbGetMaterial, idbStoreMaterial, idbDeleteMaterial } from '../services/materialsDb'
-import { generateMaterialId, formatFileSize, sleep, fetchWithRetry, getCi } from '../services/utils'
-import { API_BASE } from '../core/env'
-import { getToken, fetchWithAuth } from '../services/api'
-
-const MAX_ATTEMPTS = 3
+import { formatFileSize, sleep } from '../services/utils'
+// v3.32 (P2.1)：生成核心与历史统计拆分到独立服务模块，store 只保留编排
+import { collectChapterHistory } from '../services/aiHistory'
+import { normalizeQuestions, applyStrategyCompliance, nonStreamGenerate, processPoolDiagnostics, prepareUploadData } from '../services/aiTasks'
+import { createServerTaskController } from '../services/aiServerTasks'
+import { createMaterialManager } from '../services/aiMaterials'
 
 export const useAiStore = defineStore('ai', () => {
   const data = useDataStore()
@@ -29,25 +29,21 @@ export const useAiStore = defineStore('ai', () => {
   const providersLoaded = ref(false)
   const runnerActive = ref(false)
   const abortController = ref(null)
-  const queueDialogOpen = ref(false)
-  const serverTasks = ref([])
-  const serverTasksLoading = ref(false)
-  const serverPollTimer = ref(null)
+  // v3.32 (P2.1)：服务端任务列表/轮询/导入由独立 controller 提供
+  const {
+    serverTasks, serverTasksLoading, queueDialogOpen,
+    refreshServerTasks, markServerTaskImported, isServerTaskImported,
+    hasActiveServerTasks, startServerTaskPolling, stopServerTaskPolling,
+    importServerTaskResult, cancelServerTask, openQueueDialog, closeQueueDialog,
+  } = createServerTaskController({ data, user, ui })
+  // v3.32 (P2.1)：章节资料管理（元数据/IDB/文件池关联）独立成 manager
+  const {
+    getChapterMaterials, saveChapterMaterials, getExtIcon,
+    addMaterialFiles, removeMaterial, reconcilePoolMaterials, assignPoolFileToChapter,
+  } = createMaterialManager({ data, ui })
 
   const aiConfig = computed(() => data.state.aiConfig || {})
 
-  // —— 资料管理（chapterMaterials，二进制存 IndexedDB） ——
-  function getChapterMaterials(cid) {
-    if (!data.state.chapterMaterials) data.state.chapterMaterials = {}
-    return data.state.chapterMaterials[cid] || []
-  }
-  function saveChapterMaterials(cid, materials) {
-    if (!data.state.chapterMaterials) data.state.chapterMaterials = {}
-    data.state.chapterMaterials[cid] = materials
-    data.saveState()
-  }
-
-  // —— Provider 目录 ——
   const providersError = ref('')
   async function ensureProviders(force = false) {
     if (providersLoaded.value && !force) return providers.value
@@ -197,67 +193,10 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
-  // —— 章节历史统计（供 chapterHistory 入参） ——
-  function collectChapterHistory(chapterId) {
-    const ch = data.state.chapters[chapterId]
-    const tagStats = {}
-    let totalQuestions = 0, totalAnswered = 0, totalWrong = 0
-    ;(ch.quizSets || []).forEach((set) => {
-      set.questions.forEach((q, qi) => {
-        totalQuestions++
-        const answer = set.userAnswers && set.userAnswers[qi]
-        if (q.tag) {
-          if (!tagStats[q.tag]) tagStats[q.tag] = { total: 0, correct: 0, wrong: 0 }
-          tagStats[q.tag].total++
-        }
-        if (answer !== undefined) {
-          totalAnswered++
-          if (getCi(q, answer) === false) {
-            totalWrong++
-            if (q.tag && tagStats[q.tag]) tagStats[q.tag].wrong++
-          } else {
-            if (q.tag && tagStats[q.tag]) tagStats[q.tag].correct++
-          }
-        }
-      })
-    })
-    const topWrongTags = Object.entries(tagStats)
-      .sort((a, b) => b[1].wrong - a[1].wrong)
-      .slice(0, 10)
-      .map((e) => e[0])
-    return { totalQuestions, totalAnswered, totalWrong, tagStats, topWrongTags }
-  }
-
-  // —— 本地资料上传解析 ——
-  async function prepareUploadData(task) {
-    const materials = getChapterMaterials(task.chapterId)
-    const localMaterials = materials.filter((m) => !m._poolFile)
-    const files = []
-    for (const m of localMaterials) {
-      const dataUrl = await idbGetMaterial(m.id)
-      if (!dataUrl) {
-        if (task.log) task.log.push('资料 ' + m.name + ' 本地无缓存，将在服务端读取')
-        continue
-      }
-      const dec = atob(dataUrl.split(',')[1])
-      const bin = new Uint8Array(dec.length)
-      for (let j = 0; j < dec.length; j++) bin[j] = dec.charCodeAt(j)
-      files.push(new Blob([bin], { type: m.type || 'application/octet-stream' }))
-      files[files.length - 1]._name = m.name
-    }
-    let uploadData = { text: '', images: [] }
-    if (files.length > 0) {
-      const named = files.map((blob, i) => new File([blob], blob._name || ('file' + i), { type: blob.type }))
-      uploadData = await aiUploadFiles(named)
-    }
-    await sleep(1000)
-    return uploadData
-  }
-
   function buildOpts(task, uploadData) {
     const ac = aiConfig.value
     const envPrompt = ac.systemPrompt ? (ac.systemPrompt.trim() + '\n\n') : ''
-    const hist = collectChapterHistory(task.chapterId)
+    const hist = collectChapterHistory(data.state, task.chapterId)
     return {
       ac,
       apiKey: getAiApiKey(ac.provider || 'ecnu'),
@@ -269,41 +208,6 @@ export const useAiStore = defineStore('ai', () => {
       uploadData,
       chapterId: task.chapterId
     }
-  }
-
-  function applyStrategyCompliance(task, questions) {
-    if (!questions || questions.length === 0) return
-    const sc = { error: 0, review: 0, new: 0, unlabeled: 0 }
-    questions.forEach((q) => {
-      if (q.strategy && ['error', 'review', 'new'].indexOf(q.strategy) >= 0) sc[q.strategy]++
-      else sc.unlabeled++
-    })
-    const st = task.strategySnapshot
-    const totalQ2 = (st ? st.typeCounts.single + st.typeCounts.judge + st.typeCounts.term + st.typeCounts.short : questions.length) || questions.length
-    const expErr = Math.round(totalQ2 * (st ? st.errPct : 60) / 100)
-    const expRev = Math.round(totalQ2 * (st ? st.reviewPct : 20) / 100)
-    const expNew = totalQ2 - expErr - expRev
-    task.strategyCompliance = {
-      expected: { error: expErr, review: expRev, new: expNew },
-      actual: sc,
-      ok: Math.abs(sc.error - expErr) <= 2 && Math.abs(sc.review - expRev) <= 2 && Math.abs(sc.new - expNew) <= 2
-    }
-  }
-
-  function createEmptyQuizSet(chId) {
-    const ch = data.state.chapters[chId]
-    if (!ch) return null
-    if (!ch.quizSets) ch.quizSets = []
-    const set = { questions: [], userAnswers: [], currentIdx: 0, createdAt: Date.now() }
-    ch.quizSets.push(set)
-    ch.currentQuizSetIdx = ch.quizSets.length - 1
-    return set
-  }
-
-  function normalizeQuestions(questions) {
-    return questions
-      .map((q, i) => { if (!q.id) q.id = i + 1; return q })
-      .filter((q) => q.question && q.question.trim().length > 2)
   }
 
   function finishTask(task, ch) {
@@ -326,119 +230,6 @@ export const useAiStore = defineStore('ai', () => {
     abortController.value = null
     data.saveState()
     ui.toast(task.chapterName + ' 失败：' + error, 'err')
-  }
-
-  async function streamGenerate(task, opts) {
-    const emptySet = createEmptyQuizSet(task.chapterId)
-    task.streamSetRef = emptySet
-    const ch = data.state.chapters[task.chapterId]
-    let lastSaveAt = 0
-
-    const result = await aiStreamGenerate(
-      {
-        apiKey: opts.apiKey, provider: opts.provider, model: opts.model,
-        textContent: opts.uploadData.text,
-        typeCounts: opts.typeCounts,
-        prompt: opts.finalPrompt,
-        chapterHistory: opts.chapterHistory,
-        chapterId: opts.chapterId,
-        selfCheck: aiConfig.value.selfCheck === true
-      },
-      {
-        signal: abortController.value ? abortController.value.signal : undefined,
-        onProgress: (newParsed, totalCount) => {
-          task.streamQuestionCount = totalCount
-          if (task.streamSetRef) {
-            task.streamSetRef.questions.push.apply(task.streamSetRef.questions, newParsed)
-            const undefs = newParsed.map(() => undefined)
-            task.streamSetRef.userAnswers.push.apply(task.streamSetRef.userAnswers, undefs)
-          }
-          const now = Date.now()
-          if (now - lastSaveAt > 1000) {
-            lastSaveAt = now
-            data.saveState()
-          }
-        },
-        onChunk: async (evt) => {
-          if (evt.done && evt.questions && Array.isArray(evt.questions)) {
-            const oldAnswers = task.streamSetRef ? task.streamSetRef.userAnswers.slice() : []
-            if (task.streamSetRef) {
-              task.streamSetRef.questions = evt.questions.slice()
-              task.streamSetRef.userAnswers = []
-              for (let k = 0; k < evt.questions.length; k++) {
-                task.streamSetRef.userAnswers.push(k < oldAnswers.length && oldAnswers[k] !== undefined ? oldAnswers[k] : undefined)
-              }
-            }
-          }
-          if (evt.poolFilesStatus) task._poolFilesStatus = evt.poolFilesStatus
-        }
-      }
-    )
-
-    if (result.poolFilesStatus) task._poolFilesStatus = result.poolFilesStatus
-    if (task.streamSetRef && ch) {
-      if (!ch.questions) ch.questions = []
-      result.questions.forEach((q) => ch.questions.push(q))
-      if (!ch.userAnswers) ch.userAnswers = []
-      ch.userAnswers = ch.userAnswers.concat(result.questions.map(() => undefined))
-    }
-    return normalizeQuestions(result.questions)
-  }
-
-  async function nonStreamGenerate(task, opts, retryPromptBase) {
-    let questions = null
-    let lastJson = ''
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS && !questions; attempt++) {
-      if (attempt > 1) await sleep(2000 * (attempt - 1))
-      const retryPrompt = attempt > 1
-        ? retryPromptBase + '\n\n重要：你上次返回了无效JSON，错误是：' + lastJson + '。请修正后重新输出纯JSON数组。'
-        : retryPromptBase
-      const genRes = await fetchWithRetry(API_BASE + '/ai/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + getToken(),
-          'x-ai-api-key': opts.apiKey,
-          'x-ai-model': opts.model,
-          'x-ai-provider': opts.provider
-        },
-        body: JSON.stringify({
-          textContent: opts.uploadData.text,
-          imageUrls: opts.uploadData.images,
-          typeCounts: opts.typeCounts,
-          prompt: opts.finalPrompt + (attempt > 1 ? retryPrompt.slice(retryPromptBase.length) : ''),
-          selfCheck: aiConfig.value.selfCheck === true,
-          chapterHistory: opts.chapterHistory,
-          chapterId: opts.chapterId
-        })
-      }, 3, 5000)
-      const genData = await genRes.json()
-      if (genData.poolFilesStatus) task._poolFilesStatus = genData.poolFilesStatus
-      let raw = genData.questions
-      if (!raw && genData.output) raw = genData.output
-      if (!raw && typeof genData === 'object') raw = Object.values(genData).find((v) => Array.isArray(v) || typeof v === 'string')
-      if (typeof raw === 'string') {
-        raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-        try { questions = JSON.parse(raw) } catch (e) {
-          lastJson = e.message
-          if (attempt < MAX_ATTEMPTS) continue
-          else throw new Error('JSON格式错误: ' + e.message)
-        }
-      }
-      if (Array.isArray(raw)) questions = raw
-      if (!Array.isArray(questions) || questions.length === 0) {
-        lastJson = '不是数组或为空'
-        if (attempt < MAX_ATTEMPTS) continue
-        else throw new Error('AI未返回有效题目')
-      }
-      questions = normalizeQuestions(questions)
-      if (questions.length === 0) {
-        lastJson = '题目内容为空'
-        if (attempt < MAX_ATTEMPTS) continue
-        else throw new Error('AI返回的题目全部为空')
-      }
-    }
-    return questions
   }
 
   // —— 服务端任务路径 ——
@@ -510,7 +301,7 @@ export const useAiStore = defineStore('ai', () => {
     abortController.value = controller
 
     try {
-      const uploadData = await prepareUploadData(task)
+      const uploadData = await prepareUploadData(getChapterMaterials(task.chapterId), task)
       const opts = buildOpts(task, uploadData)
       const ac = opts.ac
 
@@ -568,19 +359,6 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
-  function processPoolDiagnostics(task) {
-    if (task.poolFilesTotal !== undefined || !task._poolFilesStatus || !Array.isArray(task._poolFilesStatus)) return
-    const pfs = task._poolFilesStatus
-    const failed = pfs.filter((s) => !s.extracted || s.empty || s.error)
-    if (failed.length > 0) {
-      task.poolFileWarnings = failed.map((s) => s.name + ': ' + (s.error || (s.empty ? '内容为空' : '提取失败')))
-    }
-    const ok = pfs.filter((s) => s.extracted && !s.empty && !s.error)
-    task.poolFilesUsed = ok.length
-    task.poolFilesTotal = pfs.length
-    delete task._poolFilesStatus
-  }
-
   function cancelTask(taskId) {
     const task = data.state.aiTaskQueue.find((t) => t.id === taskId)
     if (!task) return
@@ -619,235 +397,6 @@ export const useAiStore = defineStore('ai', () => {
     ui.toast('已停止全部任务', 'info')
   }
 
-  // —— v3.27：服务端任务列表（刷新恢复/导入/取消） ——
-  async function refreshServerTasks() {
-    if (!user.isOnline || !user.token) return
-    serverTasksLoading.value = true
-    try {
-      serverTasks.value = await listAiServerTasks(50)
-      reconcileServerTasks()
-    } catch (e) {
-      console.warn('[ai] refreshServerTasks failed:', e.message)
-    } finally {
-      serverTasksLoading.value = false
-    }
-  }
-
-  // 将服务端任务与本地队列关联（按 serverTaskId），本地运行中任务若已由服务端完成则同步状态
-  // 修复：自动导入后记录 importedServerTaskIds（持久化），列表不再显示可重复导入的任务
-  function markServerTaskImported(id) {
-    if (!id) return
-    if (!data.state.importedServerTaskIds) data.state.importedServerTaskIds = []
-    if (!data.state.importedServerTaskIds.includes(id)) {
-      data.state.importedServerTaskIds.push(id)
-      // 仅保留最近 100 条，防止无限增长
-      if (data.state.importedServerTaskIds.length > 100) {
-        data.state.importedServerTaskIds = data.state.importedServerTaskIds.slice(-100)
-      }
-    }
-  }
-  function reconcileServerTasks() {
-    const queue = data.state.aiTaskQueue || []
-    serverTasks.value.forEach((st) => {
-      const local = queue.find((t) => t.serverTaskId === st.id)
-      if (!local) return
-      if (st.status === 'completed' && local.status !== 'completed') {
-        const questions = normalizeQuestions((st.result && Array.isArray(st.result.questions)) ? st.result.questions : [])
-        // 幂等：并发/重复轮询只导入一次
-        if (questions.length > 0 && !isServerTaskImported(st.id)) {
-          data.createQuizSetForChapter(questions, local.chapterId)
-          markServerTaskImported(st.id)
-        }
-        local.status = 'completed'
-        local.questionCount = questions.length
-        local.completedAt = Date.now()
-        // 保留 serverTaskId：本地任务区过滤 serverTaskId，服务端任务才不落本地列表
-        data.saveState()
-        ui.toast(local.chapterName + ' 服务端任务完成，已导入 ' + questions.length + ' 题', 'ok')
-      } else if (st.status === 'failed' || st.status === 'canceled') {
-        if (local.status === 'running' || local.status === 'pending') {
-          local.status = 'failed'
-          local.error = st.error || '服务端任务未完成'
-          data.saveState()
-        }
-      }
-    })
-    // 已导入/已结束的任务不再占列表（防止重复导入按钮）
-    serverTasks.value = serverTasks.value.filter((st) => {
-      if (st.status === 'completed' && isServerTaskImported(st.id)) return false
-      return true
-    })
-  }
-  function isServerTaskImported(id) {
-    return !!(data.state.importedServerTaskIds && data.state.importedServerTaskIds.includes(id))
-  }
-
-  // —— T11: 服务端任务自动轮询续跑 ——
-  // 修复 P1-5：此前 serverPollTimer 声明未用，刷新后不自动续跑；
-  // 现在只要有 queued/running 服务端任务就自动轮询并 reconcile，
-  // 全部结束（且队列弹窗关闭）后自动停止。
-  const SERVER_POLL_MS = 8000
-
-  function hasActiveServerTasks() {
-    return (serverTasks.value || []).some((st) => st.status === 'queued' || st.status === 'running')
-  }
-
-  async function pollServerTasksOnce() {
-    try {
-      await refreshServerTasks()
-    } catch (e) {
-      console.warn('[ai] server poll tick failed:', e && e.message)
-    }
-    if (!hasActiveServerTasks() && !queueDialogOpen.value) stopServerTaskPolling()
-  }
-
-  function startServerTaskPolling() {
-    if (serverPollTimer.value) return
-    serverPollTimer.value = setInterval(pollServerTasksOnce, SERVER_POLL_MS)
-    if (serverPollTimer.value && typeof serverPollTimer.value.unref === 'function') {
-      serverPollTimer.value.unref()
-    }
-  }
-
-  function stopServerTaskPolling() {
-    if (serverPollTimer.value) clearInterval(serverPollTimer.value)
-    serverPollTimer.value = null
-  }
-
-  async function importServerTaskResult(serverTask) {
-    if (isServerTaskImported(serverTask.id)) {
-      ui.toast('该任务已导入过，请勿重复导入', 'info')
-      serverTasks.value = serverTasks.value.filter((st) => st.id !== serverTask.id)
-      return null
-    }
-    const questions = normalizeQuestions((serverTask.result && Array.isArray(serverTask.result.questions)) ? serverTask.result.questions : [])
-    if (questions.length === 0) { ui.toast('该任务没有可导入的题目', 'err'); return }
-    if (!data.state.chapters[serverTask.chapterId]) { ui.toast('章节已删除，无法导入', 'err'); return }
-    const set = data.createQuizSetForChapter(questions, serverTask.chapterId)
-    markServerTaskImported(serverTask.id)
-    data.saveState()
-    // 导入后立即从列表移除，按钮消失
-    serverTasks.value = serverTasks.value.filter((st) => st.id !== serverTask.id)
-    ui.toast('已导入 ' + questions.length + ' 题', 'ok')
-    return set
-  }
-
-  async function cancelServerTask(taskId) {
-    try {
-      await cancelAiServerTask(taskId)
-      await refreshServerTasks()
-      ui.toast('已取消服务端任务', 'info')
-    } catch (e) {
-      ui.toast(e.message, 'err')
-    }
-  }
-
-  function openQueueDialog() {
-    queueDialogOpen.value = true
-    refreshServerTasks()
-    startServerTaskPolling()
-  }
-  function closeQueueDialog() {
-    queueDialogOpen.value = false
-    if (!hasActiveServerTasks()) stopServerTaskPolling()
-  }
-
-  // —— 资料文件添加/删除 ——
-  function getExtIcon(name) {
-    const ext = (name || '').split('.').pop().toLowerCase()
-    if (ext === 'pdf') return 'file'
-    if (ext === 'doc' || ext === 'docx') return 'edit'
-    if (ext === 'ppt' || ext === 'pptx') return 'chart'
-    if (ext === 'txt' || ext === 'md') return 'file'
-    return 'paperclip'
-  }
-
-  async function addMaterialFiles(chapterId, fileList) {
-    const ch = data.state.chapters[chapterId]
-    if (!ch) { ui.toast('请先选择章节', 'err'); return }
-    const materials = getChapterMaterials(chapterId)
-    const allowedExts = ['pdf', 'doc', 'docx', 'pptx', 'txt', 'md']
-    let added = 0
-    for (const f of fileList) {
-      const ext = f.name.split('.').pop().toLowerCase()
-      if (allowedExts.indexOf(ext) === -1) { ui.toast(f.name + ' 类型不支持，已跳过', 'info'); continue }
-      if (f.size > 20 * 1024 * 1024) { ui.toast(f.name + ' 超过20MB，已跳过', 'info'); continue }
-      if (materials.find((m) => m.name === f.name && m.size === f.size)) { ui.toast(f.name + ' 已存在，已跳过', 'info'); continue }
-      const dataUrl = await readFileAsDataUrl(f)
-      const mid = generateMaterialId()
-      materials.push({ name: f.name, size: f.size, addedAt: Date.now(), id: mid })
-      saveChapterMaterials(chapterId, materials)
-      try { await idbStoreMaterial(mid, dataUrl) } catch (e) {
-        ui.toast('保存资料失败：' + f.name, 'err')
-        const idx = materials.length - 1
-        materials.splice(idx, 1)
-        saveChapterMaterials(chapterId, materials)
-        continue
-      }
-      added++
-      // 同步上传到服务端文件池（失败不阻塞）
-      try {
-        const upFd = new FormData()
-        const dec = atob(dataUrl.split(',')[1])
-        const bin = new Uint8Array(dec.length)
-        for (let k = 0; k < dec.length; k++) bin[k] = dec.charCodeAt(k)
-        upFd.append('file', new Blob([bin]), f.name)
-        upFd.append('chapterId', chapterId)
-        fetchWithAuth('/files/upload', { method: 'POST', body: upFd }).then((r) => {
-          if (r && r.status === 409) {
-            r.json().then((d) => ui.toast(d.error || '文件重复', 'info')).catch(() => {})
-          }
-        }).catch(() => {})
-      } catch (e) { /* ignore */ }
-    }
-    if (added > 0 && ch) ch._hasNewFilesSinceLastGen = true
-    data.saveState()
-  }
-
-  function removeMaterial(chapterId, idx) {
-    const materials = getChapterMaterials(chapterId)
-    const removed = materials.splice(idx, 1)
-    if (removed.length) idbDeleteMaterial(removed[0].id)
-    saveChapterMaterials(chapterId, materials)
-  }
-
-  // 过期/删除的文件池文件不再显示在复习资料里：移除 chapterMaterials 中
-  // 已不在文件池（名称+大小不匹配）的 _poolFile 条目。
-  function reconcilePoolMaterials(chapterId, poolFiles) {
-    const materials = getChapterMaterials(chapterId)
-    const valid = new Set((poolFiles || []).map((f) => (f.originalName || '') + '|' + (f.fileSize || 0)))
-    const kept = materials.filter((m) => !m._poolFile || valid.has((m.name || '') + '|' + (m.size || 0)))
-    if (kept.length !== materials.length) {
-      saveChapterMaterials(chapterId, kept)
-      return true
-    }
-    return false
-  }
-
-  async function assignPoolFileToChapter(chapterId, fileId) {
-    const res = await fetchWithAuth('/files/' + fileId + '/assign', {
-      method: 'POST',
-      body: JSON.stringify({ chapterId })
-    })
-    if (!res || !res.ok) {
-      const err = res ? await readApiErrorSafe(res) : '分配失败'
-      throw new Error(err)
-    }
-    const data2 = await res.json()
-    const f = data2.file
-    const materials = getChapterMaterials(chapterId)
-      // 同一章节重复关联同一池文件 → 幂等提示，不重复添加（多章节关联后更易误点）
-  if (materials.some((m) => m._poolFile && m.name === f.originalName && m.size === f.fileSize)) {
-    ui.toast('该文件已关联本章节', 'info')
-    return
-  }
-  materials.push({ name: f.originalName, size: f.fileSize, addedAt: Date.now(), id: generateMaterialId(), _poolFile: true })
-    saveChapterMaterials(chapterId, materials)
-    const ch = data.state.chapters[chapterId]
-    if (ch) ch._hasNewFilesSinceLastGen = true
-    data.saveState()
-  }
-
   return {
     providers, providersLoaded, providersError, runnerActive, abortController,
     queueDialogOpen, serverTasks, serverTasksLoading,
@@ -863,19 +412,3 @@ export const useAiStore = defineStore('ai', () => {
     formatFileSize
   }
 })
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-async function readApiErrorSafe(res) {
-  try {
-    const data = await res.json()
-    return (data && data.error) || '操作失败'
-  } catch (e) { return '操作失败' }
-}

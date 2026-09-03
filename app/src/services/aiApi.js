@@ -1,8 +1,7 @@
 // ============================================================
 // aiApi.js — AI 接口封装（/ai/*，自 legacy ai-workflow/settings 迁移）
 // ============================================================
-import { API_BASE } from '../core/env'
-import { fetchWithAuth, getToken, readApiError } from './api'
+import { apiFetch, fetchWithAuth, readApiErrorSafe } from './api'
 
 // 本地 fallback 目录（离线兜底；服务端目录为唯一事实源）
 export const AI_PROVIDER_FALLBACK = [
@@ -14,8 +13,8 @@ export const AI_PROVIDER_FALLBACK = [
 
 export async function fetchProvidersList() {
   try {
-    const res = await fetch(API_BASE + '/ai/providers')
-    if (res.ok) {
+    const res = await apiFetch('/ai/providers', { auth: false })
+    if (res && res.ok) {
       const data = await res.json()
       if (data.providers && data.providers.length > 0) return data.providers
     }
@@ -27,21 +26,12 @@ export async function fetchProvidersList() {
 
 // 最小化连接测试（POST /ai/test）
 export async function aiTest({ apiKey, provider, model, message }) {
-  const res = await fetch(API_BASE + '/ai/test', {
+  const res = await apiFetch('/ai/test', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + getToken(),
-      'x-ai-api-key': apiKey,
-      'x-ai-model': model,
-      'x-ai-provider': provider
-    },
-    body: JSON.stringify({ message: message || 'ping' })
+    headers: { 'x-ai-api-key': apiKey, 'x-ai-model': model, 'x-ai-provider': provider },
+    body: { message: message || 'ping' },
   })
-  if (!res.ok) {
-    const err = await readApiError(res, '连接测试失败')
-    throw new Error(err)
-  }
+  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '连接测试失败'))
   return res.json()
 }
 
@@ -49,22 +39,13 @@ export async function aiTest({ apiKey, provider, model, message }) {
 export async function aiUploadFiles(files) {
   const fd = new FormData()
   files.forEach((f) => fd.append('files', f))
-  const res = await fetch(API_BASE + '/ai/upload', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + getToken() },
-    body: fd
-  })
-  if (!res.ok) {
-    const err = await readApiError(res, '上传失败: ' + res.status)
-    throw new Error(err)
-  }
+  const res = await apiFetch('/ai/upload', { method: 'POST', body: fd })
+  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '上传失败: ' + (res && res.status)))
   return res.json()
 }
 
 function aiHeaders({ apiKey, provider, model, stream }) {
   const h = {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ' + getToken(),
     'x-ai-api-key': apiKey,
     'x-ai-model': model,
     'x-ai-provider': provider
@@ -89,30 +70,24 @@ export function buildAiGenerateBody({ textContent, typeCounts, prompt, chapterHi
 
 // 非流式生成（重试在调用方）
 export async function aiGenerate(opts) {
-  const res = await fetch(API_BASE + '/ai/generate', {
+  const res = await apiFetch('/ai/generate', {
     method: 'POST',
     headers: aiHeaders(opts),
-    body: buildAiGenerateBody(opts)
+    rawBody: buildAiGenerateBody(opts),
   })
-  if (!res.ok) {
-    const err = await readApiError(res, '生成失败: ' + res.status)
-    throw new Error(err)
-  }
+  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '生成失败: ' + (res && res.status)))
   return res.json()
 }
 
 // 流式生成：SSE 解析，返回 { questions, poolFilesStatus, streamDone }
 export async function aiStreamGenerate(opts, { onChunk, onProgress, signal } = {}) {
-  const res = await fetch(API_BASE + '/ai/generate', {
+  const res = await apiFetch('/ai/generate', {
     method: 'POST',
     headers: aiHeaders({ ...opts, stream: true }),
-    body: buildAiGenerateBody(opts),
-    signal
+    rawBody: buildAiGenerateBody(opts),
+    signal,
   })
-  if (!res.ok) {
-    const err = await readApiError(res, '生成失败: ' + res.status)
-    throw new Error(err)
-  }
+  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '生成失败: ' + (res && res.status)))
 
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -170,21 +145,12 @@ export async function aiStreamGenerate(opts, { onChunk, onProgress, signal } = {
 
 // —— 服务端任务队列（v3.27） ——
 export async function createAiServerTask({ apiKey, provider, model, body }) {
-  const res = await fetch(API_BASE + '/ai/tasks', {
+  const res = await apiFetch('/ai/tasks', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + getToken(),
-      'x-ai-api-key': apiKey,
-      'x-ai-model': model,
-      'x-ai-provider': provider
-    },
-    body: JSON.stringify(body)
+    headers: { 'x-ai-api-key': apiKey, 'x-ai-model': model, 'x-ai-provider': provider },
+    body,
   })
-  if (!res.ok) {
-    const err = await readApiError(res, '创建服务端任务失败: ' + res.status)
-    throw new Error(err)
-  }
+  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '创建服务端任务失败: ' + (res && res.status)))
   return res.json()
 }
 
@@ -204,9 +170,6 @@ export async function listAiServerTasks(limit = 50) {
 
 export async function cancelAiServerTask(taskId) {
   const res = await fetchWithAuth('/ai/tasks/' + taskId, { method: 'DELETE' })
-  if (!res || !res.ok) {
-    const err = await readApiError(res, '取消失败')
-    throw new Error(err)
-  }
+  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '取消失败'))
   return res.json()
 }

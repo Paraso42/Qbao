@@ -12,7 +12,7 @@
 |---|------|---------|------|---------|
 | P0 | 发布闭环收尾 + 低风险清理 | v3.30.2 | ✅ 已完成 | 2026-09-03 |
 | P1 | 数据面可靠性 | v3.31 | ✅ 已完成 | 2026-09-03 |
-| P2 | 架构收敛 | v3.32 | ▢ 未开始 | — |
+| P2 | 架构收敛 | v3.32 | ✅ 已完成 | 2026-09-03 |
 | P3 | 产品功能 | v3.33 | ▢ 未开始 | — |
 | 积压 | 不入轮（见 §7） | — | ▢ 待触发 | — |
 
@@ -94,12 +94,12 @@
 
 | 编号 | 任务 | 位置 | 验收标准 |
 |------|------|------|---------|
-| P2.1 | store 拆分 | `stores/ai.js`（35.3KB：上传/队列/服务端协调）、`stores/users.js`（14.1KB） | 单文件 ≤ ~20KB、关注点独立；行为不变（前端测试/回归覆盖） |
-| P2.2 | 巨型组件拆分 | `views/SubjectDashView.vue`（33.7KB）、`components/AdminTab.vue`（29.6KB）、`SettingsModal.vue`（22.4KB） | 按区块/表单分组件，状态走 store、交互 props/emit |
-| P2.3 | API 封装统一 | `services/aiApi.js`（裸 fetch）、`services/api.js`（重复 _handle）、readApiErrorSafe/readApiError 合并、`noticesApi.getAdminNotices` 死代码 | 单一请求封装 + 统一错误读取 + 删除死代码 |
-| P2.4 | 聊天虚拟滚动 | `components/features/chat/ChatMessages.vue`（19.9KB） | 1000+ 消息不整体重建（窗口化渲染）；性能采样/肉眼验证 |
-| P2.5 | 发布断言 | `.github/workflows/release.yml` | 构建前断言 tag 与三端 package.json 版本一致；产物存在性检查 |
-| P2.6 | 收尾发布 | CHANGELOG / 三端版本 / 提交 / tag | v3.32 发布，DoD 全过 |
+| P2.1 | store 拆分 | `stores/ai.js`（35.3KB：上传/队列/服务端协调）、`stores/users.js`（14.1KB） | ✅ 已完成（2026-09-03）：ai.js 35.3→17KB（生成核心→aiTasks.js、服务端任务→aiServerTasks.js、资料→aiMaterials.js、历史统计→aiHistory.js）；users.js 原 14.1KB 达标；+8 例单测 |
+| P2.2 | 巨型组件拆分 | `views/SubjectDashView.vue`（33.7KB）、`components/AdminTab.vue`（29.6KB）、`SettingsModal.vue`（22.4KB） | ✅ 已完成（2026-09-03）：SettingsModal 23.7→15.6KB（AiConfigSection）、AdminTab 29.6→15.5KB（Notices/Users 两区）、SubjectDashView 33.7→26.1KB（SubjectOverviewPanel） |
+| P2.3 | API 封装统一 | `services/aiApi.js`（裸 fetch）、`services/api.js`（重复 _handle）、readApiErrorSafe/readApiError 合并、`noticesApi.getAdminNotices` 死代码 | ✅ 已完成（2026-09-03）：apiFetch/apiHandle 统一（3 处私有 _handle 删除）、aiApi 收敛、死代码清理、+6 例单测 |
+| P2.4 | 聊天虚拟滚动 | `components/features/chat/ChatMessages.vue`（19.9KB） | ✅ 已完成（2026-09-03）：窗口化渲染（chatVirtual.js 纯窗口计算，4 例单测）；Electron 探针实测 1000 条消息仅渲染 ~11 节点并留档 |
+| P2.5 | 发布断言 | `.github/workflows/release.yml` | ✅ 已完成（2026-09-03）：版本-tag 断言步骤 + 三要素产物存在性检查 |
+| P2.6 | 收尾发布 | CHANGELOG / 三端版本 / 提交 / tag | ✅ 已完成（2026-09-03）：v3.32.0 三端对齐 + 提交 + tag v3.32.0 |
 
 ---
 
@@ -144,3 +144,4 @@
 - **2026-09-03**：初版。基于当日全仓复检（测试双端全绿、Release 资产实测、债务位置逐项核验）；P0.1 标记为已完成态。
 - **2026-09-03（P0 轮完成）**：P0.2–P0.9 全部落地 → v3.30.2。P0.2 配置级核验完成（实机升级冒烟留待人工，见 local/log.md）；P0.3 E2E 资产入库 tools/e2e/；P0.4 eslint（app/server + CI，0 error）；P0.5 原生 prompt/alert 全清；P0.6 占位符盐 + 4 用例；P0.7 配额原子化（advisory 锁）+ 3 用例；P0.8 上传残留清理 + 路由用例；测试基线升至 server 146 / app 38。
 - **2026-09-03（P1 轮完成）**：P1.1–P1.5 全部落地 → v3.31.0。P1.1 分层持久化 E2E 留档（探针真实 Electron 跑通，报告 tools/e2e/out/）；P1.2 同步写收敛（空推跳过/账号隔离 pending/keepalive 同检测，引擎级 5 例）；P1.3 桌面 safeStorage（DPAPI）密钥存储 + 网页最小混淆 + 预热迁移（20 例）；P1.4 store 单测 27 例并修复 2 个数据缺陷；v3.30.2 Release 资产核实（CI/Release Actions 均成功）；测试基线 app 38 → 92（14 文件）。
+- **2026-09-03（P2 轮完成）**：P2.1–P2.6 全部落地 → v3.32.0。P2.1 store 拆分（ai.js 35.3→17KB，4 个关注点模块）；P2.2 三组件拆分（SettingsModal/AdminTab/SubjectDashView 各拆出子组件）；P2.3 API 统一（apiFetch/apiHandle，删 3 份 _handle + 死代码）；P2.4 聊天虚拟滚动（chatVirtual 纯函数 + Electron 探针实测 11 节点/1000 条）；P2.5 release 版本-tag 断言；测试基线 app 92 → 108（17 文件）。

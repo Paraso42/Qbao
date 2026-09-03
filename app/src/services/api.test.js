@@ -112,3 +112,77 @@ describe('api token desktop 形态（safeStorage）', () => {
     expect(bridge.secretRemove).toHaveBeenCalledWith('token')
   })
 })
+
+// —— P2.3 统一请求/响应封装 ——
+describe('apiFetch / apiHandle / readApiErrorSafe (P2.3)', () => {
+  let storage
+  let calls
+  let mod
+  beforeEach(async () => {
+    storage = makeLocalStorageStub({ qbao_token: 'tok', qbao_user: JSON.stringify({ id: 'u1' }) })
+    globalThis.localStorage = storage
+    calls = []
+    globalThis.fetch = async (url, opts = {}) => {
+      calls.push({ url, opts })
+      if (url.indexOf('ok-json') !== -1) return { ok: true, status: 200, json: async () => ({ hello: 1 }) }
+      if (url.indexOf('empty') !== -1) return { ok: true, status: 204, json: async () => { throw new Error('no body') } }
+      if (url.indexOf('biz-err') !== -1) return { ok: false, status: 422, json: async () => ({ error: '业务错误消息' }) }
+      if (url.indexOf('unauth') !== -1) return { ok: false, status: 401, json: async () => ({ error: '未登录' }) }
+      if (url.indexOf('no-json') !== -1) return { ok: false, status: 500, json: async () => { throw new Error('parse fail') } }
+      return { ok: false, status: 404, json: async () => ({}) }
+    }
+    vi.resetModules()
+    mod = await import('./api')
+  })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.fetch })
+
+  it('apiFetch：对象 body 自动 JSON 序列化并带 Bearer；返回 res', async () => {
+    const res = await mod.apiFetch('/ok-json', { method: 'POST', body: { a: 1 } })
+    expect(res.ok).toBe(true)
+    const c = calls[0]
+    expect(c.url).toBe('/api/v1/ok-json')
+    expect(c.opts.headers['Content-Type']).toBe('application/json')
+    expect(c.opts.headers['Authorization']).toBe('Bearer tok')
+    expect(c.opts.body).toBe(JSON.stringify({ a: 1 }))
+  })
+
+  it('apiFetch：自定义头覆盖 + auth:false 不带 Bearer + 网络异常抛统一消息', async () => {
+    await mod.apiFetch('/ok-json', { headers: { 'x-ai-key': 'k1' }, auth: false })
+    const c = calls[0]
+    expect(c.opts.headers['x-ai-key']).toBe('k1')
+    expect(c.opts.headers['Authorization']).toBeUndefined()
+    globalThis.fetch = async () => { throw new Error('net down') }
+    await expect(mod.apiFetch('/x')).rejects.toThrow(/无法连接服务器/)
+  })
+
+  it('apiFetch：401 清除登录态并返回 null（与 fetchWithAuth 一致）', async () => {
+    const res = await mod.apiFetch('/unauth')
+    expect(res).toBeNull()
+    expect(mod.getToken()).toBeNull()
+    expect(storage.getItem('qbao_user')).toBeNull()
+  })
+
+  it('apiHandle：非 2xx 抛后端 error；成功解析 json；空响应容错 {}', async () => {
+    await expect(mod.apiHandle({ ok: false, status: 422, json: async () => ({ error: '业务错误消息' }) }, '兜底')).rejects.toThrow('业务错误消息')
+    const ok = await mod.apiHandle(await mod.apiFetch('/ok-json'), '兜底')
+    expect(ok).toEqual({ hello: 1 })
+    const empty = await mod.apiHandle({ ok: true, status: 204, json: async () => { throw new Error('x') } }, '兜底')
+    expect(empty).toEqual({})
+    await expect(mod.apiHandle(null, '兜底')).rejects.toThrow('请先登录')
+  })
+
+  it('readApiErrorSafe：无 error 字段/无响应体时回退；readApiError 别名一致', async () => {
+    expect(await mod.readApiErrorSafe({ ok: false, status: 500, json: async () => { throw new Error('x') } }, '兜底消息')).toBe('兜底消息')
+    expect(await mod.readApiErrorSafe(null, '网络失败兜底')).toBe('网络失败兜底')
+    expect(await mod.readApiErrorSafe({ ok: false, json: async () => ({ foo: 1 }) }, '无error兜底')).toBe('无error兜底')
+    expect(await mod.readApiError({ ok: false, json: async () => ({ error: 'E' }) }, 'x')).toBe('E')
+  })
+
+  it('apiFetch：rawBody 不重复序列化（SSE/生成类调用）', async () => {
+    await mod.apiFetch('/ok-json', { method: 'POST', rawBody: '{"x":1}' })
+    const c = calls[0]
+    expect(c.opts.body).toBe('{"x":1}')
+    expect(c.opts.headers['Content-Type']).toBe('application/json')
+  })
+})
+

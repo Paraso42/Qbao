@@ -3,7 +3,6 @@
 // 公开端点无需认证；管理员端仅封装（用户中心代理负责 UI）。
 // ============================================================
 import { API_BASE } from '../core/env'
-import { fetchWithAuth, readApiError } from './api'
 
 // GET /notices — 公开公告（已启用、未过期）；失败返回 []（静默，同 legacy loadNotices）
 export async function getNotices() {
@@ -17,15 +16,4 @@ export async function getNotices() {
   return res.json()
 }
 
-// GET /notices/all — 管理员全部消息（含停用/过期）
-export async function getAdminNotices() {
-  let res
-  try {
-    res = await fetchWithAuth('/notices/all', { method: 'GET' })
-  } catch (e) {
-    throw new Error('网络错误，请稍后重试')
-  }
-  if (!res) throw new Error('请先登录')
-  if (!res.ok) throw new Error(await readApiError(res, '获取消息失败'))
-  return res.json()
-}
+// GET /notices/all — 管理员全部消息由 usersApi.getAllNotices 提供（P2.3 清理死代码 getAdminNotices）

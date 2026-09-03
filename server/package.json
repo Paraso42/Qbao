@@ -1,6 +1,6 @@
 {
   "name": "qbao-api",
-  "version": "3.31.0",
+  "version": "3.32.0",
   "description": "Qbao 全能互动做题引擎 — 后端 API（Express + PostgreSQL）",
   "main": "server.js",
   "license": "MIT",
