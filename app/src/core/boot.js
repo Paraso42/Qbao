@@ -9,6 +9,7 @@ import { useUiStore } from '../stores/ui'
 import { createSyncEngine } from '../services/sync'
 import { setPersistWarningHook, hydrateState } from '../services/persistence'
 import { getToken } from '../services/api'
+import { initSecureKeyStore } from '../services/aiKeys'
 import { useQuizStore } from '../stores/quiz'
 import { applyFontSizes } from './fontSizes'
 
@@ -53,7 +54,8 @@ export function initApp(pinia) {
     syncStore.setOnline(online)
     if (online) {
       engine.setSyncingReady(true)
-      restoreFromCloud().then(() => engine.resumePendingSync())
+      // P1.3：登录账号变化后重载该账号的 AI Key（桌面端按 uid 分账号加密存储）
+      initSecureKeyStore().catch(() => {}).then(() => restoreFromCloud().then(() => engine.resumePendingSync()))
     }
   })
 

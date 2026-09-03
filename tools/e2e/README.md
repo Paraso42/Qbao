@@ -12,7 +12,9 @@
 - `qa-shot.cjs` / `qa-shot2.cjs` / `qa-shot3.cjs` — 桌面/手机 × 亮/暗主题截图冒烟
 - `probe.cjs` / `probe-*.cjs` — 针对性交互探针（历史、悬停、设置、AI、答题等）
 - `probe-v3.28.cjs` — v3.28 答题链路全场景回归（36 题播种 → 答题 → 报告）
-- `samples/` — 历史运行结果样例（qa 报告格式参考）
+- `probe-p1-persistence.cjs` — v3.31 P1.1 分层持久化回归：2100 题播种 → 刷新/活动会话续答 →
+  答题后骨架体积（<5MB）→ IDB 大字段分流 → 多账号隔离切换 → 登录态离线作答（pending + IDB 落盘）
+- `samples/` — 历史运行结果样例（qa 报告格式参考）；`out/` 为最新运行输出（已 gitignore）
 
 ## 运行方式
 

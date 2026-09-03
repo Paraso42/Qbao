@@ -20,6 +20,11 @@ contextBridge.exposeInMainWorld('__qbaoDesktop', Object.freeze({
   setServer: (url, label) => ipcRenderer.invoke('qbao:save-server', url, label),
   checkForUpdates: () => ipcRenderer.invoke('qbao:check-updates'),
   quitAndInstall: () => ipcRenderer.invoke('qbao:quit-and-install'),
+  // P1.3：凭据安全存储（safeStorage，主进程加密；renderer 无明文落盘）
+  secretAvailable: () => ipcRenderer.invoke('qbao:secret-available'),
+  secretSave: (name, value) => ipcRenderer.invoke('qbao:secret-save', name, value),
+  secretLoad: (name) => ipcRenderer.invoke('qbao:secret-load', name),
+  secretRemove: (name) => ipcRenderer.invoke('qbao:secret-remove', name),
   openExternal: (url) => ipcRenderer.invoke('qbao:open-external', url),
   onUpdateStatus: (cb) => {
     ipcRenderer.on('qbao:update-status', (_e, s) => { try { cb(s); } catch (err) {} });

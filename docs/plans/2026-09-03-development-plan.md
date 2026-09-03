@@ -11,7 +11,7 @@
 | P | 主题 | 目标版本 | 状态 | 完成日期 |
 |---|------|---------|------|---------|
 | P0 | 发布闭环收尾 + 低风险清理 | v3.30.2 | ✅ 已完成 | 2026-09-03 |
-| P1 | 数据面可靠性 | v3.31 | ▢ 未开始 | — |
+| P1 | 数据面可靠性 | v3.31 | ✅ 已完成 | 2026-09-03 |
 | P2 | 架构收敛 | v3.32 | ▢ 未开始 | — |
 | P3 | 产品功能 | v3.33 | ▢ 未开始 | — |
 | 积压 | 不入轮（见 §7） | — | ▢ 待触发 | — |
@@ -80,11 +80,11 @@
 
 | 编号 | 任务 | 位置 | 验收标准 |
 |------|------|------|---------|
-| P1.1 | 分层持久化 E2E 回归 | `app/src/services/persistence.js`、`services/stateDb.js`、`core/boot.js` | 2000+ 题题库实测：启动不卡、刷新后答题进度恢复、活动会话续答、多账号隔离切换、离线作答→上线合并、5MB 骨架不受大字段拖累；用 P0.3 入库脚本回归并留档 |
-| P1.2 | 同步写收敛 | `app/src/services/sync.js`、`stores/data.js` | 无变化的轮询不产生 PUT；有变化只推实际变更（保留 rev 乐观锁与 409 合并语义）；扩展 sync 单测（启动门闩/多账号/空推跳过） |
-| P1.3 | 密钥存储加固 | `desktop/main.js` + `preload.js`（safeStorage）、`app/src/services/aiKeys.js`、`services/api.js` | 桌面端 JWT/AI Key 落盘走主进程 safeStorage（renderer 无明文持久化）；网页端最小混淆 + 设置页提示；stripAiSecrets 双保险回归 |
-| P1.4 | store 层单测补位 | `app/src/stores/`（ai/quiz/chat/users） | 核心状态流转单测覆盖本次改动路径（审计第五节缺口收口） |
-| P1.5 | 收尾发布 | CHANGELOG / 三端版本 / 提交 / tag | v3.31 发布，DoD 全过 |
+| P1.1 | 分层持久化 E2E 回归 | `app/src/services/persistence.js`、`services/stateDb.js`、`core/boot.js` | ✅ 已完成（2026-09-03）：tools/e2e/probe-p1-persistence.cjs 真实 Electron 留档（2100 题启动/刷新续答第 38 题/骨架 1.1KB/IDB 分流/多账号隔离/离线 pending+IDB） |
+| P1.2 | 同步写收敛 | `app/src/services/sync.js`、`stores/data.js` | ✅ 已完成（2026-09-03）：空推跳过（脱敏推送指纹+rev 基线）、pending/lastSync 按账号隔离、keepalive 同检测、resumePendingSync 返回 Promise；引擎级单测 5 例（门闩/多账号/空推/rev 预检/409 重推） |
+| P1.3 | 密钥存储加固 | `desktop/main.js` + `preload.js`（safeStorage）、`app/src/services/aiKeys.js`、`services/api.js` | ✅ 已完成（2026-09-03）：桌面 token/AI Key 走主进程 safeStorage（renderer 无明文持久化），启动预热+旧明文迁移+不可用降级；网页端最小混淆+设置页提示；单测 20 例 |
+| P1.4 | store 层单测补位 | `app/src/stores/`（ai/quiz/chat/users） | ✅ 已完成（2026-09-03）：4 store 共 27 例；修复 getActiveSet userAnswers 写穿透（重开一轮不落盘）与 restoreFromText 指针落盘时序 |
+| P1.5 | 收尾发布 | CHANGELOG / 三端版本 / 提交 / tag | ✅ 已完成（2026-09-03）：v3.31.0 三端对齐 + 提交 + tag v3.31.0 |
 
 ---
 
@@ -143,3 +143,4 @@
 
 - **2026-09-03**：初版。基于当日全仓复检（测试双端全绿、Release 资产实测、债务位置逐项核验）；P0.1 标记为已完成态。
 - **2026-09-03（P0 轮完成）**：P0.2–P0.9 全部落地 → v3.30.2。P0.2 配置级核验完成（实机升级冒烟留待人工，见 local/log.md）；P0.3 E2E 资产入库 tools/e2e/；P0.4 eslint（app/server + CI，0 error）；P0.5 原生 prompt/alert 全清；P0.6 占位符盐 + 4 用例；P0.7 配额原子化（advisory 锁）+ 3 用例；P0.8 上传残留清理 + 路由用例；测试基线升至 server 146 / app 38。
+- **2026-09-03（P1 轮完成）**：P1.1–P1.5 全部落地 → v3.31.0。P1.1 分层持久化 E2E 留档（探针真实 Electron 跑通，报告 tools/e2e/out/）；P1.2 同步写收敛（空推跳过/账号隔离 pending/keepalive 同检测，引擎级 5 例）；P1.3 桌面 safeStorage（DPAPI）密钥存储 + 网页最小混淆 + 预热迁移（20 例）；P1.4 store 单测 27 例并修复 2 个数据缺陷；v3.30.2 Release 资产核实（CI/Release Actions 均成功）；测试基线 app 38 → 92（14 文件）。

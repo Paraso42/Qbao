@@ -8,17 +8,49 @@ import { stripAiSecretsFromState } from './aiKeys'
 import { migrateState, STORAGE_KEY, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite } from './persistence'
 
 export const SYNC_PENDING_KEY = 'qbao_sync_pending'
-const LAST_SYNC_KEY = 'qbao_lastSync'
+export const LAST_SYNC_KEY = 'qbao_lastSync'
+
+// v3.31 (P1.2)：同步标记按账号隔离（与 localStorage 状态键 / aiKeys 同策略），
+// 防止 A 账号遗留的 pending 在 B 登录后被当成 B 的未同步数据补推（多账号串状态）。
+function userScopedKey(base) {
+  try {
+    const u = getStoredUser()
+    if (u && u.id) return base + '_u_' + u.id
+  } catch (e) {}
+  return base
+}
 
 export function getSyncPending() {
-  try { return localStorage.getItem(SYNC_PENDING_KEY) === '1' } catch (e) { return false }
+  try {
+    const k = userScopedKey(SYNC_PENDING_KEY)
+    const v = localStorage.getItem(k)
+    if (v !== null) return v === '1'
+    // 兼容旧版全局键（升级前遗留的 pending 标记）
+    return localStorage.getItem(SYNC_PENDING_KEY) === '1'
+  } catch (e) { return false }
 }
 export function setSyncPending(v) {
-  try { if (v) localStorage.setItem(SYNC_PENDING_KEY, '1'); else localStorage.removeItem(SYNC_PENDING_KEY) } catch (e) {}
+  try {
+    const k = userScopedKey(SYNC_PENDING_KEY)
+    if (v) localStorage.setItem(k, '1')
+    else localStorage.removeItem(k)
+    // 写入账号键后清掉旧全局键，防幽灵 pending
+    if (k !== SYNC_PENDING_KEY) localStorage.removeItem(SYNC_PENDING_KEY)
+  } catch (e) {}
+}
+function setLastSyncNow() {
+  try {
+    const k = userScopedKey(LAST_SYNC_KEY)
+    localStorage.setItem(k, new Date().toISOString())
+    if (k !== LAST_SYNC_KEY) localStorage.removeItem(LAST_SYNC_KEY)
+  } catch (e) {}
 }
 export function getLastSyncAt() {
-  const v = localStorage.getItem(LAST_SYNC_KEY)
-  return v ? new Date(v).getTime() : null
+  try {
+    const k = userScopedKey(LAST_SYNC_KEY)
+    const v = localStorage.getItem(k) !== null ? localStorage.getItem(k) : localStorage.getItem(LAST_SYNC_KEY)
+    return v ? new Date(v).getTime() : null
+  } catch (e) { return null }
 }
 
 // 合并策略（v1）：实体级并集，同 id 本地优先，云端独有实体保留——任何一侧数据都不丢。
@@ -201,6 +233,10 @@ export function createSyncEngine(ctx) {
   let _visBound = false
   let _lastPullAt = 0
   let _pollTick = null
+  // v3.31 (P1.2) 写收敛：上次成功推送的内容（脱敏序列化串）与其时 rev。
+  // flushSync/keepalive 前先比对：内容未变且 rev 基线未变 → 空推跳过（无空 PUT）。
+  let _lastPushedJson = null
+  let _lastPushedRev = null
 
   function updateStatus() {
     if (ctx.onStatus) {
@@ -214,7 +250,7 @@ export function createSyncEngine(ctx) {
 
   function markSynced() {
     setSyncPending(false)
-    localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString())
+    setLastSyncNow()
     updateStatus()
   }
 
@@ -252,6 +288,42 @@ export function createSyncEngine(ctx) {
     }
   }
 
+  // —— 推送体准备：脱敏 + 序列化一次；与上次成功推送相同且 rev 基线未变 → noop（空推跳过） ——
+  function preparePush() {
+    let pushJson = null
+    try {
+      stripAiSecretsFromState(ctx.getState())
+      pushJson = JSON.stringify(ctx.getState())
+    } catch (e) { pushJson = null }
+    return {
+      pushJson,
+      noop: pushJson !== null && pushJson === _lastPushedJson && _syncRev === _lastPushedRev
+    }
+  }
+
+  // 全量 PUT（rev 乐观锁）。成功 → 记录推送指纹供空推跳过。
+  // 返回 { ok } / { unauthorized }（401 登出）/ { conflict }（409）/ { failed, status }
+  async function doPut(pushJson) {
+    try {
+      const payload = (typeof _syncRev === 'number' && _syncRev > 0)
+        ? '{"state_json":' + pushJson + ',"rev":' + _syncRev + '}'
+        : '{"state_json":' + pushJson + '}'
+      const res = await fetchWithAuth('/data', { method: 'PUT', body: payload })
+      if (!res) return { unauthorized: true } // 401 → 已登出
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (typeof data.rev === 'number') { _syncRev = data.rev; _lastPushedRev = data.rev }
+        _lastPushedJson = pushJson
+        markSynced()
+        return { ok: true }
+      }
+      if (res.status === 409) return { conflict: true }
+      return { failed: true, status: res.status }
+    } catch (e) {
+      return { failed: true, status: -1 }
+    }
+  }
+
   async function flushSync() {
     if (!_syncingReady) { setSyncPending(true); updateStatus(); return }
     if (_syncInFlight || !ctx.isOnline() || !getToken()) return
@@ -271,16 +343,23 @@ export function createSyncEngine(ctx) {
       if (cloudRev !== null && cloudRev !== _syncRev) {
         await pullAndMerge()
       }
-      stripAiSecretsFromState(ctx.getState())
-      const body = { state_json: ctx.getState() }
-      if (_syncRev) body.rev = _syncRev
-      const res = await fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body) })
-      if (!res) { setSyncPending(false); updateStatus(); return } // 401 → 已登出
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}))
-        if (typeof data.rev === 'number') _syncRev = data.rev
+      const pp = preparePush()
+      if (pp.pushJson === null) {
+        // 状态不可序列化（异常）：保留 pending 走重试，避免静默丢数据
+        console.error('[sync] state serialization failed, push deferred')
+        setSyncPending(true)
+        scheduleSyncRetry()
+        return
+      }
+      if (pp.noop) {
+        // P1.2 写收敛：无变化的 flush（轮询/可见性/重复调度）不产生空 PUT
         markSynced()
-      } else if (res.status === 409) {
+        return
+      }
+      const out = await doPut(pp.pushJson)
+      if (out.ok) return
+      if (out.unauthorized) { updateStatus(); return } // 已登出，pending 由登出流程清理
+      if (out.conflict) {
         console.warn('[sync] 409 conflict, merging with cloud')
         const cur = await fetchWithAuth('/data')
         if (cur && cur.ok) {
@@ -299,25 +378,20 @@ export function createSyncEngine(ctx) {
               }
             }
           }
-          if (typeof _syncRev === 'number' && _syncRev > 0) {
-            stripAiSecretsFromState(ctx.getState())
-            const body2 = { state_json: ctx.getState(), rev: _syncRev }
-            const res2 = await fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body2) })
-            if (res2 && res2.ok) {
-              const d2 = await res2.json().catch(() => ({}))
-              if (typeof d2.rev === 'number') _syncRev = d2.rev
-              markSynced()
-              return
-            }
+          // 合并后以最新 rev 重推（内容已并入云端数据）
+          const pp2 = preparePush()
+          if (pp2.pushJson !== null) {
+            const out2 = await doPut(pp2.pushJson)
+            if (out2.ok || out2.unauthorized) return
           }
         }
         setSyncPending(true)
         scheduleSyncRetry()
-      } else {
-        console.error('[sync] PUT /data failed:', res.status)
-        setSyncPending(true)
-        scheduleSyncRetry()
+        return
       }
+      console.error('[sync] PUT /data failed:', out.status)
+      setSyncPending(true)
+      scheduleSyncRetry()
     } catch (e) {
       console.error('[sync] error:', e && e.message, e)
       setSyncPending(true)
@@ -344,9 +418,10 @@ export function createSyncEngine(ctx) {
     _syncTimer = setTimeout(() => { flushSync() }, 2000)
   }
 
-  // 登录/恢复后回放未同步数据
+  // 登录/恢复后回放未同步数据（返回 flushSync 的 promise，便于调用方串行化等待）
   function resumePendingSync() {
-    if (getSyncPending() && ctx.isOnline() && getToken()) flushSync()
+    if (getSyncPending() && ctx.isOnline() && getToken()) return flushSync()
+    return Promise.resolve()
   }
 
   // —— 轮询：检测其他端写入（轻量 rev 检查，变化才拉全量合并） ——
@@ -399,11 +474,14 @@ export function createSyncEngine(ctx) {
     _unloadBound = true
     const flushOnUnload = () => {
       if (!_syncingReady || _syncInFlight || !getSyncPending() || !ctx.isOnline() || !getToken()) return
+      // P1.2：与 flushSync 相同的空推检测 —— 内容未变化（如 in-flight 刚完成）不发重复 PUT
+      const pp = preparePush()
+      if (pp.noop || pp.pushJson === null) return
       try {
-        stripAiSecretsFromState(ctx.getState())
-        const body = { state_json: ctx.getState() }
-        if (typeof _syncRev === 'number' && _syncRev > 0) body.rev = _syncRev
-        fetchWithAuth('/data', { method: 'PUT', body: JSON.stringify(body), keepalive: true }).catch(() => {})
+        const payload = (typeof _syncRev === 'number' && _syncRev > 0)
+          ? '{"state_json":' + pp.pushJson + ',"rev":' + _syncRev + '}'
+          : '{"state_json":' + pp.pushJson + '}'
+        fetchWithAuth('/data', { method: 'PUT', body: payload, keepalive: true }).catch(() => {})
       } catch (e) { /* best-effort */ }
     }
     window.addEventListener('beforeunload', flushOnUnload)

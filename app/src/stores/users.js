@@ -243,14 +243,15 @@ export const useUsersStore = defineStore('users', () => {
       const parsed = JSON.parse(text)
       if (!parsed || !parsed.state) throw new Error('无效的备份文件')
       const migrated = persistence.migrateState(parsed.state)
+      // 科目/章节指针修正必须发生在 saveState 之前，否则落盘的骨架仍是 null 指针（P1.4 修复）
+      const sids = Object.keys(migrated.subjects || {})
+      if (sids.length > 0) {
+        if (!migrated.currentSubjectId || !migrated.subjects[migrated.currentSubjectId]) migrated.currentSubjectId = sids[0]
+        const s = migrated.subjects[migrated.currentSubjectId]
+        if (s && (!migrated.currentChapterId || !migrated.chapters[migrated.currentChapterId])) migrated.currentChapterId = (s.chapterIds && s.chapterIds[0]) || null
+      }
       data.replaceState(migrated)
       data.saveState()
-      const sids = Object.keys(data.state.subjects)
-      if (sids.length > 0) {
-        if (!data.state.currentSubjectId || !data.state.subjects[data.state.currentSubjectId]) data.state.currentSubjectId = sids[0]
-        const s = data.getSubj()
-        if (s && (!data.state.currentChapterId || !data.state.chapters[data.state.currentChapterId])) data.state.currentChapterId = s.chapterIds[0] || null
-      }
       _pushBackupHistory({ kind: 'restore' })
       return { ok: true }
     } catch (e) {

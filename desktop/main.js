@@ -1,6 +1,6 @@
 // Qbao 桌面端主进程
-// 职责：窗口管理、单实例、运行时配置注入、系统级操作（打开外链/更新）。
-const { app, BrowserWindow, ipcMain, shell, Menu, dialog, Notification } = require('electron');
+// 职责：窗口管理、单实例、运行时配置注入、系统级操作（打开外链/更新）、凭据安全存储。
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, Notification, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { setupUpdater } = require('./updater');
@@ -129,4 +129,51 @@ ipcMain.handle('qbao:set-auto-start', (_e, enabled) => {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+});
+
+// —— P1.3 凭据安全存储（safeStorage / Windows DPAPI）——
+// renderer 不落明文：token / AI Key 经此通道加密后写 userData/secrets.json。
+function secretsFilePath() {
+  return path.join(app.getPath('userData'), 'secrets.json');
+}
+function readSecretsFile() {
+  try { return JSON.parse(fs.readFileSync(secretsFilePath(), 'utf8')) || {} } catch (e) { return {} }
+}
+function writeSecretsFile(map) {
+  try { fs.writeFileSync(secretsFilePath(), JSON.stringify(map)); return true } catch (e) { return false }
+}
+function secretName(name) {
+  return 'qbao_secret_' + String(name || '').replace(/[^a-zA-Z0-9_:.-]/g, '_');
+}
+ipcMain.handle('qbao:secret-available', () => {
+  try { return safeStorage.isEncryptionAvailable(); } catch (e) { return false; }
+});
+ipcMain.handle('qbao:secret-save', (_e, name, value) => {
+  try {
+    if (typeof name !== 'string' || typeof value !== 'string') return { ok: false, error: '参数错误' };
+    if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage 不可用' };
+    const map = readSecretsFile();
+    map[secretName(name)] = safeStorage.encryptString(value).toString('base64');
+    if (!writeSecretsFile(map)) return { ok: false, error: '写入 secrets.json 失败' };
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('qbao:secret-load', (_e, name) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'safeStorage 不可用' };
+    const map = readSecretsFile();
+    const b64 = map[secretName(name)];
+    if (!b64) return { ok: false, code: 'not_found' };
+    return { ok: true, value: safeStorage.decryptString(Buffer.from(b64, 'base64')) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('qbao:secret-remove', (_e, name) => {
+  try {
+    const map = readSecretsFile();
+    if (map[secretName(name)]) {
+      delete map[secretName(name)];
+      writeSecretsFile(map);
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
 });
