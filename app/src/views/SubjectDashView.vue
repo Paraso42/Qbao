@@ -17,6 +17,21 @@
       <div class="qbank-toolbar">
         <label class="qb-check"><input type="checkbox" v-model="qbOnlyWrong"> 仅显示错题</label>
         <div class="qb-search"><Icon name="search" :size="14" /><input v-model="qbKeyword" class="qb-input" type="text" placeholder="搜索题目/标签..."></div>
+        <template v-if="qbSelectMode">
+          <span class="qb-sel-count">已选 {{ qbSelected.size }} 题</span>
+          <select v-model="qbMoveTarget" class="select" style="max-width: 180px">
+            <option value="">移动到章节…</option>
+            <option v-for="m in qbMoveChapters" :key="m.cid" :value="m.cid">{{ m.name }}</option>
+          </select>
+          <button class="btn btn-secondary btn-small" @click="qbBulkTag"><Icon name="tag" :size="12" /> 设标签</button>
+          <button class="btn btn-danger btn-small" @click="qbBulkDelete"><Icon name="trash" :size="12" /> 删除</button>
+          <button class="btn btn-ghost btn-small" @click="qbExitSelect">退出</button>
+        </template>
+        <button v-else class="btn btn-ghost btn-small" @click="qbEnterSelect"><Icon name="check" :size="13" /> 批量</button>
+        <div class="qb-tool-actions">
+          <button class="btn btn-secondary btn-small" @click="ui.openImport()"><Icon name="upload" :size="13" /> 导入</button>
+          <button class="btn btn-secondary btn-small" @click="exportChapter"><Icon name="download" :size="13" /> 导出</button>
+        </div>
       </div>
       <div v-for="group in qbankGroups" :key="group.cid" class="card qb-group">
         <h4 class="qb-header" role="button" @click="toggleQbGroup(group.cid)">
@@ -26,7 +41,7 @@
         </h4>
         <template v-if="openQbGroups.has(group.cid)">
           <div v-if="group.items.length === 0" class="qb-empty">无匹配题目</div>
-          <div v-for="item in shownQbItems(group)" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
+          <div v-if="qbSelectMode" class="qb-sel-box" :class="{ on: qbSelected.has(item.key) }" @click.stop="qbToggleSelect(item.key)"><Icon :name="qbSelected.has(item.key) ? 'check' : 'square'" :size="13" /></div>          <div v-for="item in shownQbItems(group)" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
             <span class="qb-icon" :class="qbIconClass(item.ci)"></span>
             <div class="qb-text">
               <p class="qb-q">[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
@@ -37,6 +52,40 @@
             显示更多（已显示 {{ qbLimits[group.cid] || 50 }} / {{ group.items.length }}）
           </button>
         </template>
+      </div>
+    </div>
+
+    <!-- 错题本（P3.1） -->
+    <div v-else-if="tab === 'wrongbook'" class="sd-content">
+      <div class="qbank-toolbar">
+        <select v-model="wbFilter" class="select" style="max-width: 240px">
+          <option value="">全部章节</option>
+          <option v-for="wbg in wbChapters" :key="wbg.cid" :value="wbg.cid">{{ wbg.name }}（{{ wbg.wrongCount }} 错）</option>
+        </select>
+        <span class="qb-meta">共 {{ wbItems.length }} 道错题{{ wbFilter ? '（当前章节）' : '' }}</span>
+      </div>
+      <div v-if="wbItems.length === 0" class="qb-empty">暂无错题 —— 做过答错的题目会出现在这里，可一键 AI 讲解</div>
+      <div v-for="item in wbItems" :key="item.key" class="card qb-group">
+        <div class="wb-item">
+          <div class="wb-qline">
+            <span class="wb-type">[{{ typeShort[item.q.type] || item.q.type }}]</span>
+            <span class="wb-q">{{ item.q.question }}</span>
+            <span v-if="item.q.tag" class="pill wb-tag">{{ item.q.tag }}</span>
+          </div>
+          <div class="wb-answers">
+            <span class="wb-ans wrong">我的答案：{{ answerText(item.q, item.userAnswer) }}</span>
+            <span class="wb-ans right">标准答案：{{ answerText(item.q, item.q.answer) }}</span>
+            <span class="wb-date">{{ item.roundDate }}</span>
+          </div>
+          <div class="wb-actions">
+            <button class="btn btn-primary btn-small" :disabled="wbLoading[item.key]" @click="askExplain(item)">
+              <Icon name="sparkle" :size="12" /> {{ wbLoading[item.key] ? '讲解中…' : (wbCache(item) ? '重新讲解' : 'AI 讲解') }}</button>
+          </div>
+          <div v-if="wbOpen[item.key]" class="wb-explanation">
+            <div class="wb-exp-head">AI 讲解 <span v-if="wbCache(item)" class="wb-exp-meta">{{ (wbCache(item).model || '') }} · {{ fmtWhen(wbCache(item).at) }}</span></div>
+            <div class="markdown-body" v-html="renderMarkdown(wbCache(item) ? wbCache(item).explanation : '')"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -162,7 +211,9 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSubjectStore } from '../stores/subjects'
 import { useUiStore } from '../stores/ui'
+import { downloadTextFile, exportQuestionsJson } from '../services/importExport'
 import { useQuizStore } from '../stores/quiz'
+import { useAiStore } from '../stores/ai'
 import { isObjType, getCi } from '../services/utils'
 import { getQuestionId } from '../services/questions'
 import { getSrsDueQuestions } from '../services/srs'
@@ -176,11 +227,76 @@ const data = useDataStore()
 const subjects = useSubjectStore()
 const ui = useUiStore()
 const quiz = useQuizStore()
+const ai = useAiStore()
+
+// —— P3.1 错题本 ——
+const wbFilter = ref('')
+const wbOpen = reactive({})
+const wbLoading = reactive({})
+
+// 本科目错题（history 中判错的题目，含章节过滤）
+const wbChapterMeta = computed(() => {
+  const s = subj.value
+  if (!s) return []
+  return s.chapterIds.map((cid) => ({ cid, name: (data.state.chapters[cid] || {}).name || cid }))
+})
+const wbChapters = computed(() => {
+  const counts = {}
+  wbItems.value.forEach((it) => { counts[it.cid] = (counts[it.cid] || 0) + 1 })
+  return wbChapterMeta.value.filter((m) => counts[m.cid]).map((m) => ({ ...m, wrongCount: counts[m.cid] || 0 }))
+})
+const wbItems = computed(() => {
+  const s = subj.value
+  if (!s) return []
+  const out = []
+  ;(data.state.history || []).forEach((r) => {
+    if (!s.chapterIds.includes(r.chapterId) || !r.questions) return
+    if (wbFilter.value && r.chapterId !== wbFilter.value) return
+    r.questions.forEach((q, qi) => {
+      if (q.isCorrect !== false) return
+      out.push({ key: r.chapterId + ':' + r.id + ':' + qi, qId: getQuestionId(r.chapterId, q), cid: r.chapterId, q, userAnswer: q.userAnswer, roundDate: r.date || '' })
+    })
+  })
+  return out
+})
+function wbCache(item) { return (data.state.wrongBook || {})[item.qId] }
+function fmtWhen(at) { if (!at) return ''; try { return new Date(at).toLocaleString('zh-CN') } catch (e) { return '' } }
+function answerText(q, ans) {
+  if (ans === undefined || ans === null || ans === '') return '（未作答）'
+  if ((q.type === 'single' || q.type === 'judge') && typeof ans === 'number' && Array.isArray(q.options) && q.options[ans] !== undefined) return letter(ans) + '. ' + q.options[ans]
+  return String(ans)
+}
+async function askExplain(item) {
+  if (wbLoading[item.key]) return
+  wbLoading[item.key] = true
+  wbOpen[item.key] = true
+  try {
+    const ch = data.state.chapters[item.cid]
+    const context = (ch && ch.name) ? '章节：' + ch.name : ''
+    await ai.explainWrongAnswer({ q: item.q, qId: item.qId, cid: item.cid, userAnswer: item.userAnswer, force: true }, context)
+    ui.toast('讲解已生成（可回看）', 'ok')
+  } catch (e) {
+    wbOpen[item.key] = false
+    ui.toast((e && e.message) || '讲解生成失败，请检查 AI 配置', 'err')
+  } finally {
+    wbLoading[item.key] = false
+  }
+}
+function exportChapter() {
+  const ch = data.getCh()
+  if (!ch || !ch.questions || ch.questions.length === 0) { ui.toast('当前章节没有可导出的题目', 'err'); return }
+  const json = exportQuestionsJson(ch.questions, { chapterName: ch.name, chapterId: ch.id, exportedAt: new Date().toISOString() })
+  const pad = (n) => String(n).padStart(2, '0')
+  const d = new Date()
+  downloadTextFile('Qbao_' + (ch.name || '章节') + '_' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json', json)
+  ui.toast('已导出 ' + ch.questions.length + ' 道题目', 'ok')
+}
 
 const tabs = [
   { key: 'overview', label: '总览' },
   { key: 'questionbank', label: '题库' },
   { key: 'compose-exam', label: '大考卷' },
+  { key: 'wrongbook', label: '错题本' },
   { key: 'srs-review', label: '间隔复习' }
 ]
 const tab = ref('overview')
@@ -252,10 +368,137 @@ watch(qbankGroups, (groups) => {
   }
 })
 
+// —— P3.3 批量编辑（选择模式：移动/删除/设标签） ——
+const qbSelectMode = ref(false)
+const qbSelected = reactive(new Set())
+const qbMoveTarget = ref('')
+
+function qbEnterSelect() { qbSelectMode.value = true; qbSelected.clear() }
+function qbExitSelect() { qbSelectMode.value = false; qbSelected.clear(); qbMoveTarget.value = '' }
+function qbToggleSelect(key) { if (qbSelected.has(key)) qbSelected.delete(key); else qbSelected.add(key) }
+
+// 选中项还原为 qbankGroups 中的条目（含 q/章节引用）
+const qbSelectedItems = computed(() => {
+  const byKey = {}
+  qbankGroups.value.forEach((g) => g.items.forEach((it) => { byKey[it.key] = it }))
+  return Array.from(qbSelected).map((k) => byKey[k]).filter(Boolean)
+})
+
+// 按签名在题库（ch.questions）中定位（history 副本 → 题库本体）
+function findInChapter(ch, q) {
+  return (ch && ch.questions && ch.questions.findIndex((x) => x.question === q.question && x.type === q.type && x.answer === q.answer)) ?? -1
+}
+function qbBulkDelete() {
+  const items = qbSelectedItems.value
+  if (!items.length) { ui.toast('请先勾选题目', 'err'); return }
+  ui.openConfirm('批量删除', '确定删除选中的 ' + items.length + ' 道题目？将从题库与 SRS 复习计划中移除（历史记录保留）。', '删除', { danger: true }).then((ok) => {
+    if (!ok) return
+    let removed = 0
+    const removal = new Set(items.map((it) => JSON.stringify([it.cid, it.q.question, it.q.type, it.q.answer])))
+    Object.keys(data.state.chapters).forEach((cid) => {
+      const ch = data.state.chapters[cid]
+      if (!ch || !Array.isArray(ch.questions)) return
+      const keep = []
+      const keepAns = []
+      ch.questions.forEach((q, i) => {
+        const sig = JSON.stringify([cid, q.question, q.type, q.answer])
+        if (removal.has(sig)) {
+          removed++
+          delete data.state.srsData[getQuestionId(cid, q)]
+        } else {
+          keep.push(q)
+          if (ch.userAnswers) keepAns.push(ch.userAnswers[i])
+        }
+      })
+      ch.questions = keep
+      if (ch.userAnswers) ch.userAnswers = keepAns
+      // quizSets 中相同签名一并移除（轮次不残留孤儿题）
+      if (Array.isArray(ch.quizSets)) {
+        ch.quizSets.forEach((set) => {
+          if (!Array.isArray(set.questions)) return
+          const kq = [], ka = []
+          set.questions.forEach((q, i) => {
+            const sig = JSON.stringify([cid, q.question, q.type, q.answer])
+            if (removal.has(sig)) return
+            kq.push(q); if (set.userAnswers) ka.push(set.userAnswers[i])
+          })
+          set.questions = kq
+          if (set.userAnswers) set.userAnswers = ka
+        })
+        ch.quizSets = ch.quizSets.filter((set) => !set.questions || set.questions.length > 0)
+      }
+    })
+    data.saveState()
+    qbExitSelect()
+    ui.toast('已删除 ' + removed + ' 道题目', 'ok')
+  }).catch(() => {})
+}
+
+const qbMoveChapters = computed(() => {
+  const s = subj.value
+  if (!s) return []
+  return s.chapterIds.map((cid) => ({ cid, name: (data.state.chapters[cid] || {}).name || cid }))
+})
+function qbBulkMove() {
+  const targetCid = qbMoveTarget.value
+  const items = qbSelectedItems.value
+  if (!targetCid) { ui.toast('请先选择目标章节', 'err'); return }
+  if (!items.length) return
+  const target = data.state.chapters[targetCid]
+  if (!target) return
+  if (!target.questions) target.questions = []
+  if (!target.userAnswers) target.userAnswers = []
+  let moved = 0
+  const sigs = new Set(items.map((it) => JSON.stringify([it.q.question, it.q.type, it.q.answer])))
+  Object.keys(data.state.chapters).forEach((cid) => {
+    if (cid === targetCid) return
+    const ch = data.state.chapters[cid]
+    if (!ch || !Array.isArray(ch.questions)) return
+    const keep = [], keepAns = []
+    ch.questions.forEach((q, i) => {
+      const sig = JSON.stringify([q.question, q.type, q.answer])
+      if (sigs.has(sig) && !target.questions.some((x) => x.question === q.question && x.type === q.type)) {
+        target.questions.push(q)
+        target.userAnswers.push(ch.userAnswers ? ch.userAnswers[i] : undefined)
+        moved++
+      } else {
+        keep.push(q)
+        if (ch.userAnswers) keepAns.push(ch.userAnswers[i])
+      }
+    })
+    ch.questions = keep
+    if (ch.userAnswers) ch.userAnswers = keepAns
+  })
+  data.saveState()
+  qbExitSelect()
+  ui.toast('已移动 ' + moved + ' 道到 ' + (target.name || '目标章节'), 'ok')
+}
+function qbBulkTag() {
+  const items = qbSelectedItems.value
+  if (!items.length) { ui.toast('请先勾选题目', 'err'); return }
+  ui.openPrompt('设置标签', '').then((tag) => {
+    if (tag == null) return
+    const t = String(tag).trim()
+    if (!t) { ui.toast('标签不能为空', 'err'); return }
+    let tagged = 0
+    items.forEach((it) => {
+      const ch = data.state.chapters[it.cid]
+      const idx = ch && findInChapter(ch, it.q)
+      if (ch && idx >= 0) { ch.questions[idx].tag = t; tagged++ }
+    })
+    data.saveState()
+    qbExitSelect()
+    ui.toast('已为 ' + tagged + ' 道题目设置标签「' + t + '」', 'ok')
+  }).catch(() => {})
+}
+// 移动目标变化即执行（select 下拉触发）
+watch(qbMoveTarget, (v) => { if (v) { qbBulkMove() } })
+
 // —— 大考卷 ——
 const examTypes = [
   { key: 'single', label: '单选' },
   { key: 'judge', label: '判断' },
+
   { key: 'term', label: '名词解释' },
   { key: 'short', label: '简答' }
 ]
@@ -499,4 +742,22 @@ watch(() => ui.activeScreen, (screen) => {
 @media (max-width: 768px) {
   .sd-grid { grid-template-columns: repeat(2, 1fr); }
 }
+.qb-tool-actions { display: flex; gap: var(--space-sm); margin-left: auto; }
+.wb-item { padding: var(--space-sm) 0; }
+.wb-qline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wb-type { font-size: var(--fs-xs); color: var(--color-primary); background: var(--color-primary-light); border-radius: var(--radius-sm); padding: 0 6px; line-height: 18px; flex-shrink: 0; }
+.wb-q { font-size: var(--fs-sm); font-weight: 500; }
+.wb-tag { font-size: var(--fs-xs); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border-default); color: var(--text-secondary); }
+.wb-answers { display: flex; gap: var(--space-md); flex-wrap: wrap; margin-top: 4px; font-size: var(--fs-xs); color: var(--text-secondary); }
+.wb-ans.wrong { color: var(--color-danger); }
+.wb-ans.right { color: var(--color-success); }
+.wb-date { color: var(--text-muted); margin-left: auto; }
+.wb-actions { margin-top: 6px; }
+.wb-explanation { margin-top: var(--space-sm); padding: var(--space-md); background: var(--surface-hover); border-left: 3px solid var(--color-primary); border-radius: var(--radius-md); font-size: var(--fs-sm); line-height: 1.8; }
+.wb-exp-head { font-weight: 600; margin-bottom: 6px; display: flex; gap: var(--space-sm); align-items: baseline; }
+.wb-exp-meta { font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); }
+.markdown-body { word-break: break-word; }
+.qb-sel-count { font-size: var(--fs-xs); color: var(--color-primary); }
+.qb-sel-box { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--border-default); border-radius: 4px; color: var(--text-muted); flex-shrink: 0; }
+.qb-sel-box.on { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
 </style>

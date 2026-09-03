@@ -9,8 +9,10 @@ import { useUserStore } from './user'
 import { useUiStore } from './ui'
 import {
   fetchProvidersList, aiTest,
-  createAiServerTask, getAiServerTask, listAiServerTasks, cancelAiServerTask
+  createAiServerTask, getAiServerTask, listAiServerTasks, cancelAiServerTask,
+  explainWrongQuestion as explainWrongQuestionApi,
 } from '../services/aiApi'
+import { getQuestionId } from '../services/questions'
 import { getAiApiKey, setAiApiKey, removeAiApiKey, hasAnyAiApiKey } from '../services/aiKeys'
 import { generatePromptText } from '../services/strategy'
 import { formatFileSize, sleep } from '../services/utils'
@@ -123,6 +125,34 @@ export const useAiStore = defineStore('ai', () => {
     const model = effectiveModel()
     const res = await aiTest({ apiKey, provider, model, message: 'ping' })
     return { ...res, provider, model }
+  }
+
+  // —— P3.1 错题 AI 讲解（结果缓存 data.state.wrongBook，可回看；上限 200 条 LRU） ——
+  async function explainWrongAnswer(item, context) {
+    const ac = data.state.aiConfig || {}
+    const provider = ac.provider || 'ecnu'
+    const apiKey = getAiApiKey(provider)
+    if (!apiKey) throw new Error('请先在设置中配置 AI 密钥')
+    const qId = item.qId || getQuestionId(item.cid || '', item.q)
+    if (!data.state.wrongBook) data.state.wrongBook = {}
+    const cached = data.state.wrongBook[qId]
+    if (cached && !item.force) return cached
+    const res = await explainWrongQuestionApi({
+      apiKey,
+      provider,
+      model: effectiveModel(),
+      question: item.q,
+      userAnswer: item.userAnswer,
+      context,
+    })
+    data.state.wrongBook[qId] = { explanation: res.explanation, model: res.model, provider: res.provider, at: Date.now() }
+    const keys = Object.keys(data.state.wrongBook)
+    if (keys.length > 200) {
+      const stale = keys.slice().sort((a, b) => (data.state.wrongBook[a].at || 0) - (data.state.wrongBook[b].at || 0))
+      stale.slice(0, keys.length - 200).forEach((k) => { delete data.state.wrongBook[k] })
+    }
+    data.saveState()
+    return data.state.wrongBook[qId]
   }
 
   // —— 任务队列 ——
@@ -403,7 +433,7 @@ export const useAiStore = defineStore('ai', () => {
     aiConfig,
     getChapterMaterials, saveChapterMaterials,
     ensureProviders, getProvider, defaultModelFor, rememberModel, recalledModel, effectiveModel,
-    saveAiConfig, clearApiKey, testConnection,
+    saveAiConfig, clearApiKey, testConnection, explainWrongAnswer,
     enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter,
     refreshServerTasks, importServerTaskResult, cancelServerTask,
     openQueueDialog, closeQueueDialog,
