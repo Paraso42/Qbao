@@ -366,7 +366,8 @@ export const useAiStore = defineStore('ai', () => {
       // } else {
       //   questions = await nonStreamGenerate(task, opts, task.promptText)
       // }
-      const questions = await nonStreamGenerate(task, opts, task.promptText)
+      // P2.1 拆分后 nonStreamGenerate 需要 deps：修复"出题报 TypeError: deps.aiSelfCheck"（v3.32 起客户端出题必失败）
+      const questions = await nonStreamGenerate(task, opts, task.promptText, { aiSelfCheck: ac.selfCheck === true })
 
       applyStrategyCompliance(task, questions)
       // if (!(ac.streamMode === true && task.streamSetRef)) {

@@ -29,6 +29,38 @@ async function chargeGenerateSuccess(userId) {
   }
 }
 
+// v3.33.1：上游瞬时故障（401/429/5xx/网络错，如 ECNU 网关"获取第三方元数据失败"）
+// 自动重试一次并给出友好提示；测试连接与讲解共用。
+function upstreamStatus(e) {
+  const m = String((e && e.message) || '')
+  const st = parseInt((m.match(/^(\d{3})/) || [])[1] || '0', 10)
+  return st
+}
+function friendlyUpstreamError(e) {
+  const raw = String((e && e.message) || '未知错误')
+  if (/元数据/.test(raw)) return '上游网关暂时不可用（第三方模型元数据获取失败），请稍后重试或换用其他模型'
+  if (/401|Unauthorized/.test(raw)) return 'API 密钥校验失败（401），请检查密钥是否正确'
+  return raw
+}
+async function chatCompletionsWithRetry(provider, apiKey, model, messages, opts) {
+  let lastErr = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await provider.chatCompletions(apiKey, model, messages, opts)
+    } catch (e) {
+      lastErr = e
+      const st = upstreamStatus(e)
+      if ((st === 401 || st === 429 || (st >= 500 && st <= 599) || st === 0) && attempt === 0) {
+        console.log('[ai] upstream transient status=' + st + ', retrying once...')
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+        continue
+      }
+      break
+    }
+  }
+  throw lastErr
+}
+
 // AI 请求审计：所有路径都记录 status，失败也不影响主流程。
 async function logAiRequest(userId, model, status) {
   try {
@@ -496,14 +528,15 @@ let userText = textContent || '';
 
       let completion;
         try {
-          completion = await target.provider.chatCompletions(
+          completion = await chatCompletionsWithRetry(
+        target.provider,
         parsed.apiKey,
         target.model,
         testMessages,
         { temperature: 0, max_tokens: Math.min(16, Number(target.modelConfig.maxOutput) || 16) }
       );
         } catch (e) {
-          throw new ApiError(502, 'AI 连接测试失败：' + (e && e.message ? e.message : '未知错误'));
+          throw new ApiError(502, 'AI 连接测试失败：' + friendlyUpstreamError(e));
         }
 
       const content = completion && completion.choices && completion.choices[0]
@@ -571,7 +604,7 @@ let userText = textContent || '';
       );
     } catch (e) {
       await logAiRequest(req.userId, model, 'failed');
-      throw new ApiError(502, '讲解生成失败：' + (e && e.message ? e.message : '未知错误'));
+      throw new ApiError(502, '讲解生成失败：' + friendlyUpstreamError(e));
     }
     const content = completion && completion.choices && completion.choices[0]
       ? (completion.choices[0].message && completion.choices[0].message.content) || ''
