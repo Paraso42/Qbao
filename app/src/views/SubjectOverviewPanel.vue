@@ -50,6 +50,7 @@
 import { computed } from 'vue'
 import { useDataStore } from '../stores/data'
 import { isObjType, getCi } from '../services/utils'
+import { chapterQuestionTotal } from '../services/chapterStats'
 
 const data = useDataStore()
 
@@ -72,7 +73,7 @@ const overview = computed(() => {
     out.totalRounds += (data.state.history || []).filter((r) => r.chapterId === cid).length
     const ch = data.state.chapters[cid]
     if (!ch || !ch.questions) return
-    out.totalQs += ch.questions.length
+    out.totalQs += chapterQuestionTotal(ch)
     let cCor = 0, cTot = 0, cAns = 0, cWr = 0
     ch.questions.forEach((q, i) => {
       typeDist[q.type] = (typeDist[q.type] || 0) + 1

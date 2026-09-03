@@ -18,7 +18,6 @@
     <div v-if="hasSubject && ch" class="stat-cards">
       <div class="stat-card"><div class="stat-num tabular-nums">{{ rate }}<span class="stat-unit">%</span></div><div class="stat-label">章节正确率</div></div>
       <div class="stat-card"><div class="stat-num tabular-nums">{{ count }}</div><div class="stat-label">章节题量</div></div>
-      <div class="stat-card"><div class="stat-num tabular-nums">{{ wrong }}</div><div class="stat-label">待巩固错题</div></div>
     </div>
 
     <div v-if="!hasSubject" class="card guide-card">
@@ -93,6 +92,7 @@ import { useAiStore } from '../stores/ai'
 import { useUserStore } from '../stores/user'
 import { usePointsStore } from '../stores/points'
 import { generatePromptText } from '../services/strategy'
+import { chapterQuestionTotal } from '../services/chapterStats'
 import ChapterStrategyCard from '../components/features/strategy/ChapterStrategyCard.vue'
 import AiMaterialsSection from '../components/features/ai/AiMaterialsSection.vue'
 import Icon from '../components/ui/Icon.vue'
@@ -111,7 +111,8 @@ const ch = computed(() => data.getCh())
 const aiEnabled = computed(() => data.state.aiEnabled === true)
 const strategy = computed(() => (ch.value ? data.getChStrategy(ch.value.id) : null))
 
-const count = computed(() => (ch.value && ch.value.questions ? ch.value.questions.length : 0))
+// 题量口径：有轮次（quizSets）时按各轮题数之和（题库按轮次展示），旧章节回退题库数组
+const count = computed(() => chapterQuestionTotal(ch.value))
 const answered = computed(() => {
   if (!ch.value || !ch.value.userAnswers) return 0
   return ch.value.userAnswers.filter((a) => a !== undefined && a !== null && a !== -1).length
@@ -245,7 +246,7 @@ async function copyPrompt() {
 .hero-actions { display: flex; justify-content: center; gap: var(--space-sm); flex-wrap: wrap; }
 .stat-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-md);
   margin: var(--space-md) 0;
   text-align: left;
