@@ -1,4 +1,17 @@
-## v3.31.0
+## v3.32.0
+
+- **store 拆分（P2.1）**：stores/ai.js 从 35.3KB 拆至 ~17KB——生成核心（题目归一化/策略符合度/非流式重试/池诊断/上传解析）迁至 services/aiTasks.js；服务端任务协调（列表/轮询续跑/导入/取消）迁至 services/aiServerTasks.js（组合式 controller）；章节资料管理迁至 services/aiMaterials.js；章节历史统计迁至 services/aiHistory.js（纯函数）。行为不变，新增拆分模块单测 8 例
+- **巨型组件拆分（P2.2）**：
+  - SettingsModal.vue（23.7KB → 15.6KB）：AI 配置区块 → AiConfigSection.vue
+  - AdminTab.vue（29.6KB → 15.5KB）：公告管理 → AdminNoticesSection.vue、用户管理 → AdminUsersSection.vue
+  - SubjectDashView.vue（33.7KB → 26.1KB）：科目总览 → SubjectOverviewPanel.vue
+  - 拆分组件状态走 store，模板/样式随区块迁移，交互保持原地
+- **聊天虚拟滚动（P2.4）**：ChatMessages.vue 窗口化渲染——按消息类型估算行高 + 前缀高度二分定位可视窗口，上下 spacer 撑开滚动区；1000 条消息实测仅渲染 ~11 个 DOM 节点（Electron 探针 probe-p2-chat-virtual.cjs 留档），顺带修复后台窗口 rAF 不触发导致的滚动位置不同步；窗口计算抽为纯函数 services/chatVirtual.js（4 例单测）
+- **API 封装统一（P2.3）**：api.js 新增 apiFetch（统一 JSON/鉴权/FormData/401 语义）与 apiHandle（统一错误处理，替代 filesApi/pointsApi/usersApi 三份重复 _handle），readApiErrorSafe 统一错误读取（readApiError 保留别名）；aiApi.js 全部裸 fetch 收敛至 apiFetch；删除死代码 noticesApi.getAdminNotices；新增 6 例单测
+- **发布断言（P2.5）**：release.yml 构建前断言 tag 与三端 package.json 版本一致；发布前三要素产物（exe/latest.yml/blockmap）存在性检查
+- 测试：app 17 文件 108 用例（原 92）全绿；server 146 用例全绿；eslint 0 error
+
+
 
 - **同步写收敛（P1.2）**：消除"无变化也全量 PUT"的写放大——
   - 空推跳过：引擎记录上次成功推送的脱敏序列化指纹，内容未变且 rev 基线未变时直接标记已同步（轮询/可见性/重复调度触发不再产生空 PUT）

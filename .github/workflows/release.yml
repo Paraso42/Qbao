@@ -17,6 +17,18 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: desktop/package-lock.json
+      - name: 断言 tag 与三端版本一致（P2.5）
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          for f in app server desktop; do
+            V=$(node -p "require('./$f/package.json').version")
+            echo "$f package.json version = $V (tag = $TAG)"
+            if [ "$V" != "$TAG" ]; then
+              echo "::error::$f package.json 版本 $V 与 tag $TAG 不一致，终止发布"
+              exit 1
+            fi
+          done
       - name: 安装前端依赖
         working-directory: app
         run: npm ci
@@ -36,6 +48,15 @@ jobs:
       - name: 构建 NSIS 安装包
         working-directory: desktop
         run: npx electron-builder --win nsis --publish never
+      - name: 产物存在性检查（P2.5）
+        shell: bash
+        run: |
+          cd desktop/release
+          ls -la
+          test -f Qbao*Setup*.exe && echo "exe OK"
+          test -f *.blockmap && echo "blockmap OK"
+          test -s latest.yml && echo "latest.yml OK"
+          test -f Qbao*Setup*.exe && test -s latest.yml && test -f *.blockmap || { echo "::error::发布产物缺失"; exit 1; }
       - name: 发布 GitHub Release（gh CLI）
         shell: bash
         env:

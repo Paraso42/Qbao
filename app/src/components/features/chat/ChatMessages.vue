@@ -1,8 +1,9 @@
 <!-- 对应 legacy chat.js：chatRenderMessage/chatLoadMessages/chatScrollToBottom（扁平消息：头像+名称+无气泡内容，DeepSeek 风格） -->
 <template>
-  <div class="chat-messages" ref="container">
-    <div v-if="prepared.length > 200" class="chat-msg-cap">仅显示最近 200 条消息</div>
-    <template v-for="m in visibleMessages" :key="m.id">
+  <div class="chat-messages" ref="container" @scroll="onScroll">
+    <!-- P2.4 虚拟滚动：顶部占位撑开早前消息 -->
+    <div v-if="vState.topPad" class="chat-virt-pad" :style="{ height: vState.topPad + 'px' }"></div>
+    <template v-for="m in vState.list" :key="m.id">
       <!-- 撤回/系统消息 -->
       <div v-if="m.is_revoked" class="chat-msg-system">
         {{ m.isMine ? '你撤回了一条消息' : ((m.sender_name || '') + ' 撤回了一条消息') }}
@@ -113,6 +114,9 @@
       </div>
     </template>
 
+    <!-- 虚拟滚动：底部占位撑开后续消息 -->
+    <div v-if="vState.botPad" class="chat-virt-pad" :style="{ height: vState.botPad + 'px' }"></div>
+
     <!-- 图片预览 -->
     <Teleport to="body">
       <div v-if="previewUrl" class="chat-img-lightbox" @click="previewUrl = null">
@@ -123,11 +127,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useChatStore } from '../../../stores/chat'
 import { useUserStore } from '../../../stores/user'
 import Icon from '../../ui/Icon.vue'
 import { renderMarkdown, formatFileSize, resolveMediaUrl } from '../../../services/utils'
+import { msgEstimateHeight, computeChatWindow } from '../../../services/chatVirtual'
 
 const store = useChatStore()
 const user = useUserStore()
@@ -159,9 +164,39 @@ function canRevoke(m) {
   return (Date.now() - new Date(m.created_at).getTime()) < 2 * 60 * 1000
 }
 
-const visibleMessages = computed(() => {
+// —— P2.4 虚拟滚动：消息窗口化渲染（1000+ 消息不整体重建 DOM） ——
+// 行高按消息类型估算（图片/分享题/文件更高）；前缀高度二分定位可见窗口，
+// 上下 spacer 撑开滚动区，仅渲染窗口 ±300px 内的消息。
+const VIRT_ROW = 84
+const VIRT_GAP = 12
+const VIRT_BUF = 300
+const scrollTop = ref(0)
+const viewH = ref(600)
+
+function msgEstimate(m) { return msgEstimateHeight(m, VIRT_ROW) }
+
+// 同步更新滚动位置：后台/未聚焦窗口 rAF 可能长期不触发，导致窗口渲染滞后（P2.4 实测）
+function onScroll() {
+  const el = container.value
+  if (!el) return
+  scrollTop.value = el.scrollTop
+}
+function measureView() {
+  const el = container.value
+  if (el) viewH.value = el.clientHeight || 600
+}
+
+const vState = computed(() => {
   const all = prepared.value
-  return all.length > 200 ? all.slice(-200) : all
+  const n = all.length
+  if (n <= 80) return { list: all, topPad: 0, botPad: 0 } // 小列表直接全量渲染
+  const heights = []
+  for (let i = 0; i < n; i++) heights.push(msgEstimate(all[i]))
+  const w = computeChatWindow({
+    total: n, heights, gap: VIRT_GAP,
+    scrollTop: scrollTop.value, viewH: viewH.value, buf: VIRT_BUF,
+  })
+  return { list: all.slice(w.startIdx, w.endIdx), topPad: w.topPad, botPad: w.botPad }
 })
 const prepared = computed(() => {
   return store.messages.map((m) => {
@@ -261,17 +296,12 @@ watch(() => store.messages.length, (n, o) => {
   if (n > o && isNearBottom()) scrollToBottom()
 })
 
-onMounted(scrollToBottom)
+onMounted(() => { measureView(); scrollToBottom(); window.addEventListener('resize', measureView) })
+onBeforeUnmount(() => { window.removeEventListener('resize', measureView) })
 </script>
 
 <style scoped>
-.chat-msg-cap {
-  text-align: center;
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-light);
-}
+.chat-virt-pad { flex-shrink: 0; }
 .chat-messages {
   flex: 1;
   overflow-y: auto;

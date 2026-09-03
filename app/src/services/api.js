@@ -142,9 +142,54 @@ export async function apiRegister(username, displayName, password) {
 }
 
 // 统一读取接口错误信息（zod 422 / ApiError 均返回 { error }）
-export async function readApiError(res, fallback) {
+// P2.3：readApiErrorSafe 为统一实现（兼容 res=null/网络异常），readApiError 保留为别名。
+export async function readApiErrorSafe(res, fallback) {
+  if (!res || typeof res.json !== 'function') return fallback
   try {
     const data = await res.json()
     return (data && data.error) || fallback
   } catch (e) { return fallback }
+}
+export const readApiError = readApiErrorSafe
+
+// —— 统一请求封装（P2.3）：所有 *Api 模块的唯一网络出口 ——
+// opts: { method, headers, auth=true, body(对象→自动 JSON / FormData 原样), rawBody=已序列化字符串,
+//         signal, keepalive }
+// 行为：自动 Bearer 鉴权；401 清登录态并返回 null（与 fetchWithAuth 一致）；
+//       网络异常抛 netErrorMessage()。
+export async function apiFetch(path, opts = {}) {
+  const method = opts.method || 'GET'
+  const headers = {}
+  const isForm = opts.body instanceof FormData
+  // rawBody = 调用方已序列化的请求体（不再重复 JSON.stringify），此时 opts.body 应省略
+  const payload = opts.rawBody !== undefined ? opts.rawBody : opts.body
+  if (payload !== undefined && !isForm) headers['Content-Type'] = 'application/json'
+  if (opts.headers) Object.assign(headers, opts.headers)
+  if (opts.auth !== false) {
+    const t = getToken()
+    if (t) headers['Authorization'] = 'Bearer ' + t
+  }
+  let body = payload
+  if (body !== undefined && !isForm && opts.rawBody === undefined) body = JSON.stringify(body)
+  let res
+  try {
+    res = await fetch(API_BASE + path, {
+      method, headers, body,
+      signal: opts.signal,
+      keepalive: opts.keepalive ? true : undefined,
+    })
+  } catch (e) {
+    throw new Error(netErrorMessage())
+  }
+  if (res.status === 401 && opts.auth !== false) { clearStoredAuth(); return null }
+  return res
+}
+
+// —— 统一响应处理（P2.3）：替代各处重复的私有 _handle ——
+// 401/网络（res=null）→ 抛 fallback 或「请先登录」；非 2xx → 抛后端 { error }；
+// 成功 → 解析 json（空响应容错为 {}）。
+export async function apiHandle(res, fallback) {
+  if (!res) throw new Error('请先登录')
+  if (!res.ok) throw new Error(await readApiErrorSafe(res, fallback || '请求失败，请检查网络'))
+  return res.json().catch(() => ({}))
 }
