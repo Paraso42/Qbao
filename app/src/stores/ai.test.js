@@ -10,6 +10,7 @@ vi.mock('../services/aiApi', () => ({
   createAiServerTask: vi.fn(),
   getAiServerTask: vi.fn(),
   listAiServerTasks: vi.fn(async () => []),
+  explainWrongQuestion: vi.fn(async () => ({ explanation: '分步讲解内容', model: 'ecnu-plus', provider: 'ecnu' })),
   cancelAiServerTask: vi.fn(),
 }))
 
@@ -18,6 +19,7 @@ import { useDataStore } from './data'
 import { useUiStore } from './ui'
 import { STORAGE_KEY } from '../services/persistence'
 import { getAiApiKey } from '../services/aiKeys'
+import * as aiApi from '../services/aiApi'
 
 function makeLocalStorageStub(seed = {}) {
   const map = new Map(Object.entries(seed))
@@ -123,5 +125,53 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
     expect(ai.recalledModel('ecnu')).toBe('ecnu-plus') // 默认回退
     ai.rememberModel('gemini', 'gemini-2.0-flash')
     expect(ai.recalledModel('gemini')).toBe('gemini-2.0-flash')
+  })
+})
+
+describe('ai store 错题讲解 (P3.1)', () => {
+  let storage2
+  beforeEach(() => {
+    storage2 = makeLocalStorageStub({})
+    globalThis.localStorage = storage2
+    setActivePinia(createPinia())
+    storage2.setItem(STORAGE_KEY, JSON.stringify(seedState()))
+    useDataStore()
+    vi.clearAllMocks()
+  })
+  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+
+  it("explainWrongAnswer：无 key 时抛可读错误；成功后缓存进 wrongBook（可回看）", async () => {
+    storage2.setItem(STORAGE_KEY, JSON.stringify(seedState()))
+    const ai2 = useAiStore()
+    const data2 = useDataStore()
+    await expect(ai2.explainWrongAnswer({ q: { question: 'Q', type: 'single' } }, '章节：x')).rejects.toThrow('配置 AI 密钥')
+    // 配置 key（走 aiKeys web 存储）
+    const { setAiApiKey } = await import('../services/aiKeys')
+    setAiApiKey('ecnu', 'sk-test-1234567890')
+    data2.state.aiConfig.provider = 'ecnu'
+    const r = await ai2.explainWrongAnswer({ q: { question: '错题A', type: 'single', options: ['a', 'b'], answer: 1 }, cid: 'c1', userAnswer: 0 }, '章节：章一')
+    expect(aiApi.explainWrongQuestion).toHaveBeenCalled()
+    expect(r.explanation).toBe('分步讲解内容')
+    // 缓存可回看：再次调用不请求网络
+    aiApi.explainWrongQuestion.mockClear()
+    const r2 = await ai2.explainWrongAnswer({ q: { question: '错题A', type: 'single', options: ['a', 'b'], answer: 1 }, cid: 'c1', userAnswer: 0 }, null)
+    expect(r2.explanation).toBe('分步讲解内容')
+    expect(aiApi.explainWrongQuestion).not.toHaveBeenCalled()
+    // force 重新生成
+    aiApi.explainWrongQuestion.mockClear()
+    await ai2.explainWrongAnswer({ q: { question: '错题A', type: 'single', options: ['a', 'b'], answer: 1 }, cid: 'c1', userAnswer: 0, force: true }, null)
+    expect(aiApi.explainWrongQuestion).toHaveBeenCalledTimes(1)
+    expect(Object.keys(data2.state.wrongBook).length).toBe(1)
+  })
+
+  it("explainWrongAnswer：讲解失败抛出并可重试（不落缓存）", async () => {
+    const { setAiApiKey } = await import('../services/aiKeys')
+    setAiApiKey('ecnu', 'sk-test-1234567890')
+    globalThis.localStorage.setItem('qbao_ai_keys_v1', JSON.stringify({ ecnu: 'sk-test-1234567890' })); aiApi.explainWrongQuestion.mockRejectedValueOnce(new Error('讲解生成失败'))
+    const ai2 = useAiStore()
+    const data2 = useDataStore()
+    data2.state.aiConfig.provider = 'ecnu'
+    await expect(ai2.explainWrongAnswer({ q: { question: 'X', type: 'single' }, cid: 'c1' }, null)).rejects.toThrow('讲解生成失败')
+    expect(data2.state.wrongBook || {}).toEqual({})
   })
 })

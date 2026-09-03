@@ -58,8 +58,24 @@ const aiTestBodySchema = z.object({
   message: z.string().max(2000).optional(),
 });
 
+// P3.1 错题讲解：题目对象宽松校验（前端题目结构），用户答案任意可序列化值。
+// question 大小上限 32KB（含解析/选项），防超大题面打爆提示词。
+const aiExplainBodySchema = z.object({
+  question: z.object({
+    type: z.string().max(16),
+    question: z.string().min(1).max(16000),
+    options: z.array(z.string().max(2000)).max(20).optional(),
+    answer: z.union([z.number(), z.string().max(64)]).optional(),
+    explanation: z.string().max(12000).optional(),
+    tag: z.string().max(128).optional(),
+  }, { invalid_type_error: 'question 必须是题目对象' }),
+  userAnswer: z.union([z.number(), z.string().max(4000), z.null()]).optional(),
+  context: z.string().max(4000).optional(),
+});
+
 module.exports = {
   aiHeadersSchema,
   aiGenerateBodySchema,
   aiTestBodySchema,
+  aiExplainBodySchema,
 };

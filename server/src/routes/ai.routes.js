@@ -6,7 +6,7 @@ const path = require('path');
 const { getProvider, getProviderByModel, getAllProviders } = require('../providers');
 const { asyncHandler, ApiError } = require('../lib/errorHandler');
 const { validate } = require('../lib/validate');
-const { aiGenerateBodySchema, aiTestBodySchema } = require('../schemas/ai.schema');
+const { aiGenerateBodySchema, aiTestBodySchema, aiExplainBodySchema } = require('../schemas/ai.schema');
 const { parseAiHeaders, resolveAiTarget, normalizeTypeCounts, calculateMaxTokens } = require('../lib/aiRequest');
 const { getCachedOrExtractFileText } = require('../services/aiMaterialCache');
 const { validateQuestionSet } = require('../services/aiQuestionValidator');
@@ -524,9 +524,67 @@ let userText = textContent || '';
       });
     }));
 
-  app.post('/api/v1/ai/analyze', requireAuth, async (req, res) => {
-    res.status(501).json({ error: '功能开发中' });
-  });
+  // —— P3.1 错题 AI 讲解（非流式；成功才计费；额度沿用 AI 生成机制） ——
+  app.post('/api/v1/ai/explain', validate({ body: aiExplainBodySchema }), requireAuth, asyncHandler(async (req, res) => {
+    const parsed = parseAiHeaders(req);
+    const target = resolveAiTarget(parsed.providerName, parsed.model);
+    const model = target.model;
+    const { question, userAnswer, context } = req.body;
+
+    const typeLabel = ({ single: '单选题', judge: '判断题', term: '名词解释', short: '简答题' })[question.type] || question.type || '题目';
+    const stdAnswer = (() => {
+      if ((question.type === 'single' || question.type === 'judge') && typeof question.answer === 'number' && Array.isArray(question.options) && question.options[question.answer] !== undefined) {
+        return String.fromCharCode(65 + question.answer) + '. ' + question.options[question.answer];
+      }
+      return String(question.answer == null ? '' : question.answer);
+    })();
+    const qText = '题目：' + question.question
+      + (Array.isArray(question.options) && question.options.length ? '\n选项：\n' + question.options.map((o, i) => '  ' + String.fromCharCode(65 + i) + '. ' + o).join('\n') : '')
+      + '\n标准答案：' + stdAnswer
+      + (question.explanation ? '\n题干自带解析：' + question.explanation : '');
+    const answered = (userAnswer === null || userAnswer === undefined || userAnswer === '');
+    const userLine = answered
+      ? '（用户未作答）'
+      : ('用户的作答：' + ((typeof userAnswer === 'number' && Array.isArray(question.options) && question.options[userAnswer] !== undefined)
+          ? String.fromCharCode(65 + userAnswer) + '. ' + question.options[userAnswer] : String(userAnswer)));
+
+    const systemPrompt =
+      '你是一名经验丰富的' + typeLabel + '讲解老师。请用简体中文讲解下面这道' + typeLabel + '，要求：\n'
+      + '1. 先判断用户答案是否正确（用户未作答则跳过判断）；\n'
+      + '2. 分步骤讲解解题思路与关键知识点，重点说明为什么标准答案是对的；\n'
+      + '3. 若用户答错，明确指出错在哪一步、常见误区是什么；\n'
+      + '4. 结尾给一句同类题型的易错提醒。\n'
+      + '输出为 Markdown 文本（公式可用 $...$ 或 $$...$$），不要输出 JSON。';
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: qText + '\n' + userLine + (context ? '\n背景资料（可选参考）：' + String(context).slice(0, 2000) : '') },
+    ];
+
+    await logAiRequest(req.userId, model, 'started');
+    let completion;
+    try {
+      completion = await target.provider.chatCompletions(
+        parsed.apiKey,
+        model,
+        messages,
+        { temperature: 0.3, max_tokens: Math.min(2000, Number(target.modelConfig.maxOutput) || 2000) }
+      );
+    } catch (e) {
+      await logAiRequest(req.userId, model, 'failed');
+      throw new ApiError(502, '讲解生成失败：' + (e && e.message ? e.message : '未知错误'));
+    }
+    const content = completion && completion.choices && completion.choices[0]
+      ? (completion.choices[0].message && completion.choices[0].message.content) || ''
+      : '';
+    if (!content || !content.trim()) {
+      await logAiRequest(req.userId, model, 'failed');
+      throw new ApiError(502, 'AI 未返回讲解内容，请重试');
+    }
+    // 成功计费（与生成共享 AI 免费额度/超额扣分语义）
+    await logAiRequest(req.userId, model, 'ok');
+    await chargeGenerateSuccess(req.userId);
+    res.json({ explanation: content.trim(), provider: target.providerConfig.id, model });
+  }));
 };
 
 
