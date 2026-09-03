@@ -168,17 +168,6 @@ export async function listAiServerTasks(limit = 50) {
   return data.tasks || []
 }
 
-// P3.1 错题 AI 讲解（非流式；服务端成功才计费）
-export async function explainWrongQuestion({ apiKey, provider, model, question, userAnswer, context }) {
-  const res = await apiFetch('/ai/explain', {
-    method: 'POST',
-    headers: { 'x-ai-api-key': apiKey, 'x-ai-model': model, 'x-ai-provider': provider },
-    body: { question, userAnswer, context },
-  })
-  if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '讲解生成失败'))
-  return res.json()
-}
-
 export async function cancelAiServerTask(taskId) {
   const res = await fetchWithAuth('/ai/tasks/' + taskId, { method: 'DELETE' })
   if (!res || !res.ok) throw new Error(await readApiErrorSafe(res, '取消失败'))

@@ -39,7 +39,6 @@ describe('persistence.saveState (T12)', () => {
       chapters: {
         c1: { id: 'c1', name: '章节', strategy: { errPct: 20 }, questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], quizSets: [] },
       },
-      srsData: {},
       history: [{ id: 'h1', correct: 1 }],
     }
     const res = mod.saveState(state)
@@ -111,7 +110,7 @@ describe('persistence.saveState (T12)', () => {
     expect(mod.hasBigFields({ chapters: { c1: { questions: [1, 2] } } })).toBe(true)
     expect(mod.hasBigFields({ chapters: { c1: { name: 'x' } } })).toBe(false)
     expect(mod.hasBigFields({ history: [1] })).toBe(true)
-    expect(mod.hasBigFields({ srsData: { a: 1 } })).toBe(true)
+    expect(mod.hasBigFields({ srsData: { a: 1 } })).toBe(false)
     expect(mod.hasBigFields({ chapters: {} })).toBe(false)
   })
 

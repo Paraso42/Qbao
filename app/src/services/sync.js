@@ -163,7 +163,7 @@ export function mergeStates(localState, cloudState) {
     if (typeof L[k] !== 'undefined' && L[k] !== null) m[k] = L[k]
   })
   let conflictAddedCount = 0
-  ;['subjects', 'generatedExams', 'srsData'].forEach(function (k) {
+  ;['subjects', 'generatedExams'].forEach(function (k) {
     const c = m[k] || {}
     const l = L[k] || {}
     Object.keys(l).forEach(function (id) { c[id] = l[id] })

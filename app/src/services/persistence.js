@@ -61,7 +61,7 @@ export function loadState() {
 // ============================================================
 
 export const CHAPTER_BIG_FIELDS = ['questions', 'userAnswers', 'quizSets']
-export const STATE_BIG_FIELDS = ['srsData', 'generatedExams', 'history']
+export const STATE_BIG_FIELDS = ['generatedExams', 'history']
 
 // 浅拷贝剥离大字段 → 骨架（JSON.stringify 时引用会展开，体积 = 骨架大小）
 export function buildSkeleton(state) {
@@ -90,7 +90,7 @@ export function buildSkeleton(state) {
 // 判断 state 是否含大字段（旧版完整存储/合并结果）
 export function hasBigFields(state) {
   if (!state) return false
-  if (state.srsData || state.generatedExams || state.history) return true
+  if (state.generatedExams || state.history) return true
   const chs = state.chapters || {}
   for (const cid of Object.keys(chs)) {
     const ch = chs[cid]
@@ -121,7 +121,6 @@ export function scheduleFullIdbWrite(state) {
         }
       }
       const globalData = JSON.parse(JSON.stringify({
-        srsData: state.srsData || {},
         generatedExams: state.generatedExams || {},
         history: state.history || [],
       }))
@@ -216,24 +215,12 @@ export async function hydrateState(state) {
       }
     }
     if (global) {
-      if (global.srsData && (!state.srsData || Object.keys(state.srsData).length === 0)) state.srsData = global.srsData
       if (global.generatedExams && (!state.generatedExams || Object.keys(state.generatedExams).length === 0)) state.generatedExams = global.generatedExams
       if (global.history && (!state.history || state.history.length === 0)) state.history = global.history
     }
     // 恢复活动会话（答题入口/进度）
     restoreActiveSession(state)
   } catch (e) { console.warn('[persist] hydrate err', e) }
-}
-
-export function sanitizeState(state) {
-  if (state.srsData) {
-    const validIds = {}
-    Object.keys(state.chapters || {}).forEach(function (cid) { validIds[cid] = true })
-    Object.keys(state.srsData).forEach(function (qId) {
-      const cid = qId.split(':')[0]
-      if (!validIds[cid]) delete state.srsData[qId]
-    })
-  }
 }
 
 export function getChStrategy(state, cid) {
@@ -394,7 +381,6 @@ export function migrateState(s) {
   Object.keys(s.subjects).forEach(function (sid) { if (!s.subjectOrder.includes(sid)) s.subjectOrder.push(sid) })
   s.subjectOrder = s.subjectOrder.filter(function (sid) { return !!s.subjects[sid] })
 
-  if (!s.srsData) s.srsData = {}
   if (!s.settings) s.settings = { quizFontSize: 17, sidebarFontSize: 13, topbarFontSize: 14, mainFontSize: 17, darkMode: false, showNoticeBar: true }
   if (!s.settings.sidebarFontSize) s.settings.sidebarFontSize = 13
   if (!s.settings.topbarFontSize) s.settings.topbarFontSize = 14

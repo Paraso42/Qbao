@@ -4,7 +4,7 @@
     <div class="start-hero">
       <div class="hero-mark">Q</div>
       <h1 class="hero-title">Qbao</h1>
-      <p class="hero-sub">按章节刷题 · AI 智能出题 · 间隔复习</p>
+      <p class="hero-sub">按章节刷题 · AI 智能出题 · 大考卷</p>
       <div v-if="hasSubject && ch" class="hero-actions">
         <button class="btn btn-secondary btn-small" @click="ui.showScreen('history')"><Icon name="clock" :size="14" /> 答题历史</button>
         <button class="btn btn-ghost btn-small" @click="ui.openImport"><Icon name="upload" :size="14" /> 导入题目</button>

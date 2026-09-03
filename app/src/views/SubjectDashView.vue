@@ -1,4 +1,4 @@
-<!-- 科目总览（总览/题库/大考卷/SRS，自 legacy dashboard.js + exam.js 迁移，DeepSeek 风格） -->
+<!-- 科目总览（总览/题库/大考卷，自 legacy dashboard.js + exam.js 迁移，DeepSeek 风格） -->
 <template>
   <section>
     <div class="sd-head">
@@ -37,55 +37,31 @@
         <h4 class="qb-header" role="button" @click="toggleQbGroup(group.cid)">
           <span class="qb-caret"><Icon name="chevron-down" :size="13" :class="{ rotated: !openQbGroups.has(group.cid) }" /></span>
           {{ group.chName }}
-          <span class="qb-meta">{{ group.ch.questions ? group.ch.questions.length : 0 }} 题 · {{ group.rounds }} 次答题</span>
+          <span class="qb-meta">{{ group.total }} 题 · {{ group.rounds.length }} 轮出题</span>
         </h4>
         <template v-if="openQbGroups.has(group.cid)">
-          <div v-if="group.items.length === 0" class="qb-empty">无匹配题目</div>
-          <div v-if="qbSelectMode" class="qb-sel-box" :class="{ on: qbSelected.has(item.key) }" @click.stop="qbToggleSelect(item.key)"><Icon :name="qbSelected.has(item.key) ? 'check' : 'square'" :size="13" /></div>          <div v-for="item in shownQbItems(group)" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
-            <span class="qb-icon" :class="qbIconClass(item.ci)"></span>
-            <div class="qb-text">
-              <p class="qb-q">[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
-              <p v-if="item.q.explanation" class="qb-detail">{{ shortText(item.q.explanation, 80) }}</p>
+          <div v-if="group.rounds.length === 0" class="qb-empty">无匹配题目</div>
+          <div v-for="r in group.rounds" :key="r.key" class="qb-round">
+            <div class="qb-round-head" role="button" @click="toggleQbRound(r.key)">
+              <span class="qb-caret"><Icon name="chevron-down" :size="12" :class="{ rotated: !openQbRounds.has(r.key) }" /></span>
+              <span class="qb-round-title">{{ r.title }}</span>
+              <span class="qb-meta">{{ r.items.length }} 题</span>
             </div>
+            <template v-if="openQbRounds.has(r.key)">
+              <div v-for="item in shownQbItems(r)" :key="item.key" class="qb-item" :class="item.ci === true ? 'correct' : (item.ci === false ? 'wrong' : '')" @click="openDetail(item)">
+                <div v-if="qbSelectMode" class="qb-sel-box" :class="{ on: qbSelected.has(item.key) }" @click.stop="qbToggleSelect(item.key)"><Icon :name="qbSelected.has(item.key) ? 'check' : 'square'" :size="13" /></div>
+                <span class="qb-icon" :class="qbIconClass(item.ci)"></span>
+                <div class="qb-text">
+                  <p class="qb-q">[{{ typeShort[item.q.type] || item.q.type }}] {{ item.q.tag || '' }}：{{ shortText(item.q.question, 60) }}</p>
+                  <p v-if="item.q.explanation" class="qb-detail">{{ shortText(item.q.explanation, 80) }}</p>
+                </div>
+              </div>
+              <button v-if="r.items.length > (qbLimits[r.key] || 50)" class="qb-more" @click="qbLimits[r.key] = (qbLimits[r.key] || 50) + 50">
+                显示更多（已显示 {{ qbLimits[r.key] || 50 }} / {{ r.items.length }}）
+              </button>
+            </template>
           </div>
-          <button v-if="group.items.length > (qbLimits[group.cid] || 50)" class="qb-more" @click="qbLimits[group.cid] = (qbLimits[group.cid] || 50) + 50">
-            显示更多（已显示 {{ qbLimits[group.cid] || 50 }} / {{ group.items.length }}）
-          </button>
         </template>
-      </div>
-    </div>
-
-    <!-- 错题本（P3.1） -->
-    <div v-else-if="tab === 'wrongbook'" class="sd-content">
-      <div class="qbank-toolbar">
-        <select v-model="wbFilter" class="select" style="max-width: 240px">
-          <option value="">全部章节</option>
-          <option v-for="wbg in wbChapters" :key="wbg.cid" :value="wbg.cid">{{ wbg.name }}（{{ wbg.wrongCount }} 错）</option>
-        </select>
-        <span class="qb-meta">共 {{ wbItems.length }} 道错题{{ wbFilter ? '（当前章节）' : '' }}</span>
-      </div>
-      <div v-if="wbItems.length === 0" class="qb-empty">暂无错题 —— 做过答错的题目会出现在这里，可一键 AI 讲解</div>
-      <div v-for="item in wbItems" :key="item.key" class="card qb-group">
-        <div class="wb-item">
-          <div class="wb-qline">
-            <span class="wb-type">[{{ typeShort[item.q.type] || item.q.type }}]</span>
-            <span class="wb-q">{{ item.q.question }}</span>
-            <span v-if="item.q.tag" class="pill wb-tag">{{ item.q.tag }}</span>
-          </div>
-          <div class="wb-answers">
-            <span class="wb-ans wrong">我的答案：{{ answerText(item.q, item.userAnswer) }}</span>
-            <span class="wb-ans right">标准答案：{{ answerText(item.q, item.q.answer) }}</span>
-            <span class="wb-date">{{ item.roundDate }}</span>
-          </div>
-          <div class="wb-actions">
-            <button class="btn btn-primary btn-small" :disabled="wbLoading[item.key]" @click="askExplain(item)">
-              <Icon name="sparkle" :size="12" /> {{ wbLoading[item.key] ? '讲解中…' : (wbCache(item) ? '重新讲解' : 'AI 讲解') }}</button>
-          </div>
-          <div v-if="wbOpen[item.key]" class="wb-explanation">
-            <div class="wb-exp-head">AI 讲解 <span v-if="wbCache(item)" class="wb-exp-meta">{{ (wbCache(item).model || '') }} · {{ fmtWhen(wbCache(item).at) }}</span></div>
-            <div class="markdown-body" v-html="renderMarkdown(wbCache(item) ? wbCache(item).explanation : '')"></div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -166,26 +142,6 @@
       </div>
     </div>
 
-    <!-- SRS -->
-    <div v-else-if="tab === 'srs-review'" class="sd-content">
-      <div class="card">
-        <h3>间隔复习</h3>
-        <p class="ce-hint">基于 SM-2 算法的间隔重复复习，到期题目将在此列出。</p>
-        <div class="srs-hero">
-          <div class="srs-count"><span class="srs-num tabular-nums">{{ dueCount }}</span><span class="srs-label">今日到期</span></div>
-          <button class="btn btn-primary" :disabled="dueCount === 0" @click="quiz.startSrsReview">开始复习</button>
-        </div>
-        <div v-if="dueCount === 0" class="qb-empty">暂无待复习题目，继续保持！</div>
-        <div v-for="item in dueItems" :key="item.qid" class="srs-item">
-          <span class="srs-icon"><Icon name="clock" :size="15" /></span>
-          <div class="srs-main">
-            <div class="srs-q">{{ shortText(item.q.question, 80) }}</div>
-            <div class="srs-meta">{{ item.srs.repetitions }} 次复习 · 间隔 {{ item.srs.interval }} 天</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 题目详情 -->
     <Modal :open="!!detail" @close="detail = null">
       <div v-if="detail" class="qdetail">
@@ -196,8 +152,8 @@
             {{ letter(i) }}. <span v-html="renderMarkdown(opt)"></span>
           </div>
         </div>
-        <div v-if="detail.q.userAnswer !== undefined" class="qd-ans" :class="detail.q.isCorrect === true ? 'ok' : (detail.q.isCorrect === false ? 'bad' : '')">
-          你的答案：{{ detail.q.userAnswer }}
+        <div v-if="detail.userAnswer !== undefined" class="qd-ans" :class="detail.ci === true ? 'ok' : (detail.ci === false ? 'bad' : '')">
+          你的答案：{{ detail.userAnswer }}
         </div>
         <div v-if="detail.q.explanation" class="qd-exp"><h4>解析</h4><p v-html="renderMarkdown(detail.q.explanation)"></p></div>
       </div>
@@ -213,10 +169,7 @@ import { useSubjectStore } from '../stores/subjects'
 import { useUiStore } from '../stores/ui'
 import { downloadTextFile, exportQuestionsJson } from '../services/importExport'
 import { useQuizStore } from '../stores/quiz'
-import { useAiStore } from '../stores/ai'
-import { isObjType, getCi } from '../services/utils'
-import { getQuestionId } from '../services/questions'
-import { getSrsDueQuestions } from '../services/srs'
+import { isObjType } from '../services/utils'
 import { composeSubjExam, getExamSettings } from '../services/exam'
 import { renderMarkdown } from '../services/utils'
 import Icon from '../components/ui/Icon.vue'
@@ -227,61 +180,7 @@ const data = useDataStore()
 const subjects = useSubjectStore()
 const ui = useUiStore()
 const quiz = useQuizStore()
-const ai = useAiStore()
 
-// —— P3.1 错题本 ——
-const wbFilter = ref('')
-const wbOpen = reactive({})
-const wbLoading = reactive({})
-
-// 本科目错题（history 中判错的题目，含章节过滤）
-const wbChapterMeta = computed(() => {
-  const s = subj.value
-  if (!s) return []
-  return s.chapterIds.map((cid) => ({ cid, name: (data.state.chapters[cid] || {}).name || cid }))
-})
-const wbChapters = computed(() => {
-  const counts = {}
-  wbItems.value.forEach((it) => { counts[it.cid] = (counts[it.cid] || 0) + 1 })
-  return wbChapterMeta.value.filter((m) => counts[m.cid]).map((m) => ({ ...m, wrongCount: counts[m.cid] || 0 }))
-})
-const wbItems = computed(() => {
-  const s = subj.value
-  if (!s) return []
-  const out = []
-  ;(data.state.history || []).forEach((r) => {
-    if (!s.chapterIds.includes(r.chapterId) || !r.questions) return
-    if (wbFilter.value && r.chapterId !== wbFilter.value) return
-    r.questions.forEach((q, qi) => {
-      if (q.isCorrect !== false) return
-      out.push({ key: r.chapterId + ':' + r.id + ':' + qi, qId: getQuestionId(r.chapterId, q), cid: r.chapterId, q, userAnswer: q.userAnswer, roundDate: r.date || '' })
-    })
-  })
-  return out
-})
-function wbCache(item) { return (data.state.wrongBook || {})[item.qId] }
-function fmtWhen(at) { if (!at) return ''; try { return new Date(at).toLocaleString('zh-CN') } catch (e) { return '' } }
-function answerText(q, ans) {
-  if (ans === undefined || ans === null || ans === '') return '（未作答）'
-  if ((q.type === 'single' || q.type === 'judge') && typeof ans === 'number' && Array.isArray(q.options) && q.options[ans] !== undefined) return letter(ans) + '. ' + q.options[ans]
-  return String(ans)
-}
-async function askExplain(item) {
-  if (wbLoading[item.key]) return
-  wbLoading[item.key] = true
-  wbOpen[item.key] = true
-  try {
-    const ch = data.state.chapters[item.cid]
-    const context = (ch && ch.name) ? '章节：' + ch.name : ''
-    await ai.explainWrongAnswer({ q: item.q, qId: item.qId, cid: item.cid, userAnswer: item.userAnswer, force: true }, context)
-    ui.toast('讲解已生成（可回看）', 'ok')
-  } catch (e) {
-    wbOpen[item.key] = false
-    ui.toast((e && e.message) || '讲解生成失败，请检查 AI 配置', 'err')
-  } finally {
-    wbLoading[item.key] = false
-  }
-}
 function exportChapter() {
   const ch = data.getCh()
   if (!ch || !ch.questions || ch.questions.length === 0) { ui.toast('当前章节没有可导出的题目', 'err'); return }
@@ -295,9 +194,7 @@ function exportChapter() {
 const tabs = [
   { key: 'overview', label: '总览' },
   { key: 'questionbank', label: '题库' },
-  { key: 'compose-exam', label: '大考卷' },
-  { key: 'wrongbook', label: '错题本' },
-  { key: 'srs-review', label: '间隔复习' }
+  { key: 'compose-exam', label: '大考卷' }
 ]
 const tab = ref('overview')
 const detail = ref(null)
@@ -305,7 +202,9 @@ function openDetail(item) {
   detail.value = {
     q: item.q,
     roundIdx: item.roundIdx,
-    qIdx: item.qIdx
+    qIdx: item.qIdx,
+    ci: item.ci,
+    userAnswer: item.userAnswer
   }
 }
 function letter(i) { return String.fromCharCode(65 + i) }
@@ -331,18 +230,47 @@ function qbIconClass(ci) {
   return 'pending'
 }
 
-// —— 题库 ——
+// —— 题库（v3.34：章节 → 轮次出题 → 题目，两级折叠） ——
 const qbOnlyWrong = ref(false)
 const qbKeyword = ref('')
-// 题库折叠：每个章节一个可折叠分组，默认只展开第一个；单组内最多先渲染 50 条
+// 章节级折叠：默认只展开第一个分组；单轮内最多先渲染 50 条
 const openQbGroups = reactive(new Set())
+const openQbRounds = reactive(new Set())
 const qbLimits = reactive({})
 function toggleQbGroup(cid) {
   if (openQbGroups.has(cid)) openQbGroups.delete(cid)
   else openQbGroups.add(cid)
 }
-function shownQbItems(group) {
-  return group.items.slice(0, qbLimits[group.cid] || 50)
+function toggleQbRound(key) {
+  if (openQbRounds.has(key)) openQbRounds.delete(key)
+  else openQbRounds.add(key)
+}
+function shownQbItems(round) {
+  return round.items.slice(0, qbLimits[round.key] || 50)
+}
+function qbMatch(q, kw) {
+  return !!((q.question && q.question.toLowerCase().includes(kw)) ||
+    (q.tag && q.tag.toLowerCase().includes(kw)) ||
+    (q.explanation && q.explanation.toLowerCase().includes(kw)))
+}
+// 题目最近一次作答结果（按题干+类型+答案签名在章节 history 中倒序匹配）
+function latestResult(cid, q, key) {
+  const h = data.state.history || []
+  for (let i = h.length - 1; i >= 0; i--) {
+    const r = h[i]
+    if (!r || r.chapterId !== cid || !r.questions) continue
+    for (let j = r.questions.length - 1; j >= 0; j--) {
+      const x = r.questions[j]
+      if (x && x.question === q.question && x.type === q.type && x.answer === q.answer) {
+        return key === 'userAnswer' ? x.userAnswer : x.isCorrect
+      }
+    }
+  }
+  return undefined
+}
+function fmtRoundTime(t) {
+  if (!t) return ''
+  try { return new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch (e) { return '' }
 }
 const qbankGroups = computed(() => {
   const s = subj.value
@@ -351,30 +279,51 @@ const qbankGroups = computed(() => {
   return s.chapterIds.map((cid) => {
     const ch = data.state.chapters[cid]
     if (!ch) return null
-    const history = (data.state.history || []).filter((r) => r.chapterId === cid)
-    const items = []
-    history.forEach((r, ri) => {
-      if (!r.questions) return
-      r.questions.forEach((q, qi) => {
-        const ci = q.isCorrect
-        if (qbOnlyWrong.value && ci !== false) return
-        if (kw && !(q.question && q.question.toLowerCase().includes(kw)) && !(q.tag && q.tag.toLowerCase().includes(kw)) && !(q.explanation && q.explanation.toLowerCase().includes(kw))) return
-        items.push({ key: cid + ':' + ri + ':' + qi, q, ci, roundIdx: ri, qIdx: qi })
+    const rounds = []
+    const sets = Array.isArray(ch.quizSets) && ch.quizSets.length > 0 ? ch.quizSets : null
+    if (sets) {
+      sets.slice().reverse().forEach((set, rev) => {
+        if (!set || !Array.isArray(set.questions) || set.questions.length === 0) return
+        const items = []
+        set.questions.forEach((q, qi) => {
+          const ci = latestResult(cid, q, 'ci')
+          if (qbOnlyWrong.value && ci !== false) return
+          if (kw && !qbMatch(q, kw)) return
+          items.push({ key: cid + ':r' + (sets.length - 1 - rev) + ':' + qi, q, ci, cid, roundIdx: sets.length - 1 - rev, qIdx: qi, userAnswer: latestResult(cid, q, 'userAnswer') })
+        })
+        if (items.length === 0) return
+        const si = sets.length - 1 - rev
+        rounds.push({ key: cid + ':r' + si, title: '第 ' + (si + 1) + ' 轮出题 · ' + fmtRoundTime(set.createdAt), items, createdAt: set.createdAt || 0 })
       })
-    })
-    return { cid, chName: ch.name, ch, rounds: history.length, items }
+    } else if (Array.isArray(ch.questions)) {
+      const items = []
+      ch.questions.forEach((q, qi) => {
+        const ci = latestResult(cid, q, 'ci')
+        if (qbOnlyWrong.value && ci !== false) return
+        if (kw && !qbMatch(q, kw)) return
+        items.push({ key: cid + ':legacy:' + qi, q, ci, cid, roundIdx: -1, qIdx: qi, userAnswer: latestResult(cid, q, 'userAnswer') })
+      })
+      if (items.length > 0) rounds.push({ key: cid + ':legacy', title: '导入题', items, createdAt: 0 })
+    }
+    const total = sets
+      ? sets.reduce((a, set) => a + (set && Array.isArray(set.questions) ? set.questions.length : 0), 0)
+      : (Array.isArray(ch.questions) ? ch.questions.length : 0)
+    return { cid, chName: ch.name, ch, rounds, total }
   }).filter(Boolean)
 })
 
-// 题库分组默认折叠：只自动展开第一个有内容的分组，其余点击标题展开。
-// v3.33.1 修复：immediate 使首帧就展开第一组（此前 watch 仅监听后续变化，
-// 首次渲染全折叠——科目页题库"只见标题/空白"）。
+// 题库折叠默认：首帧展开第一个分组；每个展开分组内自动展开最新一轮；之后尊重用户状态。
+// v3.33.1 修复延续：immediate 使首帧就展开第一组（此前首次渲染全折叠）。
 watch(qbankGroups, (groups) => {
   if (!groups.length) return
   if (!groups.some((g) => openQbGroups.has(g.cid))) {
     groups.forEach((g) => openQbGroups.delete(g.cid))
     openQbGroups.add(groups[0].cid)
   }
+  groups.forEach((g) => {
+    if (!openQbGroups.has(g.cid) || !g.rounds.length) return
+    if (!g.rounds.some((r) => openQbRounds.has(r.key))) openQbRounds.add(g.rounds[0].key)
+  })
 }, { immediate: true })
 
 // —— P3.3 批量编辑（选择模式：移动/删除/设标签） ——
@@ -400,7 +349,7 @@ function findInChapter(ch, q) {
 function qbBulkDelete() {
   const items = qbSelectedItems.value
   if (!items.length) { ui.toast('请先勾选题目', 'err'); return }
-  ui.openConfirm('批量删除', '确定删除选中的 ' + items.length + ' 道题目？将从题库与 SRS 复习计划中移除（历史记录保留）。', '删除', { danger: true }).then((ok) => {
+  ui.openConfirm('批量删除', '确定删除选中的 ' + items.length + ' 道题目？将从题库中移除（历史记录保留）。', '删除', { danger: true }).then((ok) => {
     if (!ok) return
     let removed = 0
     const removal = new Set(items.map((it) => JSON.stringify([it.cid, it.q.question, it.q.type, it.q.answer])))
@@ -413,7 +362,6 @@ function qbBulkDelete() {
         const sig = JSON.stringify([cid, q.question, q.type, q.answer])
         if (removal.has(sig)) {
           removed++
-          delete data.state.srsData[getQuestionId(cid, q)]
         } else {
           keep.push(q)
           if (ch.userAnswers) keepAns.push(ch.userAnswers[i])
@@ -459,6 +407,7 @@ function qbBulkMove() {
   if (!target.userAnswers) target.userAnswers = []
   let moved = 0
   const sigs = new Set(items.map((it) => JSON.stringify([it.q.question, it.q.type, it.q.answer])))
+  const movedQs = []
   Object.keys(data.state.chapters).forEach((cid) => {
     if (cid === targetCid) return
     const ch = data.state.chapters[cid]
@@ -469,6 +418,7 @@ function qbBulkMove() {
       if (sigs.has(sig) && !target.questions.some((x) => x.question === q.question && x.type === q.type)) {
         target.questions.push(q)
         target.userAnswers.push(ch.userAnswers ? ch.userAnswers[i] : undefined)
+        movedQs.push(q)
         moved++
       } else {
         keep.push(q)
@@ -477,7 +427,34 @@ function qbBulkMove() {
     })
     ch.questions = keep
     if (ch.userAnswers) ch.userAnswers = keepAns
+    // 源章节轮次级一并移除（与批量删除一致），避免轮次残留孤儿题
+    if (Array.isArray(ch.quizSets)) {
+      ch.quizSets.forEach((set) => {
+        if (!Array.isArray(set.questions)) return
+        const kq = [], ka = []
+        set.questions.forEach((q, i) => {
+          const sig = JSON.stringify([q.question, q.type, q.answer])
+          if (sigs.has(sig)) return
+          kq.push(q); if (set.userAnswers) ka.push(set.userAnswers[i])
+        })
+        set.questions = kq
+        if (set.userAnswers) set.userAnswers = ka
+      })
+      ch.quizSets = ch.quizSets.filter((set) => !set.questions || set.questions.length > 0)
+    }
   })
+  // 目标侧并入最新轮次（无轮次则新建一组），保证两级题库可见
+  if (movedQs.length > 0) {
+    if (!target.quizSets) target.quizSets = []
+    const last = target.quizSets[target.quizSets.length - 1]
+    if (last && Array.isArray(last.questions)) {
+      movedQs.forEach((q) => { last.questions.push(q); if (last.userAnswers) last.userAnswers.push(undefined) })
+      if (target.currentQuizSetIdx === undefined || target.currentQuizSetIdx < 0) target.currentQuizSetIdx = target.quizSets.length - 1
+    } else {
+      target.quizSets.push({ questions: movedQs.slice(), userAnswers: new Array(movedQs.length).fill(undefined), currentIdx: 0, createdAt: Date.now() })
+      target.currentQuizSetIdx = target.quizSets.length - 1
+    }
+  }
   data.saveState()
   qbExitSelect()
   ui.toast('已移动 ' + moved + ' 道到 ' + (target.name || '目标章节'), 'ok')
@@ -608,24 +585,6 @@ function compose() {
   quiz.startExam(result.exam.id)
 }
 
-// —— SRS ——
-const dueCount = computed(() => getSrsDueQuestions(data.state).length)
-const dueItems = computed(() => {
-  return getSrsDueQuestions(data.state).map((qid) => {
-    const srs = data.state.srsData[qid]
-    let q = null
-    for (const cid in data.state.chapters) {
-      const ch = data.state.chapters[cid]
-      if (!ch || !ch.questions) continue
-      for (const qq of ch.questions) {
-        if (getQuestionId(cid, qq) === qid) { q = qq; break }
-      }
-      if (q) break
-    }
-    return { qid, srs, q: q || { question: '(题目已删除)' } }
-  })
-})
-
 // 切到该视图时初始化
 watch(() => ui.activeScreen, (screen) => {
   if (screen === 'subject-dash') {
@@ -721,14 +680,11 @@ watch(() => ui.activeScreen, (screen) => {
 .exam-main { flex: 1; min-width: 0; }
 .exam-name { font-size: var(--fs-sm); font-weight: 500; }
 .exam-meta { font-size: var(--fs-xs); color: var(--text-muted); }
-.srs-hero { display: flex; align-items: center; gap: var(--space-lg); margin-bottom: var(--space-md); }
-.srs-count { display: flex; flex-direction: column; }
-.srs-num { font-size: var(--fs-2xl); font-weight: 700; color: var(--color-primary); }
-.srs-label { font-size: var(--fs-xs); color: var(--text-secondary); }
-.srs-item { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 6px; }
-.srs-main { flex: 1; min-width: 0; }
-.srs-q { font-size: var(--fs-sm); }
-.srs-meta { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+.qb-round { border-bottom: 1px solid var(--border-light); padding: 2px 0; }
+.qb-round:last-child { border-bottom: none; }
+.qb-round-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; user-select: none; border-radius: var(--radius-sm); }
+.qb-round-head:hover { background: var(--surface-hover); }
+.qb-round-title { font-size: var(--fs-sm); font-weight: 500; color: var(--text-secondary); }
 .type-counts { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-sm); }
 .type-count-item { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--surface-hover); border-radius: var(--radius-md); }
 .type-count-item label { font-size: var(--fs-sm); color: var(--text-secondary); }
@@ -752,19 +708,6 @@ watch(() => ui.activeScreen, (screen) => {
   .sd-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .qb-tool-actions { display: flex; gap: var(--space-sm); margin-left: auto; }
-.wb-item { padding: var(--space-sm) 0; }
-.wb-qline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.wb-type { font-size: var(--fs-xs); color: var(--color-primary); background: var(--color-primary-light); border-radius: var(--radius-sm); padding: 0 6px; line-height: 18px; flex-shrink: 0; }
-.wb-q { font-size: var(--fs-sm); font-weight: 500; }
-.wb-tag { font-size: var(--fs-xs); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border-default); color: var(--text-secondary); }
-.wb-answers { display: flex; gap: var(--space-md); flex-wrap: wrap; margin-top: 4px; font-size: var(--fs-xs); color: var(--text-secondary); }
-.wb-ans.wrong { color: var(--color-danger); }
-.wb-ans.right { color: var(--color-success); }
-.wb-date { color: var(--text-muted); margin-left: auto; }
-.wb-actions { margin-top: 6px; }
-.wb-explanation { margin-top: var(--space-sm); padding: var(--space-md); background: var(--surface-hover); border-left: 3px solid var(--color-primary); border-radius: var(--radius-md); font-size: var(--fs-sm); line-height: 1.8; }
-.wb-exp-head { font-weight: 600; margin-bottom: 6px; display: flex; gap: var(--space-sm); align-items: baseline; }
-.wb-exp-meta { font-weight: 400; font-size: var(--fs-xs); color: var(--text-muted); }
 .markdown-body { word-break: break-word; }
 .qb-sel-count { font-size: var(--fs-xs); color: var(--color-primary); }
 .qb-sel-box { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--border-default); border-radius: 4px; color: var(--text-muted); flex-shrink: 0; }

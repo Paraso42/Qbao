@@ -1,7 +1,7 @@
 // ============================================================
-// quiz store — 答题引擎编排（自 legacy quiz-engine/srs/quiz-report 迁移）
-// 负责：答题会话状态、答案提交、结算（历史/SRS/成就/服务端同步）、
-//       SRS 复习与大考卷的答题入口、报告数据准备。
+// quiz store — 答题引擎编排（自 legacy quiz-engine/quiz-report 迁移）
+// 负责：答题会话状态、答案提交、结算（历史/成就/服务端同步）、
+//       大考卷的答题入口、报告数据准备。
 // ============================================================
 import { defineStore } from 'pinia'
 import { computed, reactive } from 'vue'
@@ -13,7 +13,6 @@ import {
   calcStats, syncSingleAnswerToTagMeta, autoUpdateChapterWeakTags
 } from '../services/questions'
 import { saveQuizHistory } from '../services/history'
-import { updateSRSAfterExam, buildSrsExam } from '../services/srs'
 import { checkAchievements } from '../services/achievements'
 
 let _lastSyncTime = 0
@@ -385,11 +384,10 @@ export const useQuizStore = defineStore('quiz', () => {
     const as = activeSet.value
     if (!as) return
     if (as._isSet) { endQuizSessionForSet(as); return }
-    if (as.isExam) { endExamGenerated(as); return }
+    if (as.isExam) { endExamGenerated(); return }
     // 兼容旧数据路径
     autoUpdateChapterWeakTags(data.state, as._ref, as)
     saveQuizHistory(data.state, as)
-    updateSRSAfterExam(data.state, as)
     checkAchievements(data.state)
     syncAnswerToServerFinal()
     data.saveState()
@@ -407,7 +405,6 @@ export const useQuizStore = defineStore('quiz', () => {
       finalizeUnanswered(answeredCopy)
       syncSetAnswersToChapter(ch, as)
       saveQuizHistory(data.state, answeredCopy)
-      updateSRSAfterExam(data.state, answeredCopy)
       if (answeredCopy.setId) autoUpdateChapterWeakTags(data.state, data.state.chapters[answeredCopy.setId])
       checkAchievements(data.state)
       syncAnswerToServerFinal()
@@ -418,7 +415,6 @@ export const useQuizStore = defineStore('quiz', () => {
     syncSetAnswersToChapter(ch, as)
     finalizeUnanswered(as)
     saveQuizHistory(data.state, as)
-    updateSRSAfterExam(data.state, as)
     if (as.setId) autoUpdateChapterWeakTags(data.state, data.state.chapters[as.setId])
     checkAchievements(data.state)
     syncAnswerToServerFinal()
@@ -427,31 +423,16 @@ export const useQuizStore = defineStore('quiz', () => {
     openQuiz('report')
   }
 
-  function endExamGenerated(as) {
-    updateSRSAfterExam(data.state, as)
+  function endExamGenerated() {
     checkAchievements(data.state)
     syncAnswerToServerFinal()
     data.state.currentExamId = null
-    if (as.questions && as.questions.length > 0) {
-      let taggedChapterId = null
-      as.questions.forEach((q) => { if (q._srsChapterId && !taggedChapterId) taggedChapterId = q._srsChapterId })
-      if (taggedChapterId && data.state.chapters[taggedChapterId]) {
-        autoUpdateChapterWeakTags(data.state, data.state.chapters[taggedChapterId])
-      }
-    }
     data.saveState()
     session.endedFromExam = true
     openQuiz('report')
   }
 
-  // —— SRS / 大考卷入口 ——
-  function startSrsReview() {
-    const eid = buildSrsExam(data.state)
-    if (!eid) { ui.toast('暂无待复习题目', 'info'); return }
-    data.saveState()
-    openQuiz('quiz')
-  }
-
+  // —— 大考卷入口 ——
   function startExam(examId) {
     const ex = data.state.generatedExams[examId]
     if (!ex) return
@@ -466,7 +447,7 @@ export const useQuizStore = defineStore('quiz', () => {
     openQuiz, closeQuiz,
     startSession, selectOption, submitAnswer, nextQuestion, goToQuestion,
     markDontKnow, resetQuiz, endExam,
-    startSrsReview, startExam,
+    startExam,
     restoreQuizFromServer, syncAnswerToServer, syncAnswerToServerFinal,
     bindLifecycle
   }
