@@ -72,6 +72,8 @@
             <div class="settings-section">
               <h4>AI API 配置</h4>
               <p class="ai-desc">选择 AI 提供商并配置对应 API 密钥，可在章节界面使用 AI 自动生成题目。密钥仅保存在本机，不随数据同步。</p>
+              <p v-if="IS_DESKTOP" class="ai-help-note">桌面端：密钥由系统安全存储（Windows DPAPI / safeStorage）加密落盘，应用内不保留明文。</p>
+              <p v-else class="ai-help-note">网页端：密钥仅以混淆形式保存在本地浏览器，无法达到系统级加密强度，请勿在公共设备保存密钥。</p>
 
               <div class="settings-row">
                 <label>提供商</label>
@@ -143,7 +145,7 @@
                 <p>2. 在对应平台获取 API 密钥并粘贴保存</p>
                 <p>3. 选择合适的模型</p>
                 <p>4. 在章节页面点击「AI 生成」即可上传资料并自动生成题目</p>
-                <p class="ai-help-note">密钥仅保存在本地浏览器，通过后端代理调用 AI 接口。</p>
+                <p class="ai-help-note">密钥仅保存在本机{{ IS_DESKTOP ? '（系统加密存储）' : '（浏览器混淆存储）' }}，AI 请求经后端代理转发，密钥不上传服务器。</p>
               </div>
             </div>
           </div>

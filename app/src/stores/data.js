@@ -30,7 +30,10 @@ export const useDataStore = defineStore('data', () => {
   function getActiveSet() {
     const ex = getExam()
     if (ex) return {
-      _ref: ex, questions: ex.questions, userAnswers: ex.userAnswers,
+      _ref: ex, questions: ex.questions,
+      // userAnswers 用访问器绑定底层对象：替换（reset）与原位写都落到持久层（P1.4 修复）
+      get userAnswers() { return ex.userAnswers },
+      set userAnswers(v) { ex.userAnswers = v },
       currentIdx: ex.currentIdx, setCurrentIdx: (v) => { ex.currentIdx = v },
       setName: ex.name, isExam: true, setId: ex.id, subjectId: ex.subjectId
     }
@@ -43,7 +46,9 @@ export const useDataStore = defineStore('data', () => {
       const qs = ch.quizSets[idx]
       if (qs && Array.isArray(qs.questions)) {
         return {
-          _ref: qs, _isSet: true, questions: qs.questions, userAnswers: qs.userAnswers,
+          _ref: qs, _isSet: true, questions: qs.questions,
+          get userAnswers() { return qs.userAnswers },
+          set userAnswers(v) { qs.userAnswers = v },
           currentIdx: qs.currentIdx, setCurrentIdx: (v) => { qs.currentIdx = v },
           setName: ch.name, isExam: false, setId: ch.id, subjectId: null
         }
@@ -52,7 +57,9 @@ export const useDataStore = defineStore('data', () => {
     }
     if (!Array.isArray(ch.questions) || ch.questions.length === 0) return null
     return {
-      _ref: ch, questions: ch.questions, userAnswers: ch.userAnswers,
+      _ref: ch, questions: ch.questions,
+      get userAnswers() { return ch.userAnswers },
+      set userAnswers(v) { ch.userAnswers = v },
       currentIdx: ch.currentIdx, setCurrentIdx: (v) => { ch.currentIdx = v },
       setName: ch.name, isExam: false, setId: ch.id, subjectId: null
     }

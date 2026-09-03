@@ -1,4 +1,22 @@
-## v3.30.2
+## v3.31.0
+
+- **同步写收敛（P1.2）**：消除"无变化也全量 PUT"的写放大——
+  - 空推跳过：引擎记录上次成功推送的脱敏序列化指纹，内容未变且 rev 基线未变时直接标记已同步（轮询/可见性/重复调度触发不再产生空 PUT）
+  - 页面关闭 keepalive 推送接入同一空推检测，消除与进行中 flush 竞态导致的重复 PUT/409
+  - 同步标记（pending / lastSync）按账号隔离（qbao_sync_pending_u_<uid>），防 A 账号遗留 pending 被 B 账号补推；旧全局键自动兼容迁移
+  - resumePendingSync 返回 Promise 便于调用方串行等待；新增引擎级单测（启动门闩/多账号隔离/空推跳过/rev 预检合并/409 冲突自动重推）
+- **密钥存储加固（P1.3）**：
+  - 桌面端登录 token 与 AI Provider Key 改走主进程 safeStorage（Windows DPAPI）加密落盘（userData/secrets.json），renderer 不再持久化明文；新增 secret-save/load/remove IPC 与 preload 桥
+  - 启动/登录时自动预热与迁移：旧 localStorage 明文一键转入安全存储后清除；safeStorage 不可用时自动降级（混淆存储，功能不中断）
+  - 网页端最小混淆（XOR + 自实现 base64，中文安全），读取兼容旧明文；设置页明示两种形态的存储边界
+- **store 层单测补位（P1.4）**：新增 quiz/chat/users/ai 四个 store 的核心状态流转单测（共 27 例），顺带修复三个缺陷：
+  - data store getActiveSet 包装对象的 userAnswers 改为访问器绑定底层（此前"重开一轮"等整体替换不落持久层，刷新后旧答案回流）
+  - 备份回档 restoreFromText 的科目/章节指针修正提前到 saveState 之前（此前落盘骨架指针为空，刷新丢失当前选中）
+- **分层持久化 E2E 回归（P1.1）**：新增 tools/e2e/probe-p1-persistence.cjs 并在真实 Electron 构建产物上留档——
+  2100 题题库启动不卡、刷新后活动会话续答（停在答 37/2100 的第 38 题）、答题后骨架仅 ~1.1KB（远低于 5MB 上限）、题目/答案全部分流 IndexedDB、多账号切换互不串号、登录态离线作答保留 pending 标记并落 IDB
+- 测试：app 14 文件 92 用例（原 38）、server 146 用例全绿；两端 eslint 0 error
+
+
 
 - **ESLint 静态检查接入**（P0.4）：app/server 两端 eslint 配置（入口基线规则集：未定义变量/重复声明为错误，样式类为警告留痕；浏览器/Node 全局内联维护，零运行时依赖）；lint 脚本用 npx 固定 eslint@9.39.5（两端 0 error）；CI 后端/前端 job 各增 lint 步骤
 - **替换原生 prompt/alert**（P0.5）：桌面端「修改服务器地址」改为应用内输入框 + toast 反馈（复用 ui.openPrompt），services/api.js 移除 showServerSetupDialog；全仓无 window.prompt/alert 残留

@@ -4,6 +4,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { initApp } from './core/boot'
+import { initSecureAuth } from './services/api'
+import { initSecureKeyStore } from './services/aiKeys'
 import './styles/tokens.css'
 import './styles/base.css'
 import './styles/components.css'
@@ -34,6 +36,12 @@ async function boot() {
   } catch (e) {
     console.warn('[boot] KaTeX 加载失败，公式将退化为纯文本', e)
   }
+
+  // P1.3：桌面端预热安全凭据（token / AI Key 从主进程 safeStorage 载入内存再挂载应用，
+  // 保证首个请求与设置页读取同步可见；网页端两函数直接返回）
+  await Promise.all([initSecureAuth(), initSecureKeyStore()]).catch((e) => {
+    console.warn('[boot] 凭据预热失败（将按旧路径读取）', e && e.message)
+  })
 
   const pinia = createPinia()
   const app = createApp(App)

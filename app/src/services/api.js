@@ -1,11 +1,86 @@
 // ============================================================
 // api.js — 认证与请求封装（自 legacy api.js 迁移）
-// token/user 存 localStorage（键不变），登录态由 user store 维护。
+// token 存放（v3.31 P1.3 加固）：桌面端走主进程 safeStorage（renderer 无明文持久化），
+// 网页端最小混淆；旧明文键自动兼容并迁移。登录态由 user store 维护。
 // ============================================================
-import { API_BASE, IS_DESKTOP } from '../core/env'
+import { API_BASE, IS_DESKTOP, desktopBridge } from '../core/env'
+import { obfuscate, deobfuscate, secretNameFor } from './secureStore'
 
-export function getToken() { return localStorage.getItem('qbao_token') }
-export function setToken(t) { if (t) localStorage.setItem('qbao_token', t); else localStorage.removeItem('qbao_token') }
+// 桌面端 token 内存镜像（IPC 为异步，同步读取走内存；boot 时 initSecureAuth 预热）
+let _memToken = null
+
+export async function initSecureAuth() {
+  if (!IS_DESKTOP) return
+  const b = desktopBridge()
+  if (!b) return
+  try {
+    const r = await b.secretLoad(secretNameFor('token', ''))
+    if (r && r.ok && r.value) {
+      _memToken = r.value
+      try { localStorage.removeItem('qbao_token') } catch (e) {}
+      return
+    }
+  } catch (e) {}
+  // 升级迁移：旧 localStorage 明文/混淆 → 安全存储，然后清明文
+  try {
+    const legacy = localStorage.getItem('qbao_token')
+    if (legacy) {
+      const plain = deobfuscate(legacy)
+      if (plain !== null && plain !== undefined && plain.length) {
+        _memToken = plain
+        b.secretSave(secretNameFor('token', ''), plain).catch(() => {})
+        try { localStorage.removeItem('qbao_token') } catch (e) {}
+      }
+    }
+  } catch (e) {}
+}
+
+export function getToken() {
+  if (IS_DESKTOP) {
+    if (_memToken !== null) return _memToken
+    try {
+      const raw = localStorage.getItem('qbao_token')
+      if (!raw) return null
+      const plain = deobfuscate(raw)
+      return plain !== null && plain !== undefined && plain.length ? plain : null
+    } catch (e) { return null }
+  }
+  try {
+    const raw = localStorage.getItem('qbao_token')
+    if (!raw) return null
+    const plain = deobfuscate(raw)
+    return plain !== null && plain !== undefined && plain.length ? plain : null
+  } catch (e) { return null }
+}
+
+export function setToken(t) {
+  if (IS_DESKTOP) {
+    _memToken = t || null
+    const b = desktopBridge()
+    if (!b) return
+    if (t) {
+      b.secretSave(secretNameFor('token', ''), t)
+        .then((r) => { if (!r || !r.ok) legacyTokenFallback(t) })
+        .catch(() => legacyTokenFallback(t))
+    } else {
+      b.secretRemove(secretNameFor('token', '')).catch(() => {})
+      try { localStorage.removeItem('qbao_token') } catch (e) {}
+    }
+    return
+  }
+  try {
+    if (t) localStorage.setItem('qbao_token', obfuscate(t))
+    else localStorage.removeItem('qbao_token')
+  } catch (e) {}
+}
+
+// 桌面 safeStorage 不可用时的降级（混淆写 localStorage，功能不中断）
+function legacyTokenFallback(t) {
+  try {
+    if (t) localStorage.setItem('qbao_token', obfuscate(t))
+    else localStorage.removeItem('qbao_token')
+  } catch (e) {}
+}
 export function getStoredUser() {
   try { return JSON.parse(localStorage.getItem('qbao_user') || 'null') } catch { return null }
 }
