@@ -8,6 +8,7 @@ import { computed, reactive } from 'vue'
 import { useDataStore } from './data'
 import { useUserStore } from './user'
 import { useUiStore } from './ui'
+import { usePointsStore } from './points'
 import { fetchWithAuth } from '../services/api'
 import {
   calcStats, syncSingleAnswerToTagMeta, autoUpdateChapterWeakTags
@@ -24,6 +25,7 @@ export const useQuizStore = defineStore('quiz', () => {
   const data = useDataStore()
   const user = useUserStore()
   const ui = useUiStore()
+  const points = usePointsStore()
 
   const session = reactive({
     modalOpen: false,
@@ -85,7 +87,11 @@ export const useQuizStore = defineStore('quiz', () => {
         stats: statsNow,
         status: syncStatus
       })
-    }).catch((e) => console.warn('syncAnswerToServer failed:', e))
+    })
+      // 结算（completed）响应带最新余额 → 实时同步积分显示
+      .then((res) => (res && res.ok ? res.json().catch(() => null) : null))
+      .then((d) => { if (d && typeof d.balance === 'number') points.applyBalance(d.balance) })
+      .catch((e) => console.warn('syncAnswerToServer failed:', e))
   }
 
   function syncAnswerToServerFinal() {
@@ -112,7 +118,11 @@ export const useQuizStore = defineStore('quiz', () => {
         stats: calcStats(as),
         status: 'completed'
       })
-    }).catch((e) => console.warn('syncAnswerToServerFinal failed:', e))
+    })
+      // 结算响应带最新余额 → 实时同步积分显示
+      .then((res) => (res && res.ok ? res.json().catch(() => null) : null))
+      .then((d) => { if (d && typeof d.balance === 'number') points.applyBalance(d.balance) })
+      .catch((e) => console.warn('syncAnswerToServerFinal failed:', e))
   }
 
   function flushBeforeUnload() {

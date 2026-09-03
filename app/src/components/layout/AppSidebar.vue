@@ -82,6 +82,7 @@ import Icon from '../ui/Icon.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import Toggle from '../ui/Toggle.vue'
 import { resolveMediaUrl } from '../../services/utils'
+import { chapterQuestionTotal } from '../../services/chapterStats'
 
 const ui = useUiStore()
 const data = useDataStore()
@@ -100,8 +101,8 @@ const aiRunning = computed(() => {
 })
 
 function chapterTotal(cid) {
-  const ch = data.state.chapters[cid]
-  return ch && ch.questions ? ch.questions.length : 0
+  // 题量口径与题库一致：轮次题数之和，旧章节回退题库数组
+  return chapterQuestionTotal(data.state.chapters[cid])
 }
 function chapterAnswered(cid) {
   const ch = data.state.chapters[cid]

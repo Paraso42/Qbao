@@ -107,6 +107,8 @@ function nextPage() {
 onMounted(async () => {
   await points.loadRules()
   points.loadLedger(1)
+  // 打开积分页时向服务端取一次权威余额（答题结算在其他页面发生，本地可能在旧值）
+  points.refreshBalance()
 })
 </script>
 

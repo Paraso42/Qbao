@@ -46,7 +46,11 @@ module.exports = function (app) {
         );
         const updSession = formatSession(updRes.rows[0]);
         const updAward = await awardQuizPoints(req.userId, chapterId, stats || updSession.stats);
-        return res.json({ session: updSession, pointsAwarded: updAward ? updAward.points : 0 });
+        return res.json({
+          session: updSession,
+          pointsAwarded: updAward ? updAward.points : 0,
+          balance: updAward && typeof updAward.balance === 'number' ? updAward.balance : null
+        });
       }
       // 无 in_progress 会话可完成 — 直接以 completed 建
       const compResult = await pool.query(
@@ -56,7 +60,11 @@ module.exports = function (app) {
       );
       const compSession = formatSession(compResult.rows[0]);
       const compAward = await awardQuizPoints(req.userId, chapterId, stats || compSession.stats);
-      return res.json({ session: compSession, pointsAwarded: compAward ? compAward.points : 0 });
+      return res.json({
+        session: compSession,
+        pointsAwarded: compAward ? compAward.points : 0,
+        balance: compAward && typeof compAward.balance === 'number' ? compAward.balance : null
+      });
     }
 
     // in_progress：拒绝凭空创建"空题"会话（防 K3：有未做完的假象却进不去答题界面）。

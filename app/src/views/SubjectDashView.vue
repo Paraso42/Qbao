@@ -76,7 +76,7 @@
             <label v-if="data.state.chapters[cid]" class="ce-ch">
               <input type="checkbox" :value="cid" v-model="checkedCids" @change="resetWeights">
               <span class="ce-ch-name">{{ data.state.chapters[cid].name }}</span>
-              <span class="ce-ch-count tabular-nums">{{ data.state.chapters[cid].questions ? data.state.chapters[cid].questions.length : 0 }} 题</span>
+              <span class="ce-ch-count tabular-nums">{{ chapterQuestionTotal(data.state.chapters[cid]) }} 题</span>
             </label>
           </template>
         </div>
@@ -172,6 +172,7 @@ import { useQuizStore } from '../stores/quiz'
 import { isObjType } from '../services/utils'
 import { composeSubjExam, getExamSettings } from '../services/exam'
 import { renderMarkdown } from '../services/utils'
+import { chapterQuestionTotal } from '../services/chapterStats'
 import Icon from '../components/ui/Icon.vue'
 import Modal from '../components/ui/Modal.vue'
 import SubjectOverviewPanel from './SubjectOverviewPanel.vue'
