@@ -315,6 +315,13 @@ const typeShort = { single: '单选', judge: '判断', term: '名解', short: '�
 const examColors = ['#EF4444', '#F59E0B', '#10B981', '#4D6BFE', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16']
 
 function rateColor(rate) {
+  if (rate >= 70) return '#10B981'
+  if (rate >= 40) return '#F59E0B'
+  return '#EF4444'
+}
+// v3.33.1 修复：P2.2 重构误删（shortText 函数体被并入 rateColor），模板 3 处调用导致
+// 题库/间隔复习 tab 渲染即 TypeError 白屏 —— 恢复截断助手
+function shortText(t, n) {
   const s = String(t || '')
   return s.length > n ? s.substring(0, n) + '...' : s
 }
@@ -359,14 +366,16 @@ const qbankGroups = computed(() => {
   }).filter(Boolean)
 })
 
-// 题库分组默认折叠：只自动展开第一个有内容的分组，其余点击标题展开
+// 题库分组默认折叠：只自动展开第一个有内容的分组，其余点击标题展开。
+// v3.33.1 修复：immediate 使首帧就展开第一组（此前 watch 仅监听后续变化，
+// 首次渲染全折叠——科目页题库"只见标题/空白"）。
 watch(qbankGroups, (groups) => {
   if (!groups.length) return
   if (!groups.some((g) => openQbGroups.has(g.cid))) {
     groups.forEach((g) => openQbGroups.delete(g.cid))
     openQbGroups.add(groups[0].cid)
   }
-})
+}, { immediate: true })
 
 // —— P3.3 批量编辑（选择模式：移动/删除/设标签） ——
 const qbSelectMode = ref(false)

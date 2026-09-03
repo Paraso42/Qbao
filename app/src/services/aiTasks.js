@@ -40,7 +40,7 @@ export function applyStrategyCompliance(task, questions) {
 
 // 非流式生成（重试在模块内，最多 AI_MAX_ATTEMPTS 次；JSON 解析失败自动纠错重试）
 // deps: { aiSelfCheck: boolean }（生成时刻的 selfCheck 配置）
-export async function nonStreamGenerate(task, opts, retryPromptBase, deps) {
+export async function nonStreamGenerate(task, opts, retryPromptBase, deps = {}) {
   let questions = null
   let lastJson = ''
   for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !questions; attempt++) {
@@ -124,7 +124,7 @@ export async function prepareUploadData(materials, task) {
 
 // —— 流式生成（v3.30.1 起停用，保留代码便于恢复；P2.1 拆分） ——
 // deps: { data, abortSignal, aiSelfCheck }
-export async function streamGenerate(task, opts, deps) {
+export async function streamGenerate(task, opts, deps = {}) {
   const data = deps.data
   const ch = data.state.chapters[task.chapterId]
   // 空 set 预创建（原 store 内 createEmptyQuizSet 语义）

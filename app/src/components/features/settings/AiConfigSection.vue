@@ -86,7 +86,7 @@
 
 <script setup>
 // P2.2：AI 配置区块（自 SettingsModal.vue 拆出）— 状态走 store，交互留在区块内
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAiStore } from '../../../stores/ai'
 import { useDataStore } from '../../../stores/data'
 import { useUiStore } from '../../../stores/ui'
@@ -137,6 +137,11 @@ function onProviderChange() {
   modelId.value = ai.defaultModelFor(providerId.value)
   apiKeyInput.value = ''
 }
+
+// v3.33.1 修复：Modal 关闭即销毁内容（v-if），重开/切 tab 时父组件 watch 在
+// pre-flush 阶段触发、aiCfgRef 尚为 null，loadForm 被跳过 → 模型选择一栏空白。
+// 改为挂载即回填（幂等，与父组件 watch 兼容）。
+onMounted(() => { loadForm() })
 
 async function saveConfig() {
   ai.saveAiConfig({
