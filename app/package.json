@@ -1,14 +1,15 @@
 {
   "name": "qbao-app",
   "private": true,
-  "version": "3.30.1",
+  "version": "3.30.2",
   "type": "module",
   "description": "Qbao 前端（Vue 3 + Vite，singlefile 构建供桌面 file:// 加载）",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "npx --yes eslint@9.39.5 src"
   },
   "dependencies": {
     "pinia": "^2.3.1",

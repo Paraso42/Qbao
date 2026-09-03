@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { avatarCropSource } from './utils'
+import { avatarCropSource, renderMarkdown } from './utils'
 import * as env from '../core/env'
 
 // resolveMediaUrl 依赖 API_BASE / location；在此用可控值测试
@@ -126,5 +126,35 @@ describe('avatarCropSource', () => {
     expect(r.srcX).toBeCloseTo(40 / 280 * 200, 6)
     expect(r.srcY).toBeCloseTo(70 / 280 * 200, 6)
     expect(r.srcSize).toBe(200)
+  })
+})
+
+// renderMarkdown（P0.6：占位符盐防伪造 —— 测试环境无 katex，公式回退为 <code> 包裹）
+describe('renderMarkdown', () => {
+  it('正常行内/块级公式渲染（katex 缺失时回退 <code>）', () => {
+    const out = renderMarkdown('行内 $x_1$ 与块级 $$\sum_{i=1}^{n} x_i$$')
+    expect(out).toContain('<code>x_1</code>')
+    expect(out).toContain('<code>\sum_{i=1}^{n} x_i</code>')
+  })
+
+  it('P0.6 伪造占位符 %%DM0%%/%%IM1%% 不再被还原为 undefined 或错位 HTML', () => {
+    const out = renderMarkdown('题目 %%DM0%% 内容 $x$ 结束 %%IM1%%')
+    expect(out).toContain('%%DM0%%')
+    expect(out).toContain('%%IM1%%')
+    expect(out).toContain('<code>x</code>')
+    expect(out.includes('undefined')).toBe(false)
+  })
+
+  it('P0.6 多公式编号不串位（真实占位按序还原）', () => {
+    const out = renderMarkdown('$a$、$b$ 与 $$c$$ 混合')
+    expect(out).toContain('<code>a</code>')
+    expect(out).toContain('<code>b</code>')
+    expect(out).toContain('<code>c</code>')
+  })
+
+  it('HTML 仍被转义（XSS 面不回退）', () => {
+    const out = renderMarkdown('<script>alert(1)</script> 与 $x$')
+    expect(out.includes('<script>')).toBe(false)
+    expect(out).toContain('&lt;script&gt;')
   })
 })

@@ -1,0 +1,13 @@
+{
+  "seed": true,
+  "reload": 1,
+  "topbar-chat": "{\"tbChat\":false}",
+  "sidebar": "{\"sideNav\":false,\"aiRowOpen\":true}",
+  "tags-toggle": "[\"展开全部 10 个\"]",
+  "font-vars": "{\"mainFsBase\":\"17px\",\"topbarFsLg\":\"18px\"}",
+  "goto-history": 1,
+  "history": "{\"hasSelect\":false,\"hsCurrent\":true,\"hs\":4}",
+  "goto-dash": 1,
+  "open-compose": 1,
+  "compose": "{\"ceCh\":2,\"names\":[\"第一章 极限与连续\",\"第二章 导数与微分\"]}"
+}

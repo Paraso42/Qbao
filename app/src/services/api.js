@@ -2,7 +2,7 @@
 // api.js — 认证与请求封装（自 legacy api.js 迁移）
 // token/user 存 localStorage（键不变），登录态由 user store 维护。
 // ============================================================
-import { API_BASE, IS_DESKTOP, desktopBridge } from '../core/env'
+import { API_BASE, IS_DESKTOP } from '../core/env'
 
 export function getToken() { return localStorage.getItem('qbao_token') }
 export function setToken(t) { if (t) localStorage.setItem('qbao_token', t); else localStorage.removeItem('qbao_token') }
@@ -31,19 +31,6 @@ export function netErrorMessage() {
   return (IS_DESKTOP)
     ? '无法连接服务器 (' + API_BASE + ') — 请检查网络连接或 VPN'
     : '无法连接服务器 (' + API_BASE + ') — 请检查网络'
-}
-
-// 桌面端首次运行：未配置服务器时引导输入地址（应用内保存，主进程重建窗口生效）
-export function showServerSetupDialog() {
-  const bridge = desktopBridge()
-  if (!bridge || typeof bridge.setServer !== 'function') return
-  const url = window.prompt('设置服务器地址（如 https://your-server.example）', 'https://')
-  if (url == null) return
-  const trimmed = String(url).trim()
-  if (!/^https?:\/\//.test(trimmed)) { window.alert('请输入完整地址，如 https://your-server.example'); return }
-  bridge.setServer(trimmed, '服务器')
-    .then((r) => { if (r && r.ok !== false) return; window.alert('保存失败: ' + ((r && r.error) || '未知错误')) })
-    .catch((e) => window.alert('保存失败: ' + e.message))
 }
 
 // 登录/注册：仅网络请求，返回 { token, user }；登录态由调用方写入。

@@ -187,7 +187,6 @@ import { useDataStore } from '../../../stores/data'
 import { useAiStore } from '../../../stores/ai'
 import { IS_DESKTOP, desktopBridge } from '../../../core/env'
 import { getAiApiKey } from '../../../services/aiKeys'
-import { showServerSetupDialog } from '../../../services/api'
 import { applyFontSizes } from '../../../core/fontSizes'
 import Modal from '../../ui/Modal.vue'
 import Icon from '../../ui/Icon.vue'
@@ -357,7 +356,26 @@ function checkUpdates() {
     updateMessage.value = (e && e.message) || '检查失败'
   })
 }
-function showServerSetup() { showServerSetupDialog() }
+// P0.5: 服务器地址改为应用内输入框（ui.openPrompt）+ toast 反馈，替代原生 prompt/alert
+function showServerSetup() {
+  const d = desktopBridge()
+  if (!d || typeof d.setServer !== 'function') { ui.toast('当前环境不支持修改服务器地址', 'err'); return }
+  ui.openPrompt('设置服务器地址（如 https://your-server.example）', 'https://').then((url) => {
+    if (url == null) return
+    const trimmed = String(url).trim()
+    if (!/^https?:\/\//.test(trimmed)) { ui.toast('请输入完整地址，如 https://your-server.example', 'err'); return }
+    d.setServer(trimmed, '服务器')
+      .then((r) => {
+        if (r && r.ok !== false) {
+          desktopInfo.value.apiBase = trimmed
+          ui.toast('服务器地址已保存，重启应用生效', 'ok')
+        } else {
+          ui.toast('保存失败: ' + ((r && r.error) || '未知错误'), 'err')
+        }
+      })
+      .catch((e) => ui.toast('保存失败: ' + ((e && e.message) || '未知错误'), 'err'))
+  })
+}
 function bindUpdateStatus() {
   const d = desktopBridge()
   if (!d || typeof d.onUpdateStatus !== 'function') return

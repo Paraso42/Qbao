@@ -5,6 +5,8 @@
 # ---- Node 依赖 ----
 node_modules/
 server/node_modules/
+# ChatECNU 托管依赖环境（dependency_install 项目级安装目录）
+.chatecnu/
 
 # ---- 环境变量与密钥（任何位置都不上传）----
 .env
@@ -46,6 +48,10 @@ Thumbs.db
 # ---- tools/：默认忽略其中的一次性脚本，仅保留说明 ----
 tools/*
 !tools/README.md
+# P0.3: e2e 回归探针入库（tools/e2e），运行产物 out/ 不入库
+!tools/e2e/
+!tools/e2e/**
+tools/e2e/out/
 
 # ---- 桌面端（Electron）----
 desktop/node_modules/
