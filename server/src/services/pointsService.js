@@ -243,40 +243,65 @@ async function awardShareDownload(db, ownerId, bankId, newCount) {
 // ---------- 消耗与配额 ----------
 
 // AI 配额：kind = 'generate'（出题尝试+任务创建共享每日免费次数）| 'upload'（文件解析）
+// P0.7 整改：配额「计数 → 扣费」原子化 —— 真实 pool（带 connect）时包一层事务 +
+// 同用户 advisory xact lock（hashtextextended），并发请求串行裁决，杜绝两个并发请求
+// 同时读到免费额度内而双双免扣（TOCTOU）；fake db（无 connect）走直连保持单元可测。
+const AI_QUOTA_LOCK_PREFIX = 'qbao:aiq:';
 async function checkAndChargeAiQuota(db, userId, kind) {
   const since = localStartOfDay();
-  let used = 0;
-  if (kind === 'generate') {
-    const [logs, tasks] = await Promise.all([
-      db.query(
-        "SELECT COUNT(*)::int AS c FROM ai_request_log WHERE user_id = $1 AND created_at >= $2 AND status = 'started'",
+  const client = typeof db.connect === 'function' ? await db.connect() : null;
+  const q = client || db;
+  try {
+    if (client) {
+      await q.query('BEGIN');
+      await q.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [AI_QUOTA_LOCK_PREFIX + userId]);
+    }
+    let used = 0;
+    if (kind === 'generate') {
+      const [logs, tasks] = await Promise.all([
+        q.query(
+          "SELECT COUNT(*)::int AS c FROM ai_request_log WHERE user_id = $1 AND created_at >= $2 AND status = 'started'",
+          [userId, since]
+        ),
+        q.query(
+          'SELECT COUNT(*)::int AS c FROM ai_tasks WHERE user_id = $1 AND created_at >= $2',
+          [userId, since]
+        ),
+      ]);
+      used = ((logs.rows[0] && logs.rows[0].c) || 0) + ((tasks.rows[0] && tasks.rows[0].c) || 0);
+      if (used < P.AI_FREE_DAILY) {
+        if (client) await q.query('COMMIT');
+        return { charged: false, used };
+      }
+      const res = await spendPoints(q, userId, P.AI_OVER_COST, {
+        reason: 'ai_generate', note: 'AI 出题超额（每日免费 ' + P.AI_FREE_DAILY + ' 次）',
+      });
+      if (client) await q.query('COMMIT');
+      return { charged: true, used, balance: res.balance };
+    }
+    if (kind === 'upload') {
+      const logs = await q.query(
+        "SELECT COUNT(*)::int AS c FROM ai_request_log WHERE user_id = $1 AND created_at >= $2 AND model = 'upload'",
         [userId, since]
-      ),
-      db.query(
-        'SELECT COUNT(*)::int AS c FROM ai_tasks WHERE user_id = $1 AND created_at >= $2',
-        [userId, since]
-      ),
-    ]);
-    used = ((logs.rows[0] && logs.rows[0].c) || 0) + ((tasks.rows[0] && tasks.rows[0].c) || 0);
-    if (used < P.AI_FREE_DAILY) return { charged: false, used };
-    const res = await spendPoints(db, userId, P.AI_OVER_COST, {
-      reason: 'ai_generate', note: 'AI 出题超额（每日免费 ' + P.AI_FREE_DAILY + ' 次）',
-    });
-    return { charged: true, used, balance: res.balance };
+      );
+      used = (logs.rows[0] && logs.rows[0].c) || 0;
+      if (used < P.AI_UPLOAD_FREE_DAILY) {
+        if (client) await q.query('COMMIT');
+        return { charged: false, used };
+      }
+      const res = await spendPoints(q, userId, P.AI_UPLOAD_OVER_COST, {
+        reason: 'ai_upload', note: 'AI 文件解析超额（每日免费 ' + P.AI_UPLOAD_FREE_DAILY + ' 次）',
+      });
+      if (client) await q.query('COMMIT');
+      return { charged: true, used, balance: res.balance };
+    }
+    throw new Error('points: unknown ai quota kind ' + kind);
+  } catch (e) {
+    if (client) await q.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    if (client) client.release();
   }
-  if (kind === 'upload') {
-    const logs = await db.query(
-      "SELECT COUNT(*)::int AS c FROM ai_request_log WHERE user_id = $1 AND created_at >= $2 AND model = 'upload'",
-      [userId, since]
-    );
-    used = (logs.rows[0] && logs.rows[0].c) || 0;
-    if (used < P.AI_UPLOAD_FREE_DAILY) return { charged: false, used };
-    const res = await spendPoints(db, userId, P.AI_UPLOAD_OVER_COST, {
-      reason: 'ai_upload', note: 'AI 文件解析超额（每日免费 ' + P.AI_UPLOAD_FREE_DAILY + ' 次）',
-    });
-    return { charged: true, used, balance: res.balance };
-  }
-  throw new Error('points: unknown ai quota kind ' + kind);
 }
 
 // 今日 AI 配额使用情况（前端提示用）

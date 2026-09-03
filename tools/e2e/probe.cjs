@@ -1,0 +1,25 @@
+const { app, BrowserWindow } = require('electron')
+const path = require('path')
+const fs = require('fs')
+const DIST = path.join(__dirname, '..', '..', 'app', 'dist', 'index.html')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+app.whenReady().then(async () => {
+  const win = new BrowserWindow({
+    width: 1280, height: 800, show: false,
+    webPreferences: { preload: path.join(__dirname, '..', '..', 'desktop', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+  })
+  await win.loadFile(DIST)
+  await sleep(900)
+  const dump = (label) => win.webContents.executeJavaScript("JSON.stringify({ settingsOpen: window.__pinia._s.get('ui').settingsOpen, confirmOpen: window.__pinia._s.get('ui').confirm.open, importOpen: window.__pinia._s.get('ui').importOpen, authOpen: window.__pinia._s.get('ui').authOpen, overlays: document.querySelectorAll('.dialog-overlay').length, boxes: document.querySelectorAll('.dialog-box').length, bodyClass: document.body.className })").then((s) => console.log(label + ' ' + s)).catch((e) => console.log(label + ' ERR ' + e.message))
+  await dump('INIT')
+  await win.webContents.executeJavaScript("window.__pinia._s.get('ui').openSettings('personalize'); 1")
+  await sleep(600)
+  await dump('AFTER-openSettings')
+  await win.webContents.executeJavaScript("window.__pinia._s.get('ui').openConfirm('删除', '确定删除？', '删除'); 1")
+  await sleep(600)
+  await dump('AFTER-openConfirm')
+  const img = await win.webContents.capturePage()
+  fs.writeFileSync(path.join(__dirname, 'out', 'probe.png'), img.toPNG())
+  console.log('PROBE_SHOT saved')
+  app.exit(0)
+})

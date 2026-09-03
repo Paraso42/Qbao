@@ -216,6 +216,51 @@ describe('pointsService AI 配额', () => {
     db._uploads = 11;
     expect((await svc.checkAndChargeAiQuota(db, 1, 'upload')).charged).toBe(true);
   });
+
+  it('P0.7 真实池路径：BEGIN + advisory 锁内完成计数与扣费（同用户并发串行化）', async () => {
+    const db = makeDb();
+    db._genLogs = 10; db._tasks = 1; // 超免费额度 → 应扣费
+    db.connect = async () => db; // 模拟 pool.connect 返回同一 client
+    db.release = () => {};
+    const r = await svc.checkAndChargeAiQuota(db, 7, 'generate');
+    expect(r.charged).toBe(true);
+    const sqls = db.calls.map((c) => c.sql);
+    expect(sqls[0]).toBe('BEGIN');
+    expect(sqls[1]).toMatch(/pg_advisory_xact_lock\(hashtextextended/);
+    expect(db.calls[1].params[0]).toBe('qbao:aiq:7'); // 锁键按用户隔离
+    expect(sqls.some((s) => /UPDATE users SET storage_points = storage_points -/.test(s))).toBe(true);
+    expect(sqls[sqls.length - 1]).toBe('COMMIT');
+  });
+
+  it('P0.7 真实池路径：免费额度内直接放行且不扣费', async () => {
+    const db = makeDb();
+    db._uploads = 3;
+    db.connect = async () => db;
+    db.release = () => {};
+    const r = await svc.checkAndChargeAiQuota(db, 7, 'upload');
+    expect(r.charged).toBe(false);
+    const sqls = db.calls.map((c) => c.sql);
+    expect(sqls[0]).toBe('BEGIN');
+    expect(sqls.some((s) => /storage_points = storage_points -/.test(s))).toBe(false);
+    expect(sqls[sqls.length - 1]).toBe('COMMIT');
+  });
+
+  it('P0.7 真实池路径：扣费抛错 → ROLLBACK（不半途扣分）', async () => {
+    const db = makeDb();
+    db._genLogs = 10; db._tasks = 1;
+    db.connect = async () => db;
+    db.release = () => {};
+    const origQuery = db.query;
+    db.query = async (sql, params) => {
+      if (/UPDATE users SET storage_points = storage_points -/.test(sql)) return { rows: [] };
+      if (/SELECT storage_points FROM users/.test(sql)) return { rows: [{ storage_points: 1 }] };
+      return origQuery(sql, params);
+    };
+    await expect(svc.checkAndChargeAiQuota(db, 7, 'generate')).rejects.toMatchObject({ status: 400 });
+    const sqls = db.calls.map((c) => c.sql);
+    expect(sqls[0]).toBe('BEGIN');
+    expect(sqls[sqls.length - 1]).toBe('ROLLBACK');
+  });
 });
 
 describe('pointsService 清零与规则', () => {

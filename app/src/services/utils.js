@@ -52,6 +52,10 @@ export function generateId(prefix) {
 
 export function escapeHtml(text) {
   if (typeof text !== 'string') return String(text ?? '')
+  // 无 DOM 环境（vitest node 单测/SSR）退化为等价转义：textContent→innerHTML 只转义 & < >
+  if (typeof document === 'undefined') {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  }
   const d = document.createElement('div')
   d.textContent = text
   return d.innerHTML
@@ -62,6 +66,12 @@ export function renderMarkdown(text) {
   if (typeof text !== 'string') return escapeHtml(String(text ?? ''))
   const katexLib = (typeof window !== 'undefined' && window.katex) || null
 
+  // P0.6: 每次渲染生成不可预测的占位符盐——用户输入伪造 %%DM..%%/%%IM..%% 时
+  // 不会被误还原成 undefined 或错位的 KaTeX HTML（此前越界索引会输出 "undefined"）。
+  const salt = Math.random().toString(36).slice(2, 10)
+  const dmTok = (i) => '%%DM' + salt + i + '%%'
+  const imTok = (i) => '%%IM' + salt + i + '%%'
+
   // Step 1: $$...$$ display math 占位
   const displayMath = []
   let s = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => {
@@ -71,7 +81,7 @@ export function renderMarkdown(text) {
     } else {
       displayMath.push('<code>' + escapeHtml(m.trim()) + '</code>')
     }
-    return '%%DM' + (displayMath.length - 1) + '%%'
+    return dmTok(displayMath.length - 1)
   })
 
   // Step 2: $...$ inline math 占位
@@ -83,15 +93,15 @@ export function renderMarkdown(text) {
     } else {
       inlineMath.push('<code>' + escapeHtml(m.trim()) + '</code>')
     }
-    return '%%IM' + (inlineMath.length - 1) + '%%'
+    return imTok(inlineMath.length - 1)
   })
 
   // Step 3: 其余文本转义
   s = escapeHtml(s)
 
-  // Step 4: 恢复 KaTeX HTML
-  s = s.replace(/%%DM(\d+)%%/g, (_, i) => displayMath[parseInt(i)])
-  s = s.replace(/%%IM(\d+)%%/g, (_, i) => inlineMath[parseInt(i)])
+  // Step 4: 恢复 KaTeX HTML（带盐精确匹配；索引越界兜底返回原 token，不输出 undefined）
+  s = s.replace(new RegExp('%%DM' + salt + '(\\d+)%%', 'g'), (m, i) => displayMath[parseInt(i)] !== undefined ? displayMath[parseInt(i)] : m)
+  s = s.replace(new RegExp('%%IM' + salt + '(\\d+)%%', 'g'), (m, i) => inlineMath[parseInt(i)] !== undefined ? inlineMath[parseInt(i)] : m)
 
   // Step 5: 安全的 Markdown 标记
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')

@@ -152,10 +152,24 @@ module.exports = function (app) {
   // T15: 统一错误层 — 积分不足→400、multer 类型白名单→422、其余→通用 500（不泄内部细节）
   app.post('/api/v1/ai/upload', requireAuth, upload.array('files', 10), asyncHandler(async (req, res) => {
     // 积分配额：每日免费解析次数内不扣分；超出后按次预扣（失败不阻塞上传主流程）
-    await pointsService.checkAndChargeAiQuota(pool, req.userId, 'upload').catch((e) => {
-      if (e instanceof ApiError) throw e;
-      console.warn('[points] ai upload quota check failed:', e.message);
-    });
+    let quotaError = null;
+    try {
+      await pointsService.checkAndChargeAiQuota(pool, req.userId, 'upload').catch((e) => {
+        if (e instanceof ApiError) throw e;
+        console.warn('[points] ai upload quota check failed:', e.message);
+      });
+    } catch (e) {
+      quotaError = e;
+    }
+    if (quotaError) {
+      // P0.8：配额/校验抛错时清理 multer 已落盘文件，防磁盘残留（此前会遗留文件）
+      if (req.files && req.files.length) {
+        for (const f of req.files) {
+          try { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); } catch (_) { /* 忽略单个清理失败 */ }
+        }
+      }
+      throw quotaError;
+    }
 
     if (!req.files || req.files.length === 0) return res.status(422).json({ error: '未上传文件' });
     const results = [];

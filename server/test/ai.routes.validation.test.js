@@ -82,4 +82,29 @@ describe('AI 路由参数与 Provider 校验', () => {
 
     expect(res.status).toBe(422);
   });
+
+  it('P0.8 上传超出配额 → 400 且 multer 落盘文件被清理（无磁盘残留）', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const uploadRoot = path.join(__dirname, '..', '..', 'uploads');
+    if (!fs.existsSync(uploadRoot)) fs.mkdirSync(uploadRoot, { recursive: true });
+    const before = fs.readdirSync(uploadRoot).length;
+    installFakePool([
+      [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
+      // 已用完当日免费解析次数 → 走扣费；余额不足 → ApiError 400
+      [/SELECT COUNT\(\*\)::int AS c FROM ai_request_log/, async () => ({ rows: [{ c: 20 }] })],
+      [/UPDATE users SET storage_points = storage_points -/, async () => ({ rows: [] })],
+      [/SELECT storage_points FROM users/, async () => ({ rows: [{ storage_points: 2 }] })],
+    ]);
+    // P0.7 后配额检查在真实 pool 上走事务；helpers 默认把 pool.connect 也 stub 成
+    // fake client，测试封闭（不触真实 PostgreSQL），失败路径应 400 并清理落盘文件。
+    const res = await request(app)
+      .post('/api/v1/ai/upload')
+      .set('Authorization', 'Bearer ' + token)
+      .attach('files', Buffer.from('quota-fail-sample-content'), { filename: 'sample.txt' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('积分不足');
+    const after = fs.readdirSync(uploadRoot).length;
+    expect(after).toBe(before); // 配额失败路径已清理本次落盘文件
+  });
 });

@@ -192,13 +192,13 @@ async function runDiagnostics() {
         var output = completion.choices[0].message.content;
         console.log('  HTTP 200 | 输出长度:', output.length, '| 耗时:', result.timeMs + 'ms');
 
-        var parsed = tryParseQuestions(output);
-        if (parsed.questions && parsed.questions.length > 0) {
+        var parsed2 = tryParseQuestions(output);
+        if (parsed2.questions && parsed2.questions.length > 0) {
           result.status = 'OK';
-          result.questions = parsed.questions.length;
-          result.method = parsed.method;
-          console.log('  ✅ 成功:', parsed.questions.length, '题 (', parsed.method, ')');
-          console.log('  示例:', JSON.stringify(parsed.questions[0]).substring(0, 120));
+          result.questions = parsed2.questions.length;
+          result.method = parsed2.method;
+          console.log('  ✅ 成功:', parsed2.questions.length, '题 (', parsed2.method, ')');
+          console.log('  示例:', JSON.stringify(parsed2.questions[0]).substring(0, 120));
         } else {
           result.status = 'ZERO';
           result.error = '无法解析为JSON数组';

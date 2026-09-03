@@ -46,6 +46,9 @@ jobs:
         # T20: 固定 forks + maxForks=2（默认并行 fork 偶发 Worker exited unexpectedly）
         working-directory: server
         run: npx vitest run --pool=forks --poolOptions.forks.maxForks=2
+      - name: 后端 Lint（eslint，P0.4）
+        working-directory: server
+        run: npm run lint
 
   frontend:
     runs-on: ubuntu-latest
@@ -81,3 +84,6 @@ jobs:
       - name: 前端服务层单测
         working-directory: app
         run: npx vitest run
+      - name: 前端 Lint（eslint，P0.4）
+        working-directory: app
+        run: npm run lint

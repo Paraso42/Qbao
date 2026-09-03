@@ -1,4 +1,16 @@
+## v3.30.2
+
+- **ESLint 静态检查接入**（P0.4）：app/server 两端 eslint 配置（入口基线规则集：未定义变量/重复声明为错误，样式类为警告留痕；浏览器/Node 全局内联维护，零运行时依赖）；lint 脚本用 npx 固定 eslint@9.39.5（两端 0 error）；CI 后端/前端 job 各增 lint 步骤
+- **替换原生 prompt/alert**（P0.5）：桌面端「修改服务器地址」改为应用内输入框 + toast 反馈（复用 ui.openPrompt），services/api.js 移除 showServerSetupDialog；全仓无 window.prompt/alert 残留
+- **renderMarkdown 占位符伪造防护**（P0.6）：公式占位符改用每次渲染随机盐，用户输入伪造占位符不再被误还原为 undefined 或错位 KaTeX HTML；escapeHtml 增加无 DOM 环境回退（纯逻辑可单测）——新增 4 例单测
+- **AI 配额计数/扣费原子化**（P0.7）：checkAndChargeAiQuota 在真实连接池上包事务 + 同用户 advisory 锁（hashtextextended），并发请求串行裁决，杜绝先计数后扣费的双请求蹭免费额度（TOCTOU）；测试基建 installFakePool 默认 stub pool.connect，带事务的服务调用封闭可测——新增 3 例单测
+- **AI 上传配额失败清理落盘文件**（P0.8）：/ai/upload 配额/校验抛错时删除 multer 已落盘文件，防磁盘残留——新增路由级测试
+- **E2E 回归资产入库**（P0.3）：.tmp 的 Electron UI 探针/QA 脚本收编至 tools/e2e/（含用法文档与样例报告），输出统一进 tools/e2e/out/（gitignore）；含密钥的 local/e2e-ai-scenarios 保持本地不提交
+- **桌面升级链路核验**（P0.2）：v3.30.1 Release 资产与 latest.yml 实测一致（sha512/size/url 完整）；实机升级冒烟留待人工（记入 local/log.md）
+- 测试：server 29 文件 146 用例、app 7 文件 38 用例全绿；两端 eslint 0 error
+
 ## v3.30.1
+
 
 - 出题流程调整（按用户验收反馈）：
   - **停用流式输出**：流式分支整体注释保留（可恢复），一律改为"生成完成 → 校验 → 一次性导入"，保证 AI 二次校准能在导入前生效、出题质量可控
