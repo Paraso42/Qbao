@@ -18,6 +18,12 @@ const {
 const { ApiError } = require('../lib/errorHandler');
 const { finalizeAiQuestions } = require('./aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('./chapterSessionGuard');
+const {
+  acquireChapterGenerationLock,
+  releaseChapterGenerationLock,
+  sweepChapterGenerationLocks,
+  CONFLICT_MESSAGE,
+} = require('./chapterGenerationLock');
 const pointsService = require('./pointsService');
 const P = require('../config/points');
 const { loadPoolTextForChapter } = require('../lib/poolText');
@@ -70,44 +76,54 @@ async function createAiTask(userId, { providerName, model, apiKey, body }) {
   // 章节未完成规则校验（与 /ai/generate 一致）：未做完题目不允许继续出题
   await assertChapterCanGenerate(userId, body.chapterId || null);
 
-  // 同一章节已有进行中（queued/running）任务 → 409（round5.1：多端/多窗口并发点击时
-  // 客户端执行归属是第一道防线，这里做服务端兜底，防止两个端都为同一次出题建任务）
-  const activeSameChapter = await pool.query(
-    "SELECT id FROM ai_tasks WHERE user_id = $1 AND chapter_id = $2 AND status IN ('queued', 'running') LIMIT 1",
-    [userId, body.chapterId || null]
-  );
-  if (activeSameChapter.rows.length > 0) {
-    throw new ApiError(409, '该章节已有任务在生成中，请等待完成后再试');
-  }
-
-  // 队列公平：每用户同时 queued+running 任务数上限（防一人占满串行 worker）
-  const queueCount = await pool.query(
-    "SELECT COUNT(*)::int AS c FROM ai_tasks WHERE user_id = $1 AND status IN ('queued', 'running')",
-    [userId]
-  );
-  if ((queueCount.rows[0] && queueCount.rows[0].c) >= P.AI_TASK_USER_LIMIT) {
-    throw new ApiError(429, 'AI 出题排队任务已达上限（' + P.AI_TASK_USER_LIMIT + '），请等待完成或取消旧任务');
-  }
-
-  // T6：任务创建不再预扣积分——改为 worker 成功完成时才计费（checkAndChargeAiQuota），
-  // 失败/取消/重启中断不扣费；每日免费次数仍按 ai_tasks 创建记录计数（防滥用）。
+  // Provider/模型解析前置：未知 Provider 应尽早 422，不给锁表留副作用
   const target = resolveAiTarget(providerName, model);
-  const request = {
-    provider: target.providerConfig.id,
-    model: target.model,
-    body,
-  };
 
-  const result = await pool.query(
-    `INSERT INTO ai_tasks (user_id, chapter_id, status, request_json)
-     VALUES ($1, $2, $3, $4::jsonb)
-     RETURNING *`,
-    [userId, body.chapterId || null, TASK_STATUS.QUEUED, JSON.stringify(request)]
-  );
+  // round6 同章节互斥：任务路径与直连路径共用 ai_generation_locks。
+  // 抢到锁才允许落库任务；锁随任务终态释放（worker 完成/失败、取消、启动清理）。
+  // 彻底封堵"任务在跑时另一实例/旧版客户端用直连再生成一轮"。
+  const releaseLock = await acquireChapterGenerationLock(userId, body.chapterId || null, 'task');
+  try {
+    // 同一章节已有进行中（queued/running）任务 → 409（round5.1 兜底，
+    // 锁表抢锁后此处仅防御历史遗留/直连老任务）
+    const activeSameChapter = await pool.query(
+      "SELECT id FROM ai_tasks WHERE user_id = $1 AND chapter_id = $2 AND status IN ('queued', 'running') LIMIT 1",
+      [userId, body.chapterId || null]
+    );
+    if (activeSameChapter.rows.length > 0) {
+      throw new ApiError(409, CONFLICT_MESSAGE);
+    }
 
-  const task = result.rows[0];
-  taskSecrets.set(task.id, { apiKey, providerName: target.providerConfig.id, model: target.model });
-  return formatTask(task);
+    // 队列公平：每用户同时 queued+running 任务数上限（防一人占满串行 worker）
+    const queueCount = await pool.query(
+      "SELECT COUNT(*)::int AS c FROM ai_tasks WHERE user_id = $1 AND status IN ('queued', 'running')",
+      [userId]
+    );
+    if ((queueCount.rows[0] && queueCount.rows[0].c) >= P.AI_TASK_USER_LIMIT) {
+      throw new ApiError(429, 'AI 出题排队任务已达上限（' + P.AI_TASK_USER_LIMIT + '），请等待完成或取消旧任务');
+    }
+
+    // T6：任务创建不再预扣积分——改为 worker 成功完成时才计费（checkAndChargeAiQuota），
+    // 失败/取消/重启中断不扣费；每日免费次数仍按 ai_tasks 创建记录计数（防滥用）。
+    const request = {
+      provider: target.providerConfig.id,
+      model: target.model,
+      body,
+    };
+
+    const result = await pool.query(
+      'INSERT INTO ai_tasks (user_id, chapter_id, status, request_json) VALUES ($1, $2, $3, $4::jsonb) RETURNING *',
+      [userId, body.chapterId || null, TASK_STATUS.QUEUED, JSON.stringify(request)]
+    );
+
+    const task = result.rows[0];
+    taskSecrets.set(task.id, { apiKey, providerName: target.providerConfig.id, model: target.model });
+    return formatTask(task);
+  } catch (e) {
+    // 抢锁成功但后续失败（409/429/DB 错误）→ 立即释放，避免锁泄漏
+    if (releaseLock) await releaseLock();
+    throw e;
+  }
 }
 
 async function listAiTasks(userId, limit = 20) {
@@ -141,6 +157,7 @@ async function cancelAiTask(userId, taskId) {
   );
   if (queued.rows[0]) {
     taskSecrets.delete(taskId);
+    await releaseChapterGenerationLock(userId, queued.rows[0].chapter_id || null);
     return formatTask(queued.rows[0]);
   }
 
@@ -160,6 +177,7 @@ async function cancelAiTask(userId, taskId) {
     }
     taskSecrets.delete(taskId);
     console.log('[ai-task] cancel running task id=' + taskId + ' userId=' + userId);
+    await releaseChapterGenerationLock(userId, running.rows[0].chapter_id || null);
     return formatTask(running.rows[0]);
   }
 
@@ -349,6 +367,7 @@ async function processNextAiTask() {
     if (!secret) {
       runningAborters.delete(task.id);
       await failTask(task.id, '服务重启后 API Key 不再可用，请重新创建任务');
+      await releaseChapterGenerationLock(task.user_id, task.chapter_id || null);
       return true;
     }
 
@@ -381,6 +400,8 @@ async function processNextAiTask() {
       await failTask(task.id, e.message);
     } finally {
       runningAborters.delete(task.id);
+      // round6：任务进入终态（完成/失败/取消）→ 释放同章节生成锁
+      await releaseChapterGenerationLock(task.user_id, task.chapter_id || null);
     }
     return true;
   } catch (e) {
@@ -405,6 +426,9 @@ async function markStaleTasksFailed() {
     if (result.rowCount > 0) {
       console.log('[ai-task] startup cleanup: ' + result.rowCount + ' stale task(s) marked failed');
     }
+    // round6：进程重启后所有生成锁作废（直连在途必然中断；任务锁随上一步任务终态化）
+    await sweepChapterGenerationLocks();
+    console.log('[gen-lock] startup sweep done');
   } catch (e) {
     console.error('[ai-task] startup cleanup failed:', e.message);
   }

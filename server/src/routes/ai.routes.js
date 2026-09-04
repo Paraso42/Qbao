@@ -13,6 +13,7 @@ const { getCachedOrExtractFileText } = require('../services/aiMaterialCache');
 const { validateQuestionSet } = require('../services/aiQuestionValidator');
 const { finalizeAiQuestions } = require('../services/aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('../services/chapterSessionGuard');
+const { acquireChapterGenerationLock } = require('../services/chapterGenerationLock');
 const { cleanupExpiredFiles } = require('../services/filePoolService');
 const { loadPoolTextForChapter } = require('../lib/poolText');
 const pointsService = require('../services/pointsService');
@@ -222,6 +223,7 @@ module.exports = function (app) {
   }));
 
   app.post('/api/v1/ai/generate', validate({ body: aiGenerateBodySchema }), requireAuth, async (req, res) => {
+    let releaseGenLock = null
     try {
       const parsed = parseAiHeaders(req); const target = resolveAiTarget(parsed.providerName, parsed.model); const apiKey = parsed.apiKey;
       const model = target.model;
@@ -245,6 +247,13 @@ module.exports = function (app) {
 
       if (!apiKey || apiKey.length < 10) {
         return res.status(401).json({ error: '缺少 AI API Key，请在设置中配置' });
+      }
+
+      // round6 同章节互斥：直连路径也在 ai_generation_locks 登记（任务路径
+      // createAiTask 抢到同一把锁直至任务终态）。旧版/多端实例并发直连生成
+      // 同一章节 → 第二次 409，一次出题只能产生一轮。请求结束(finally)释放。
+      if (chapterId) {
+        releaseGenLock = await acquireChapterGenerationLock(req.userId, chapterId, 'direct')
       }
 
       const tcSpec = normalizeTypeCounts(typeCounts);
@@ -488,6 +497,11 @@ let userText = textContent || '';
         if (!res.headersSent) return res.status(500).json({ error: '服务器内部错误' });
         console.error('AI generate error after headers sent:', e.message);
         return;
+    } finally {
+      // round6：无论成功/失败/客户端断连，直连生成结束即释放章节锁
+      if (releaseGenLock) {
+        await releaseGenLock()
+      }
     }
   });
 

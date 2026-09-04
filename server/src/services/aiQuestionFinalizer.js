@@ -189,8 +189,34 @@ async function finalizeAiQuestions({
   }
 
   // 3) 最终收口（自检可能改写题量；补题后确保不超配额），并报告最终缺口
-  const finalQuota = applyTypeQuota(questions, typeCounts);
+  let finalQuota = applyTypeQuota(questions, typeCounts);
   questions = finalQuota.questions;
+
+  // round6：自检/二次审核可能删除题目导致数量缺口（实测：要求 15 题（5单5判3名2简），
+  // 自检复核删掉 1 道名词解释 → 只返回 14 题且此前补题发生在自检之前、无法覆盖）。
+  // 收口后再补一轮缺失题型，保证最终数量与用户设定一致（补题为未计费的上游调用）。
+  if (hasShortfall(finalQuota.shortfall) && provider && apiKey && !(signal && signal.aborted)) {
+    const missing = shortfallLabels(finalQuota.shortfall).join('、');
+    console.log('[finalizer] post-selfcheck shortfall, top-up again: ' + missing);
+    const topUp2 = await topUpShortfall({
+      provider,
+      apiKey,
+      model,
+      modelConfig,
+      sourceText,
+      questions: finalQuota.questions,
+      typeCounts,
+      shortfall: finalQuota.shortfall,
+      signal,
+    });
+    topUpInfo.performed = true;
+    topUpInfo.attempts += topUp2.attempts;
+    topUpInfo.remainingShortfall = { ...topUp2.shortfall };
+    const fq2 = applyTypeQuota(topUp2.questions, typeCounts);
+    questions = fq2.questions;
+    finalQuota = fq2;
+  }
+
   if (hasShortfall(finalQuota.shortfall)) {
     baseWarnings.push('题型配额未完全满足，尚缺：' + shortfallLabels(finalQuota.shortfall).join('、'));
   }
