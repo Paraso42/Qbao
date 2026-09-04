@@ -1,4 +1,5 @@
-## v3.34.1
+## v3.34.2
+- **工程修复（v3.34.1 发布事故）**：v3.34.1 初次推送时包管理器锁文件（package-lock.json ×3）在版本替换过程中损坏，CI/Release 的 `npm ci` 全部失败、未产生任何 Release 资产；已从上一提交恢复锁文件并以 JSON 正规方式升为 3.34.2，三端 `npm ci` 本地实测通过；从未发布的 v3.34.1 标签删除，改发 **v3.34.2**。
 - **桌面端分发改版：网页端「设置 → 桌面端」新增国内镜像下载（C 方案，不跳转 GitHub）**：
   - 背景：多数用户网络无法稳定访问 GitHub Release；自动更新只服务已装用户，「新用户从哪下载」需要国内可达渠道
   - 服务端新增公开端点 /api/v1/desktop/latest（版本/大小/SHA256/发布日期）与 /api/v1/desktop/download（附件流下载最新安装包，支持断点续传）；短链 https://<host>/download → 302 到下载端点（nginx location = /download，原配置备份 .bak_r7，代理读超时放宽至 1800s）；文件目录 QBAO_DESKTOP_DIR（默认 <repo>/downloads，位于 server/ 之外，发布清理不影响）——服务器即桌面端安装包储藏室/统一下载站，不依赖服务器直连 GitHub，每次 Release 后人工把安装包放入 downloads/ 并写 meta.json
