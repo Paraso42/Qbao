@@ -131,13 +131,14 @@
       <div class="card">
         <h4>历史试卷</h4>
         <div v-if="examList.length === 0" class="qb-empty">暂无历史试卷</div>
-        <div v-for="ex in examList" :key="ex.id" class="exam-item" @click="quiz.startExam(ex.id)">
+        <div v-for="ex in examList" :key="ex.id" class="exam-item" @click="openExam(ex)">
           <span class="exam-icon"><Icon name="file" :size="15" /></span>
           <div class="exam-main">
             <div class="exam-name">{{ ex.name }}</div>
             <div class="exam-meta">{{ ex.questions.length }} 题 · {{ new Date(ex.createdAt).toLocaleString('zh-CN') }}</div>
+            <div v-if="examFinished(ex)" class="exam-meta exam-done">已完成 · 正确率 {{ examRate(ex) }}%</div>
           </div>
-          <button class="btn btn-primary btn-small" @click.stop="quiz.startExam(ex.id)">开始答题</button>
+          <button class="btn btn-primary btn-small" @click.stop="openExam(ex)">{{ examFinished(ex) ? '查看报告' : '开始答题' }}</button>
         </div>
       </div>
     </div>
@@ -169,7 +170,7 @@ import { useSubjectStore } from '../stores/subjects'
 import { useUiStore } from '../stores/ui'
 import { downloadTextFile, exportQuestionsJson } from '../services/importExport'
 import { useQuizStore } from '../stores/quiz'
-import { isObjType } from '../services/utils'
+import { isObjType, getCi } from '../services/utils'
 import { composeSubjExam, getExamSettings } from '../services/exam'
 import { renderMarkdown } from '../services/utils'
 import { chapterQuestionTotal } from '../services/chapterStats'
@@ -561,6 +562,29 @@ function onWeightInput(idx) {
   weights.value = pcts
 }
 const examTotal = computed(() => examTc.value.single + examTc.value.judge + examTc.value.term + examTc.value.short)
+// 考卷完成判定：全部题目都有作答（含 -1 跳过视为已处理）
+function examAnsweredCount(ex) {
+  if (!ex || !ex.userAnswers) return 0
+  return ex.userAnswers.filter((a) => a !== undefined && a !== null && a !== -1).length
+}
+function examFinished(ex) {
+  return !!(ex && ex.questions && ex.questions.length > 0 && examAnsweredCount(ex) >= ex.questions.length)
+}
+function examRate(ex) {
+  if (!ex || !ex.questions || !ex.questions.length) return 0
+  let obj = 0, correct = 0
+  ex.questions.forEach((qq, i) => {
+    if (!qq || !ex.userAnswers || ex.userAnswers[i] === undefined || ex.userAnswers[i] === null || ex.userAnswers[i] === -1) return
+    obj++
+    if (getCi(qq, ex.userAnswers[i]) === true) correct++
+  })
+  return obj > 0 ? Math.round(correct / obj * 100) : 0
+}
+// 打开考卷：已完成 → 报告；未完成 → 继续答题
+function openExam(ex) {
+  if (examFinished(ex)) quiz.openExamReport(ex.id)
+  else quiz.startExam(ex.id)
+}
 const examList = computed(() => {
   const s = subj.value
   if (!s) return []

@@ -27,6 +27,8 @@ export function initApp(pinia) {
   // T12: 持久化失败/接近上限 → 用户可见提示（不再静默丢数据）
   setPersistWarningHook((msg, fatal) => ui.toast(msg, fatal ? 'err' : 'info'))
 
+  // aiStore 在下方才创建（引用后置，onMerged 回调延迟取用）
+  let aiStoreRef = null
   engine = createSyncEngine({
     getState: () => data.state,
     replaceState: (merged) => data.replaceState(merged),
@@ -35,7 +37,10 @@ export function initApp(pinia) {
       syncStore.setSyncing(s.syncing)
       if (typeof s.lastSyncAt === 'number') syncStore.lastSyncAt = s.lastSyncAt
     },
-    notify: (msg) => ui.toast(msg, 'info')
+    notify: (msg) => ui.toast(msg, 'info'),
+    // 每次云端合并后重新裁决 AI 任务队列：恢复/失败标记不被云端旧状态回滚，
+    // 未完成的任务继续执行（修复“出题中途刷新后永远卡在排队”）
+    onMerged: () => { if (aiStoreRef) { try { aiStoreRef.reconcileQueue() } catch (e) { console.warn('[boot] reconcileQueue failed:', e && e.message) } } }
   })
   data.setSyncHook(() => engine.scheduleSync())
 
@@ -73,6 +78,7 @@ export function initApp(pinia) {
   quiz.bindLifecycle()
   // 出题队列恢复：刷新后自动续跑未开始/服务端任务，已发起 AI 请求的本地任务标记失败
   const aiStore = useAiStore(pinia)
+  aiStoreRef = aiStore
   aiStore.resumeQueuedTasks()
   // 页面销毁前把题目/考卷/历史大字段强写一次 IndexedDB（空闲回调可能被卸载丢弃）
   setStateSource(() => data.state)

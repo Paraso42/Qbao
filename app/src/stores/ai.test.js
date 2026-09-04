@@ -211,3 +211,70 @@ describe('pruneTaskQueue 队列剪枝 (round4)', () => {
     expect(q2[0].id).toBe('h20')
   })
 })
+
+describe('reconcileQueue 合并后重裁决 (round4.1)', () => {
+  let storage
+  beforeEach(() => {
+    storage = makeLocalStorageStub({})
+    globalThis.localStorage = storage
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+
+  function setupSeed(queue, opts = {}) {
+    const st = seedState()
+    st.aiTaskQueue = queue
+    if (opts.materials) st.chapterMaterials = opts.materials
+    if (opts.aiConfig) st.aiConfig = { ...st.aiConfig, ...opts.aiConfig }
+    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+    const ai = useAiStore()
+    const data = useDataStore()
+    return { ai, data }
+  }
+
+  it('云端带回的 running 本地直连任务 → 明确失败（不再永远卡在排队）', async () => {
+    const mk = (id, status, extra = {}) => ({ id, chapterId: 'c1', chapterName: '章一', status, promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, _expectedTotal: 2, ...extra })
+    const { data } = setupSeed([mk('stuck1', 'running')])
+    const t = data.state.aiTaskQueue[0]
+    expect(t.status).toBe('failed')
+    expect(t.error).toContain('页面被刷新')
+  })
+
+  it('带 serverTaskId 的任务（服务端任务）→ 复用续跑直到完成，不被“刷新取消”逻辑误杀', { timeout: 20000 }, async () => {
+    // migrateState 会把持久化的 running 重置为 pending+_wasRunning；服务端任务带
+    // serverTaskId → resume 时复用服务端任务续跑（不重复创建、不误标失败）
+    const mk = (id, status, extra = {}) => ({ id, chapterId: 'c1', chapterName: '章一', status, promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, _expectedTotal: 2, ...extra })
+    const { getAiServerTask } = await import('../services/aiApi')
+    getAiServerTask.mockResolvedValue({ status: 'completed', result: { questions: [{ question: '服务端出的题', type: 'single', options: ['a', 'b', 'c', 'd'], answer: 0 }] } })
+    const { ai, data } = setupSeed([mk('svc1', 'running', { serverTaskId: 'st_1' })], {
+      materials: { c1: [{ id: 'm1', name: 'a.txt', size: 3, addedAt: 1 }] },
+      aiConfig: { useServerQueue: true },
+    })
+    await vi.waitFor(() => {
+      const t = data.state.aiTaskQueue[0]
+      expect(['running', 'completed']).toContain(t.status)
+      if (t.status === 'failed') throw new Error('服务端任务被误标失败: ' + t.error)
+    }, { timeout: 8000, interval: 50 })
+    await vi.waitFor(() => {
+      const t = data.state.aiTaskQueue[0]
+      expect(t.status).toBe('completed')
+    }, { timeout: 8000, interval: 200 })
+    const t = data.state.aiTaskQueue[0]
+    expect(t.serverTaskId).toBe('st_1') // 复用，未重复创建
+    expect(t.error).toBe('')
+    expect(t.questionCount).toBe(1)
+    // 完成后 runner 退出
+    await vi.waitFor(() => { expect(ai.runnerActive).toBe(false) }, { timeout: 3000, interval: 50 })
+  })
+
+  it('pending 任务 → 启动 runner 自动续跑（不依赖用户重新点出题）', async () => {
+    const mk = (id, status, extra = {}) => ({ id, chapterId: 'c1', chapterName: '章一', status, promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, _expectedTotal: 2, ...extra })
+    const { data } = setupSeed([mk('pend1', 'pending')])
+    await vi.waitFor(() => {
+      const t = data.state.aiTaskQueue[0]
+      expect(['running', 'failed', 'completed']).toContain(t.status)
+    }, { timeout: 2000, interval: 50 })
+    // 无资料环境最终以失败收场（资料已被删除）——关键是从 pending 被接管执行
+  })
+})

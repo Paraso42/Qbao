@@ -468,3 +468,34 @@ describe('多端并发出题/答题合并 (round4)', () => {
     expect(m.chapters.c1.userAnswers).toEqual([0, 1])
   })
 })
+
+describe('aiTaskQueue 合并 (round4.1)', () => {
+  it('同 id 本地优先（恢复/失败决策不被云端旧状态回滚），云端独有任务并入', () => {
+    const mk = (id, status, extra = {}) => ({ id, chapterId: 'c1', chapterName: '章一', status, promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, ...extra })
+    const local = {
+      subjects: {}, chapters: {}, history: [], lastScreen: 'start', aiConfig: {},
+      aiTaskQueue: [
+        mk('t1', 'failed', { error: '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」' }), // 本地已裁决失败
+        mk('t3', 'pending'), // 本地新建未推送
+      ],
+    }
+    const cloud = {
+      subjects: {}, chapters: {}, history: [], lastScreen: 'start', aiConfig: {},
+      aiTaskQueue: [
+        mk('t1', 'running'),  // 云端旧状态：仍 running
+        mk('t2', 'completed'), // 云端独有（其他设备）
+      ],
+    }
+    const m = mergeStates(local, cloud).state
+    const byId = Object.fromEntries(m.aiTaskQueue.map((t) => [t.id, t]))
+    // t1 本地失败状态保留，不被云端 running 回滚
+    expect(byId.t1.status).toBe('failed')
+    expect(byId.t1.error).toContain('页面被刷新')
+    // t2/t3 各自并入
+    expect(byId.t2.status).toBe('completed')
+    expect(byId.t3.status).toBe('pending')
+    expect(m.aiTaskQueue).toHaveLength(3)
+    // 云端在前、本地补入的次序（t1 原位保留、t3 追加）
+    expect(m.aiTaskQueue.map((t) => t.id)).toEqual(['t1', 't2', 't3'])
+  })
+})

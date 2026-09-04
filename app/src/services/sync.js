@@ -221,6 +221,22 @@ export function mergeStates(localState, cloudState) {
   } else if (Array.isArray(L.history)) {
     m.history = L.history
   }
+  // aiTaskQueue：按任务 id 并集，同 id 本地优先——出题任务由本地 runner 裁决
+  // （刷新后的恢复/失败标记、执行进度不受云端旧状态回滚），云端独有任务并入
+  if (Array.isArray(L.aiTaskQueue) || Array.isArray(m.aiTaskQueue)) {
+    const cloudQ = Array.isArray(m.aiTaskQueue) ? m.aiTaskQueue : []
+    const localQ = Array.isArray(L.aiTaskQueue) ? L.aiTaskQueue : []
+    const outQ = []
+    const byId = new Map()
+    const push = (t) => { if (!t || !t.id) return; if (byId.has(t.id)) return; byId.set(t.id, outQ.length); outQ.push(t) }
+    cloudQ.forEach(push)
+    localQ.forEach((t) => {
+      if (!t || !t.id) return
+      if (byId.has(t.id)) { const i = byId.get(t.id); outQ[i] = t; return } // 本地同 id 覆盖云端副本
+      push(t)
+    })
+    m.aiTaskQueue = outQ
+  }
   return { state: m, conflictAddedCount }
 }
 
@@ -299,6 +315,7 @@ export function createSyncEngine(ctx) {
         if (mergedRes.conflictAddedCount > 0 && ctx.notify) {
           ctx.notify('已从云端同步其他设备新增的 ' + mergedRes.conflictAddedCount + ' 道题目')
         }
+        if (typeof ctx.onMerged === 'function') { try { ctx.onMerged() } catch (e) {} }
         return { changed: true, addedCount: mergedRes.conflictAddedCount }
       }
       return { changed: false, addedCount: 0 }
@@ -390,6 +407,7 @@ export function createSyncEngine(ctx) {
             ctx.replaceState(merged)
             persistMergedState(merged)
             if (typeof cloud.rev === 'number') _syncRev = cloud.rev
+            if (typeof ctx.onMerged === 'function') { try { ctx.onMerged() } catch (e) {} }
             if (ctx.notify) {
               if (mergedRes.conflictAddedCount > 0) {
                 ctx.notify('检测到其他设备同时出题，已合并双方题目（新增 ' + mergedRes.conflictAddedCount + ' 题）')
