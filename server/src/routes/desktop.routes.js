@@ -15,7 +15,9 @@ const crypto = require('crypto');
 const FILE_RE = /^Qbao-Setup-(\d+)\.(\d+)\.(\d+)\.exe$/i;
 
 function downloadsDir() {
-  return process.env.QBAO_DESKTOP_DIR || path.join(__dirname, '..', '..', 'downloads');
+  // 默认 <repo根>/downloads（server/src/routes 上溯三级）；位于 server/ 之外，
+  // 部署时不会被 deploy 清理脚本删除——服务器即安装包储藏室
+  return process.env.QBAO_DESKTOP_DIR || path.join(__dirname, '..', '..', '..', 'downloads');
 }
 
 function listInstallers() {
