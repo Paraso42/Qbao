@@ -6,7 +6,8 @@
         <div class="sm-nav-title">设置</div>
         <div class="sm-nav-item" :class="{ active: activeTab === 'personalize' }" @click="ui.setSettingsTab('personalize')"><Icon name="settings" :size="15" />个性化</div>
         <div class="sm-nav-item" :class="{ active: activeTab === 'aiconfig' }" @click="ui.setSettingsTab('aiconfig')"><Icon name="sparkle" :size="15" />AI 配置</div>
-        <div v-if="isDesktop" class="sm-nav-item" :class="{ active: activeTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />桌面端</div>
+        <!-- 桌面端：桌面环境=应用信息/检查更新；网页环境=国内镜像下载（v3.34.1） -->
+        <div class="sm-nav-item" :class="{ active: activeTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />桌面端</div>
       </nav>
 
       <div class="sm-content">
@@ -71,7 +72,8 @@
 
         <!-- 桌面端 -->
         <section v-else-if="activeTab === 'desktop'" class="sm-tab">
-          <div class="card">
+          <!-- 桌面端内：应用信息 + 检查更新（保持现状，v3.34.1 不改动） -->
+          <div v-if="isDesktop" class="card">
             <div class="settings-section">
               <h4>应用信息</h4>
               <div class="settings-row"><label>当前版本</label><span class="row-val">v{{ desktopInfo.version || '?' }}</span></div>
@@ -94,6 +96,29 @@
               </div>
             </div>
           </div>
+          <!-- 网页端：国内镜像下载分发（内容与桌面端不同：不含检查更新/开机自启） -->
+          <div v-else class="card">
+            <div class="settings-section">
+              <h4>桌面版应用</h4>
+              <p class="col-hint">电脑端独立窗口、开机自启、自动更新；账号数据与网页版云端同步。</p>
+              <div class="settings-row"><label>最新版本</label><span class="row-val">{{ webDl.version }}</span></div>
+              <div class="settings-row"><label>安装包大小</label><span class="row-val">{{ webDl.sizeText }}</span></div>
+              <div class="settings-row"><label>更新日期</label><span class="row-val">{{ webDl.dateText }}</span></div>
+              <div class="ai-status" :class="'ai-status-' + webDl.state">{{ webDl.message }}</div>
+              <div class="ai-actions">
+                <button class="btn btn-primary btn-small" :disabled="!webDl.ready" @click="startWebDownload"><Icon name="download" :size="13" /> 下载桌面版</button>
+                <button class="btn btn-secondary btn-small" :disabled="webDl.loading" @click="loadWebDesktopRelease">刷新</button>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h4>安全校验（SHA256）</h4>
+              <div class="sha-row">
+                <code class="sha-code">{{ webDl.sha256 || '—' }}</code>
+                <button class="btn btn-secondary btn-small" :disabled="!webDl.sha256" @click="copySha256">复制</button>
+              </div>
+              <p class="ai-help-note">安装包由本站服务器提供（国内镜像），下载后可用校验值核对文件完整性。已安装旧版桌面端的用户，请在桌面端「设置 → 桌面端」点击「检查更新」升级到最新版，无需重复下载。</p>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -104,7 +129,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useUiStore } from '../../../stores/ui'
 import { useDataStore } from '../../../stores/data'
-import { IS_DESKTOP, desktopBridge } from '../../../core/env'
+import { IS_DESKTOP, desktopBridge, API_BASE } from '../../../core/env'
+import { fetchDesktopRelease, formatSize, formatDate } from '../../../services/desktopRelease'
 import { applyFontSizes } from '../../../core/fontSizes'
 import Modal from '../../ui/Modal.vue'
 import Icon from '../../ui/Icon.vue'
@@ -150,6 +176,57 @@ const desktopInfo = ref({ version: '', apiBase: '', serverLabel: '', autoStart: 
 const updateState = ref('idle')
 const updateMessage = ref('启动应用后会自动检查更新；有新版本时会提示下载。')
 const updateChecking = ref(false)
+
+// 网页端：桌面版下载（国内镜像，v3.34.1——内容与桌面端不同，不跳转 GitHub）
+const webDl = ref({ ready: false, loading: false, state: 'info', message: '正在获取下载信息…', version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '' })
+async function loadWebDesktopRelease() {
+  webDl.value.loading = true
+  webDl.value.state = 'info'
+  webDl.value.message = '正在获取下载信息…'
+  try {
+    const j = await fetchDesktopRelease()
+    webDl.value.version = 'v' + j.version
+    webDl.value.sizeText = formatSize(j.sizeBytes)
+    webDl.value.dateText = formatDate(j.publishedAt)
+    webDl.value.sha256 = j.sha256 || ''
+    webDl.value.fileName = j.fileName
+    webDl.value.ready = true
+    webDl.value.state = 'ok'
+    webDl.value.message = '已就绪，点击「下载桌面版」开始下载'
+  } catch (e) {
+    webDl.value.ready = false
+    webDl.value.state = 'err'
+    webDl.value.message = '获取下载信息失败（' + ((e && e.message) || '网络错误') + '），请重试'
+  } finally {
+    webDl.value.loading = false
+  }
+}
+function startWebDownload() {
+  if (!webDl.value.ready) return
+  const a = document.createElement('a')
+  a.href = API_BASE + '/desktop/download'
+  a.download = webDl.value.fileName || ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  ui.toast('开始下载桌面版 ' + webDl.value.version, 'info')
+}
+function copySha256() {
+  const sha = webDl.value.sha256
+  if (!sha) return
+  const done = () => ui.toast('SHA256 已复制', 'ok')
+  const fallback = () => {
+    const ta = document.createElement('textarea')
+    ta.value = sha
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy'); done() } catch (e) { ui.toast('复制失败，请手动复制', 'err') }
+    ta.remove()
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(sha).then(done).catch(fallback)
+  } else fallback()
+}
 
 function loadDesktopInfo() {
   const d = desktopBridge()
@@ -221,13 +298,13 @@ watch(() => ui.settingsOpen, (open) => {
     if (activeTab.value === 'aiconfig') {
       if (aiCfgRef.value) aiCfgRef.value.loadForm()
     }
-    if (activeTab.value === 'desktop') loadDesktopInfo()
+    if (activeTab.value === 'desktop') { if (isDesktop.value) loadDesktopInfo(); else loadWebDesktopRelease() }
   }
 })
 watch(() => ui.settingsTab, (tab) => {
   if (!ui.settingsOpen) return
   if (tab === 'aiconfig') { if (aiCfgRef.value) aiCfgRef.value.loadForm() }
-  if (tab === 'desktop') loadDesktopInfo()
+  if (tab === 'desktop') { if (isDesktop.value) loadDesktopInfo(); else loadWebDesktopRelease() }
 })
 
 onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
@@ -323,6 +400,8 @@ onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
 .ai-status-ok { color: var(--color-success); }
 .ai-status-err { color: var(--color-danger); }
 .ai-status-info { color: var(--color-primary); }
+.sha-row { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-md) 0; border-bottom: 1px solid var(--border-light); }
+.sha-code { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: var(--fs-xs); color: var(--text-secondary); background: var(--surface-hover); padding: 6px 10px; border-radius: var(--radius-sm); word-break: break-all; }
 .ai-help { font-size: var(--fs-sm); color: var(--text-secondary); line-height: 1.9; }
 .ai-help-note { margin-top: 8px; color: var(--text-muted); font-size: var(--fs-xs); }
 @media (max-width: 768px) {
