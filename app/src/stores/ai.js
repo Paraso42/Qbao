@@ -131,14 +131,11 @@ export const useAiStore = defineStore('ai', () => {
     return (data.state.aiTaskQueue || []).some((t) => t.chapterId === chapterId && (t.status === 'pending' || t.status === 'running'))
   }
 
-  // 章节最近一轮是否还有未做完的题目（K1 规则本地前置校验；服务端有 409 兜底）
+  // K1 规则本地前置校验（服务端有 409 兜底）：
+  // 任意一轮存在未做完的题目（含被 JSON 往返转成 null 的未作答位）→ 不允许继续出题。
+  // 与出题入口（getActionableQuizSet）同口径，避免“有未完成轮次却无入口”的死锁。
   function hasUnfinishedQuestions(ch) {
-    if (!ch || !ch.quizSets || ch.quizSets.length === 0) return false
-    const qs = ch.quizSets[ch.quizSets.length - 1]
-    if (!qs || !qs.questions || qs.questions.length === 0) return false
-    const unanswered = (qs.userAnswers || [])
-      .filter((a) => a === undefined || a === null || a === -1).length
-    return unanswered > 0
+    return data.hasUnfinishedQuizSet(ch)
   }
 
   function enqueueGenerate(chapterId, typeCounts) {

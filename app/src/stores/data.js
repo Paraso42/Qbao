@@ -81,6 +81,41 @@ export const useDataStore = defineStore('data', () => {
 
   function getChStrategy(cid) { return persistence.getChStrategy(state, cid) }
 
+  // —— K1 轮次守卫与可操作轮次（v3.34.1 round5） ——
+  // 章节存在任意一轮有未作答（undefined/null/-1 均视为未作答）→ 不允许出题。
+  // 口径与服务端 in_progress 会话语义一致（任何未完成会话都会 409 拦截），
+  // 并修复本地多轮合并后“守卫看最后一轮、入口看当前轮”的错位。
+  function hasUnfinishedQuizSet(ch) {
+    if (!ch || !Array.isArray(ch.quizSets) || ch.quizSets.length === 0) return false
+    return ch.quizSets.some((s) => s && Array.isArray(s.questions) && s.questions.length > 0 &&
+      (s.userAnswers || []).some((a) => a === undefined || a === null || a === -1))
+  }
+
+  // 可操作轮次：从最新一轮往前找第一轮未完成的（答题入口应指向它），
+  // 全部完成时回退最后一轮（查看报告）。出题守卫与答题入口必须指向同一轮。
+  function getActionableQuizSet(ch) {
+    if (!ch || !Array.isArray(ch.quizSets) || ch.quizSets.length === 0) return null
+    for (let i = ch.quizSets.length - 1; i >= 0; i--) {
+      const s = ch.quizSets[i]
+      if (s && Array.isArray(s.questions) && s.questions.length > 0 &&
+        (s.userAnswers || []).some((a) => a === undefined || a === null || a === -1)) return s
+    }
+    const last = ch.quizSets[ch.quizSets.length - 1]
+    return (last && Array.isArray(last.questions) && last.questions.length > 0) ? last : null
+  }
+
+  // 进入答题/报告前，把当前轮次指针指到可操作轮（与守卫口径一致）
+  function activateQuizSet(ch, set) {
+    if (!ch || !set) return false
+    const idx = ch.quizSets.indexOf(set)
+    if (idx < 0) return false
+    if (ch.currentQuizSetIdx !== idx) {
+      ch.currentQuizSetIdx = idx
+      saveState()
+    }
+    return true
+  }
+
   function createQuizSetForChapter(questions, chId) {
     const ch = state.chapters[chId]
     if (!ch) return null
@@ -125,6 +160,7 @@ export const useDataStore = defineStore('data', () => {
   return {
     state, saveState, setSyncHook, replaceState,
     getCh, getSubj, getExam, getActiveSet, getCurrentQuizSet,
-    getChStrategy, createQuizSetForChapter
+    getChStrategy, createQuizSetForChapter,
+    hasUnfinishedQuizSet, getActionableQuizSet, activateQuizSet
   }
 })

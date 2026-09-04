@@ -155,7 +155,7 @@ function sessionQuestions(record) {
 .hs-search { flex: 1; max-width: 260px; padding: 6px 10px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: var(--surface-card); font-size: var(--fs-xs); }
 .hs-search:focus { border-color: var(--color-primary); outline: none; }
 .hs-q { padding: var(--space-sm) var(--space-md); background: var(--surface-card); border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 6px; }
-.hs-q.correct { border-color: var(--color-success-light); }
+.hs-q.correct { border-color: var(--color-success-light); background: var(--color-success-light); }
 .hs-q.wrong { border-color: var(--color-danger-light); background: var(--color-danger-light); }
 .hs-q-text { font-size: var(--fs-sm); line-height: 1.6; }
 .hs-q-meta { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }

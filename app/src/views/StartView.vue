@@ -129,14 +129,17 @@ const wrong = computed(() => {
 })
 const rate = computed(() => (answered.value > 0 ? Math.round((answered.value - wrong.value) / answered.value * 100) : 0))
 
-const currentSet = computed(() => data.getCurrentQuizSet())
+// 可操作轮次 = 最新一轮未完成（否则最后一轮）：与 K1 出题守卫（hasUnfinishedQuizSet）
+// 指向同一轮，杜绝“最后一轮未完成被拦出题，却没有任何答题入口”的死锁
+// （多端合并/重复导入曾造成 currentQuizSetIdx 停在已答完轮次而新轮未作答）。
+const actionableSet = computed(() => data.getActionableQuizSet(ch.value))
 const setAnswered = computed(() => {
-  const qs = currentSet.value
+  const qs = actionableSet.value
   if (!qs || !qs.userAnswers) return 0
   return qs.userAnswers.filter((a) => a !== undefined && a !== null && a !== -1).length
 })
 const setTotal = computed(() => {
-  const qs = currentSet.value
+  const qs = actionableSet.value
   if (!qs || !qs.questions || !Array.isArray(qs.questions)) return 0
   return qs.questions.length
 })
@@ -149,6 +152,9 @@ const quickInfo = computed(() => {
 })
 
 function onQuickAction() {
+  if (!ch.value || !actionableSet.value) return
+  // 先把当前轮次指针指到可操作轮，答题/报告都落在守卫说的那一轮
+  data.activateQuizSet(ch.value, actionableSet.value)
   if (setFinished.value && setTotal.value > 0) {
     // 查看已完成轮次的报告：顺带补发最终结算（离线作答/结算中断时服务端还停在
     // in_progress，不补会锁死“开始出题”）；服务端增量结算，重复发送幂等
@@ -164,14 +170,9 @@ function createFirstSubject() {
 // AI 生成
 const materials = computed(() => (ch.value ? ai.getChapterMaterials(ch.value.id) : []))
 const hasTask = computed(() => (ch.value ? ai.hasTaskForChapter(ch.value.id) : false))
-// 本章节仍有未做完的题目 → 不允许继续出题（K1 规则；服务端同样有 409 兜底）
-const hasUnfinishedSet = computed(() => {
-  const qs = data.getCurrentQuizSet()
-  if (!qs || !qs.questions || !Array.isArray(qs.questions) || qs.questions.length === 0) return false
-  const unanswered = (qs.userAnswers || [])
-    .filter((a) => a === undefined || a === null || a === -1).length
-  return unanswered > 0
-})
+// 任意一轮仍有未做完的题目 → 不允许继续出题（K1 规则；服务端同样有 409 兜底；
+// 与 ai.js 守卫、可操作轮次入口同口径——有未完成轮次时一定有对应答题入口）
+const hasUnfinishedSet = computed(() => data.hasUnfinishedQuizSet(ch.value))
 const canGenerate = computed(() => {
   if (!ch.value) return false
   if (materials.value.length === 0) return false
