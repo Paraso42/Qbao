@@ -95,6 +95,35 @@ export function reclassifyTagsByRound(s) {
   }
 }
 
+
+// 章节题库答案对齐：题库（ch.questions）可能经多端去重合并（按题干并集），
+// 与各轮 quizSets 的拼接顺序不再一一对应。按题干把各轮已答答案回填到题库
+// 对应位置（轮次顺序优先，早轮先占位），保证 ch.userAnswers 与 ch.questions
+// 始终同序同长——章节正确率/错题统计/大考卷报告才不串位。
+export function rebuildChapterAnswersFromSets(ch) {
+  if (!ch || !Array.isArray(ch.quizSets) || ch.quizSets.length === 0) return
+  if (!Array.isArray(ch.questions) || ch.questions.length === 0) { ch.userAnswers = []; return }
+  const ans = new Array(ch.questions.length).fill(undefined)
+  const byText = new Map()
+  ch.questions.forEach((q, i) => {
+    if (q && q.question && !byText.has(q.question)) byText.set(q.question, i)
+  })
+  for (const set of ch.quizSets) {
+    if (!set || !Array.isArray(set.questions)) continue
+    const ua = set.userAnswers
+    set.questions.forEach((q, i) => {
+      if (!q || !q.question) return
+      const poolIdx = byText.get(q.question)
+      if (poolIdx === undefined) return
+      const a = ua && ua[i]
+      if (a === undefined || a === null || a === -1) return
+      const cur = ans[poolIdx]
+      if (cur === undefined || cur === null) ans[poolIdx] = a
+    })
+  }
+  ch.userAnswers = ans
+}
+
 // 单题标签统计更新 — 每道题作答后立即更新
 export function syncSingleAnswerToTagMeta(state, chapterId, question, answerVal) {
   if (!question || !question.tag) return

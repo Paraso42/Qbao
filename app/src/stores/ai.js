@@ -180,6 +180,7 @@ export const useAiStore = defineStore('ai', () => {
       runnerActive.value = true
       runnerLoop()
     }
+    pruneTaskQueue()
     const position = data.state.aiTaskQueue.filter((t) => t.status === 'pending').length
     ui.toast(ch.name + ' 已加入队列，排在第 ' + position + ' 位', 'info')
   }
@@ -292,6 +293,7 @@ export const useAiStore = defineStore('ai', () => {
 
   async function executeTask(task) {
     task.status = 'running'
+    delete task._wasRunning
     data.saveState()
     const ch = data.state.chapters[task.chapterId]
     if (!ch) { failTask(task, '章节已删除'); return }
@@ -399,6 +401,66 @@ export const useAiStore = defineStore('ai', () => {
     ui.toast('已停止全部任务', 'info')
   }
 
+  // —— 刷新后恢复队列（T-round4）： ——
+  // 页面刷新时 migrateState 已把 running 任务重置为 pending 并打 _wasRunning 标记。
+  //  · 未开始的排队任务 → 直接继续跑；
+  //  · 服务端任务（serverTaskId 已持久化）→ 复用任务继续轮询，不重复创建、不重复扣费；
+  //  · 本地直连且 AI 请求已在途的任务 → 无法得知请求是否已扣费/已生成，直接继续会
+  //    重复调用 AI（重复扣费/可能生成重复轮次）→ 标记失败并明确提示，让用户重试。
+  let _resumed = false
+  function resumeQueuedTasks() {
+    if (_resumed) return
+    _resumed = true
+    const queue = data.state.aiTaskQueue || []
+    const pending = queue.filter((t) => t.status === 'pending')
+    if (pending.length === 0) return
+    let changed = false
+    pending.forEach((t) => {
+      if (t._wasRunning && !t.serverTaskId) {
+        t.status = 'failed'
+        t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
+        changed = true
+        // 清理可能残留的空流式 set
+        if (t.streamSetRef) {
+          const ch = data.state.chapters[t.chapterId]
+          if (ch && ch.quizSets) {
+            const idx = ch.quizSets.indexOf(t.streamSetRef)
+            if (idx >= 0 && (!t.streamSetRef.questions || t.streamSetRef.questions.length === 0)) {
+              ch.quizSets.splice(idx, 1)
+            }
+          }
+          delete t.streamSetRef
+        }
+      }
+      delete t._wasRunning
+    })
+    if (changed) data.saveState()
+    // 仍有可继续的任务 → 启动 runner；有服务端任务 → 同时启动轮询以便导入
+    if (data.state.aiTaskQueue.some((t) => t.status === 'pending')) {
+      runnerActive.value = true
+      runnerLoop()
+    }
+    if (data.state.aiTaskQueue.some((t) => t.serverTaskId && (t.status === 'pending' || t.status === 'running'))) {
+      startServerTaskPolling()
+    }
+    pruneTaskQueue()
+  }
+
+  // 任务队列剪枝：已完成/失败任务无限累积（含大 promptText）会缓慢撑大 localStorage；
+  // 只保留最近的 40 条历史任务，进行中/排队中的任务永不清除（顺序保持原序）
+  function pruneTaskQueue() {
+    const queue = data.state.aiTaskQueue
+    if (!Array.isArray(queue) || queue.length <= 50) return
+    const isActive = (t) => t && (t.status === 'pending' || t.status === 'running')
+    const inactive = queue.map((t, i) => ({ t, i })).filter((x) => !isActive(x.t)).sort((a, b) => b.i - a.i)
+    const keepIdx = new Set(inactive.slice(0, 40).map((x) => x.i))
+    const kept = queue.filter((t, i) => isActive(t) || keepIdx.has(i))
+    if (kept.length !== queue.length) data.state.aiTaskQueue = kept
+  }
+
+  // 刷新/启动即恢复队列（boot 也会调用；幂等标记保证只跑一次）
+  resumeQueuedTasks()
+
   return {
     providers, providersLoaded, providersError, runnerActive, abortController,
     queueDialogOpen, serverTasks, serverTasksLoading,
@@ -406,7 +468,7 @@ export const useAiStore = defineStore('ai', () => {
     getChapterMaterials, saveChapterMaterials,
     ensureProviders, getProvider, defaultModelFor, rememberModel, recalledModel, effectiveModel,
     saveAiConfig, clearApiKey, testConnection,
-    enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter,
+    enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter, resumeQueuedTasks, pruneTaskQueue,
     refreshServerTasks, importServerTaskResult, cancelServerTask,
     openQueueDialog, closeQueueDialog,
     startServerTaskPolling, stopServerTaskPolling, hasActiveServerTasks, isServerTaskImported,

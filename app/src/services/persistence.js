@@ -100,33 +100,50 @@ export function hasBigFields(state) {
 }
 
 let _idbWritePending = false
+function writeBigFieldsToIdb(state) {
+  try {
+    const chList = []
+    const chs = state.chapters || {}
+    for (const cid of Object.keys(chs)) {
+      const ch = chs[cid]
+      if (ch && (ch.questions || ch.quizSets)) {
+        // JSON round-trip：解除 Vue reactive proxy（IDB 结构化克隆不接受 Proxy）
+        chList.push({ cid, data: JSON.parse(JSON.stringify({
+          questions: ch.questions || [],
+          userAnswers: ch.userAnswers || [],
+          quizSets: ch.quizSets || [],
+        })) })
+      }
+    }
+    const globalData = JSON.parse(JSON.stringify({
+      generatedExams: state.generatedExams || {},
+      history: state.history || [],
+    }))
+    stateDb.saveChapters(chList)
+    stateDb.saveGlobal(globalData)
+  } catch (e) { console.warn('[persist] idb write err', e) }
+}
+
+let _stateSource = null
+// 注册完整内存 state 的来源（boot 时由 data store 提供）；pagehide 强刷用
+export function setStateSource(fn) { _stateSource = fn }
+
+// 页面销毁前强制写一次大字段（requestIdleCallback 在卸载时可能被丢弃；
+// IDB 事务在 pagehide 阶段启动仍会提交，保证最近答题/出题进度不丢）
+export function flushBigFieldsNow() {
+  const state = typeof _stateSource === 'function' ? _stateSource() : null
+  if (!state || typeof state !== 'object') return
+  if (!hasBigFields(state)) return
+  writeBigFieldsToIdb(state)
+}
+
 // 空闲时全量写大字段到 IndexedDB（requestIdleCallback 不阻塞交互；节流合并高频保存）
 export function scheduleFullIdbWrite(state) {
   if (_idbWritePending || typeof state !== 'object' || !state) return
   _idbWritePending = true
   const run = () => {
     _idbWritePending = false
-    try {
-      const chList = []
-      const chs = state.chapters || {}
-      for (const cid of Object.keys(chs)) {
-        const ch = chs[cid]
-        if (ch && (ch.questions || ch.quizSets)) {
-          // JSON round-trip：解除 Vue reactive proxy（IDB 结构化克隆不接受 Proxy）
-          chList.push({ cid, data: JSON.parse(JSON.stringify({
-            questions: ch.questions || [],
-            userAnswers: ch.userAnswers || [],
-            quizSets: ch.quizSets || [],
-          })) })
-        }
-      }
-      const globalData = JSON.parse(JSON.stringify({
-        generatedExams: state.generatedExams || {},
-        history: state.history || [],
-      }))
-      stateDb.saveChapters(chList)
-      stateDb.saveGlobal(globalData)
-    } catch (e) { console.warn('[persist] idb write err', e) }
+    writeBigFieldsToIdb(state)
   }
   if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 3000 })
   else setTimeout(run, 600)
@@ -136,6 +153,8 @@ export function scheduleFullIdbWrite(state) {
 // 答题中的会话（当前章节的当前 quizSet 的答案/进度）每次 saveState 同步写 localStorage
 // 小键（几 KB ~ 几十 KB），不依赖 IndexedDB 空闲写入，刷新/关闭必达。
 export const ACTIVE_SESSION_KEY = 'qbao_active_session'
+// 大考卷（generatedExams）进度同步键：考卷题目/答案/进度走同一条“刷新必达”通道
+export const ACTIVE_EXAM_KEY = 'qbao_active_exam'
 
 function extractActiveSession(state) {
   try {
@@ -163,6 +182,30 @@ function saveActiveSession(state) {
     // 用 JSON 序列化（剥离 reactive proxy），体积 = 当前 quizSet 大小（通常 < 100KB）
     localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session))
   } catch (e) { /* 骨架键已尽力；失败则依赖 IDB/云端 */ }
+}
+
+function extractActiveExam(state) {
+  try {
+    const exId = state && state.currentExamId
+    const ex = exId && state.generatedExams && state.generatedExams[exId]
+    if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) return null
+    return {
+      examId: exId,
+      name: ex.name || '',
+      subjectId: ex.subjectId || null,
+      questions: ex.questions,
+      userAnswers: ex.userAnswers || [],
+      currentIdx: typeof ex.currentIdx === 'number' ? ex.currentIdx : 0,
+    }
+  } catch (e) { return null }
+}
+
+function saveActiveExam(state) {
+  const exam = extractActiveExam(state)
+  if (!exam) return
+  try {
+    localStorage.setItem(ACTIVE_EXAM_KEY, JSON.stringify(exam))
+  } catch (e) { /* 失败则依赖 IDB/云端 */ }
 }
 
 function restoreActiveSession(state) {
@@ -195,6 +238,36 @@ function restoreActiveSession(state) {
   } catch (e) { console.warn('[persist] restoreActiveSession err', e) }
 }
 
+function restoreActiveExam(state) {
+  try {
+    const raw = localStorage.getItem(ACTIVE_EXAM_KEY)
+    if (!raw) return
+    const s = JSON.parse(raw)
+    if (!Array.isArray(s.questions) || s.questions.length === 0) return
+    if (!state.generatedExams) state.generatedExams = {}
+    const ex = state.generatedExams[s.examId]
+    if (!ex || !Array.isArray(ex.questions) || ex.questions.length === 0) {
+      // 骨架/IDB 中缺失考卷 → 用活动键完整回填（刷新必达）
+      state.generatedExams[s.examId] = {
+        id: s.examId,
+        name: s.name || '大考卷',
+        subjectId: s.subjectId || null,
+        questions: s.questions,
+        userAnswers: toUndef(s.userAnswers),
+        currentIdx: s.currentIdx || 0,
+      }
+    } else {
+      // 考卷已恢复：活动键每次保存必最新 → 按题回填答案/进度（覆盖 IDB/云端旧值）
+      const answers = toUndef(s.userAnswers)
+      if (!Array.isArray(ex.userAnswers)) ex.userAnswers = []
+      for (let j = 0; j < Math.min(answers.length, ex.questions.length); j++) {
+        ex.userAnswers[j] = answers[j]
+      }
+      if (typeof s.currentIdx === 'number') ex.currentIdx = s.currentIdx
+    }
+  } catch (e) { console.warn('[persist] restoreActiveExam err', e) }
+}
+
 // 启动时从 IndexedDB 回填大字段到骨架 state（题目常驻内存，结构不变）
 const toUndef = (arr) => (Array.isArray(arr) ? arr.map((a) => (a === null ? undefined : a)) : [])
 
@@ -220,6 +293,7 @@ export async function hydrateState(state) {
     }
     // 恢复活动会话（答题入口/进度）
     restoreActiveSession(state)
+    restoreActiveExam(state)
   } catch (e) { console.warn('[persist] hydrate err', e) }
 }
 
@@ -313,8 +387,9 @@ export function saveState(state) {
     }
     // v3.30：大字段（题目/答案/历史）空闲时写 IndexedDB，不再占 localStorage
     scheduleFullIdbWrite(state)
-    // 活动会话同步写（答题进度刷新不丢）
+    // 活动会话同步写（答题进度刷新不丢）：当前轮次 + 进行中的大考卷
     saveActiveSession(state)
+    saveActiveExam(state)
     return { ok: true, bytes }
   } catch (e) {
     const fatalMsg = e && e.name === 'QuotaExceededError'
@@ -410,8 +485,9 @@ export function migrateState(s) {
   if (typeof s.aiEnabled !== 'boolean') s.aiEnabled = false
   if (!s.aiTaskQueue) s.aiTaskQueue = []
   if (!s.importedServerTaskIds || !Array.isArray(s.importedServerTaskIds)) s.importedServerTaskIds = []
-  // 页面刷新后重置 running 任务为 pending，清掉不可序列化的流引用
-  s.aiTaskQueue.forEach((t) => { if (t.status === 'running') t.status = 'pending'; delete t.streamSetRef })
+  // 页面刷新后重置 running 任务为 pending，清掉不可序列化的流引用；
+  // _wasRunning 标记供 ai store 恢复逻辑区分“未开始”与“请求已在途”（避免刷新后重复调用 AI）
+  s.aiTaskQueue.forEach((t) => { if (t.status === 'running') { t.status = 'pending'; t._wasRunning = true } delete t.streamSetRef })
   // quizSession 为瞬态，不持久化
   s.quizSession = null
   return s

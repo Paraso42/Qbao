@@ -7,10 +7,11 @@ import { useUserStore } from '../stores/user'
 import { useSyncStore } from '../stores/sync'
 import { useUiStore } from '../stores/ui'
 import { createSyncEngine } from '../services/sync'
-import { setPersistWarningHook, hydrateState } from '../services/persistence'
+import { setPersistWarningHook, hydrateState, setStateSource, flushBigFieldsNow } from '../services/persistence'
 import { getToken } from '../services/api'
 import { initSecureKeyStore } from '../services/aiKeys'
 import { useQuizStore } from '../stores/quiz'
+import { useAiStore } from '../stores/ai'
 import { applyFontSizes } from './fontSizes'
 
 let engine = null
@@ -47,6 +48,8 @@ export function initApp(pinia) {
     bootRestore.finally(() => {
       engine.setSyncingReady(true)
       if (user.isOnline) engine.resumePendingSync()
+      // 刷新后直接处于章节页而非切章进入 → 也恢复该章服务端进行中的答题会话
+      if (user.isOnline) quiz.restoreQuizFromServer(false)
     })
   })
 
@@ -68,6 +71,12 @@ export function initApp(pinia) {
   // 答题引擎：页面生命周期同步（beforeunload/visibilitychange）
   const quiz = useQuizStore(pinia)
   quiz.bindLifecycle()
+  // 出题队列恢复：刷新后自动续跑未开始/服务端任务，已发起 AI 请求的本地任务标记失败
+  const aiStore = useAiStore(pinia)
+  aiStore.resumeQueuedTasks()
+  // 页面销毁前把题目/考卷/历史大字段强写一次 IndexedDB（空闲回调可能被卸载丢弃）
+  setStateSource(() => data.state)
+  window.addEventListener('pagehide', flushBigFieldsNow)
 
   applyDarkMode()
   applyFontSizes(data.state.settings)
