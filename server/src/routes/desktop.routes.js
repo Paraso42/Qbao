@@ -105,4 +105,9 @@ module.exports = function desktopRoutes(app) {
       else res.end();
     });
   });
+
+  // 短链别名：https://<host>/download → 最新安装包（方便口头分发）
+  app.get('/download', (req, res) => {
+    res.redirect(302, '/api/v1/desktop/download');
+  });
 };
