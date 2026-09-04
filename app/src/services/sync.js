@@ -67,13 +67,17 @@ function questionKey(q) {
 // 同轮次（签名相同）多端各自作答时，重复方不整轮丢弃，而是把已答答案补进
 // 保留副本的空位（未答/-1/undefined 视为空位；双方都答同一题时保留先入方，
 // 与题库并集“云端优先、本地补漏”的语义一致）——多端并发答题任何一侧进度不丢。
-function mergeQuizSets(localSets, cloudSets) {
+// round5.1：轮次删除墓碑——多端合并会把“云端删除的轮次”从本地补回来（本地并集语义），
+// 墓碑（cid+sig 列表）随状态传播，云端/本地任何一侧命中墓碑的轮次都直接丢弃，删除不可复活。
+function mergeQuizSets(localSets, cloudSets, tombstoneSigs) {
   const out = []
   const seen = new Map()
+  const tomb = new Set(tombstoneSigs || [])
   const pushSet = (set) => {
     if (!set || !Array.isArray(set.questions)) return
     const sig = set.questions.map(questionKey).filter(Boolean).join('\u0001')
     if (!sig) return
+    if (tomb.has(sig)) return
     if (seen.has(sig)) {
       const target = out[seen.get(sig)]
       if (!target || !Array.isArray(target.userAnswers)) return
@@ -143,7 +147,7 @@ function mergeChapterQuestions(localCh, cloudCh) {
 }
 
 // 章节级并集合并（v3.28）
-function mergeChapter(localCh, cloudCh) {
+function mergeChapter(localCh, cloudCh, tombSigs) {
   const out = JSON.parse(JSON.stringify(cloudCh || {}))
   const L = localCh || {}
 
@@ -152,8 +156,8 @@ function mergeChapter(localCh, cloudCh) {
   out.questions = qm.questions
   out.userAnswers = qm.userAnswers
 
-  // 2) quizSets 并集（云端在前、本地在后，按签名去重）
-  out.quizSets = mergeQuizSets(L.quizSets, out.quizSets)
+  // 2) quizSets 并集（云端在前、本地在后，按签名去重；墓碑命中即丢弃）
+  out.quizSets = mergeQuizSets(L.quizSets, out.quizSets, tombSigs)
   // 有轮次的章节：题库答案以轮次为准按题干重新对齐（去重合并可能使
   // ch.questions 与各轮顺序错位，逐位置覆盖会串题），保证统计与报告不错位
   if (Array.isArray(out.quizSets) && out.quizSets.length > 0) {
@@ -226,7 +230,12 @@ export function mergeStates(localState, cloudState) {
       if (cloudCh && typeof cloudCh === 'object' && localCh && typeof localCh === 'object') {
         const before = (Array.isArray(cloudCh.questions) ? cloudCh.questions.length : 0)
           + (Array.isArray(cloudCh.quizSets) ? cloudCh.quizSets.length : 0)
-        const merged = mergeChapter(localCh, cloudCh)
+        const allTomb = [
+          ...(Array.isArray(m.aiTombstones) ? m.aiTombstones : []),
+          ...(Array.isArray(L.aiTombstones) ? L.aiTombstones : []),
+        ]
+        const tombSigs = allTomb.filter((tb) => tb && tb.cid === id).map((tb) => tb.sig)
+        const merged = mergeChapter(localCh, cloudCh, tombSigs)
         const after = (Array.isArray(merged.questions) ? merged.questions.length : 0)
           + (Array.isArray(merged.quizSets) ? merged.quizSets.length : 0)
         if (after > before) conflictAddedCount += after - before
@@ -259,6 +268,21 @@ export function mergeStates(localState, cloudState) {
       push(t)
     })
     m.aiTaskQueue = outQ
+  }
+  // aiTombstones：轮次删除墓碑并集（cid+sig），上限 100 条（只增于数据修复操作）
+  {
+    const c = Array.isArray(m.aiTombstones) ? m.aiTombstones : []
+    const l = Array.isArray(L.aiTombstones) ? L.aiTombstones : []
+    const seen = new Map()
+    ;[...c, ...l].forEach((tb) => {
+      if (!tb || !tb.cid || !tb.sig) return
+      const k = tb.cid + '\u0001' + tb.sig
+      if (seen.has(k)) return
+      seen.set(k, tb)
+    })
+    const merged = Array.from(seen.values()).slice(-100)
+    if (merged.length > 0) m.aiTombstones = merged
+    else delete m.aiTombstones
   }
   return { state: m, conflictAddedCount }
 }

@@ -534,3 +534,54 @@ describe('subjects 合并 chapterIds 并集 (round5)', () => {
     expect(Object.keys(m.subjects).sort()).toEqual(['s1', 's2'])
   })
 })
+
+
+describe('quizSets 轮次删除墓碑 aiTombstones (round5.1)', () => {
+  function q(t, type = 'single', answer = 0, opts) {
+    return { question: t, type, answer, options: ['A', 'B', 'C', 'D'], tag: 'x', ...(opts || {}) }
+  }
+  const setA = { questions: [q('A1'), q('A2'), q('A3')], userAnswers: [0, 1, 2], currentIdx: 0, createdAt: 1 }
+  const setB = { questions: [q('B1'), q('B2'), q('B3')], userAnswers: [undefined, 1, 2], currentIdx: 0, createdAt: 2 }
+  const setC = { questions: [q('C1'), q('C2'), q('C3')], userAnswers: [0, 1, 2], currentIdx: 0, createdAt: 3 }
+  const sigB = setB.questions.map((x) => JSON.stringify([x.question, x.type, x.answer, (x.options || []).join('|')])).join('\u0001')
+  const ctx = (caps, sets, tombstones) => ({
+    subjects: { s1: { id: 's1', name: '科目', chapterIds: ['c1'] } },
+    chapters: { c1: { id: 'c1', name: '章', quizSets: sets, questions: [], userAnswers: [] } },
+    generatedExams: {},
+    aiTombstones: tombstones || [],
+    history: [],
+  })
+
+  it('墓碑命中：云端副本被丢弃（他端删除的轮次不再保留）', () => {
+    const cloud = ctx({}, [setA, setB, setC], [{ cid: 'c1', sig: sigB, ts: 1 }])
+    const local = ctx({}, [setA, setB, setC], [])
+    const m = mergeStates(local, cloud).state
+    expect(m.chapters.c1.quizSets.map((x) => x.questions[0].question)).toEqual(['A1', 'C1'])
+  })
+
+  it('墓碑命中：本地副本同样被丢弃（删除方在另一端，本端合并后不再复活并推送）', () => {
+    const cloud = ctx({}, [setA, setC], [])
+    const local = ctx({}, [setA, setB, setC], [{ cid: 'c1', sig: sigB, ts: 1 }])
+    const m = mergeStates(local, cloud).state
+    expect(m.chapters.c1.quizSets.map((x) => x.questions[0].question)).toEqual(['A1', 'C1'])
+  })
+
+  it('墓碑并集：云端/本地两侧墓碑合并保留（去重 + 上限 100）', () => {
+    const cloud = ctx({}, [setA], [{ cid: 'c1', sig: sigB, ts: 1 }])
+    const local = ctx({}, [setA], [{ cid: 'c1', sig: sigB, ts: 2 }, { cid: 'c1', sig: 'sig-' + sigB.slice(0, 20), ts: 3 }])
+    const m = mergeStates(local, cloud).state
+    expect(m.aiTombstones).toHaveLength(2)
+    // 上限：101 条 → 只留 100
+    const many = []
+    for (let i = 0; i < 101; i++) many.push({ cid: 'c1', sig: 's' + i, ts: i })
+    const m2 = mergeStates(ctx({}, [setA], many), ctx({}, [setA], [])).state
+    expect(m2.aiTombstones.length).toBe(100)
+  })
+
+  it('无墓碑时行为不变（回归）', () => {
+    const cloud = ctx({}, [setA, setC], [])
+    const local = ctx({}, [setA, setB], [])
+    const m = mergeStates(local, cloud).state
+    expect(m.chapters.c1.quizSets.map((x) => x.questions[0].question)).toEqual(['A1', 'C1', 'B1'])
+  })
+})
