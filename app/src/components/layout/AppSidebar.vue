@@ -108,8 +108,10 @@ function chapterAnswered(cid) {
   const ch = data.state.chapters[cid]
   if (!ch) return 0
   let answered = 0
+  // 未作答位经 JSON 往返会成为 null，必须与 -1/undefined 同等视为未作答，
+  // 否则“本轮未答完”也会显示成全部答完（如 15 题出两轮显示 30/30）
   ;(ch.quizSets || []).forEach((set) => {
-    if (set.userAnswers) answered += set.userAnswers.filter((a) => a !== undefined && a !== -1).length
+    if (set.userAnswers) answered += set.userAnswers.filter((a) => a !== undefined && a !== null && a !== -1).length
   })
   return answered
 }

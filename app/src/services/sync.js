@@ -183,12 +183,35 @@ export function mergeStates(localState, cloudState) {
     if (typeof L[k] !== 'undefined' && L[k] !== null) m[k] = L[k]
   })
   let conflictAddedCount = 0
-  ;['subjects', 'generatedExams'].forEach(function (k) {
-    const c = m[k] || {}
-    const l = L[k] || {}
+  // generatedExams：本地优先按 id 覆盖（实体对象整体取本地，云端独有保留）
+  {
+    const c = m.generatedExams || {}
+    const l = L.generatedExams || {}
     Object.keys(l).forEach(function (id) { c[id] = l[id] })
-    m[k] = c
-  })
+    m.generatedExams = c
+  }
+  // subjects：按 id 合并，本地优先（名称/折叠状态），但 chapterIds 取并集——
+  // 本地旧骨架（另一台设备上新建的章节尚未同步到本端）整体覆盖云端会把新章节
+  // 从科目里刷掉，再随全量推送把云端的科目结构也回退（round5 实测事故）
+  {
+    const c = m.subjects || {}
+    const l = L.subjects || {}
+    Object.keys(l).forEach(function (id) {
+      const cloudSubj = c[id]
+      const localSubj = l[id]
+      if (cloudSubj && localSubj && typeof cloudSubj === 'object' && typeof localSubj === 'object') {
+        const merged = { ...cloudSubj, ...localSubj }
+        merged.chapterIds = Array.from(new Set([
+          ...(Array.isArray(cloudSubj.chapterIds) ? cloudSubj.chapterIds : []),
+          ...(Array.isArray(localSubj.chapterIds) ? localSubj.chapterIds : []),
+        ]))
+        c[id] = merged
+      } else {
+        c[id] = localSubj
+      }
+    })
+    m.subjects = c
+  }
   // chapterMaterials：资料元数据并集（云端在前、本地补漏，按章节内 id 去重）（T9）
   if (L.chapterMaterials || m.chapterMaterials) {
     m.chapterMaterials = mergeChapterMaterials(L.chapterMaterials, m.chapterMaterials)

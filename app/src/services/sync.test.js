@@ -499,3 +499,38 @@ describe('aiTaskQueue 合并 (round4.1)', () => {
     expect(m.aiTaskQueue.map((t) => t.id)).toEqual(['t1', 't2', 't3'])
   })
 })
+
+
+describe('subjects 合并 chapterIds 并集 (round5)', () => {
+  it('本地旧骨架缺新章节 → 并集保留云端章节，不整体回退', () => {
+    const cloud = {
+      subjects: { s1: { id: 's1', name: '科目一', collapsed: false, chapterIds: ['c1', 'c2'] } },
+      chapters: { c1: { id: 'c1', questions: [] }, c2: { id: 'c2', questions: [] } },
+      generatedExams: {},
+    }
+    const local = {
+      subjects: { s1: { id: 's1', name: '科目一', collapsed: true, chapterIds: ['c1'] } },
+      chapters: { c1: { id: 'c1', questions: [] } },
+      generatedExams: {},
+    }
+    const m = mergeStates(local, cloud).state
+    expect(m.subjects.s1.chapterIds).toEqual(['c1', 'c2'])
+    // 本地操作字段（collapsed）仍本地优先
+    expect(m.subjects.s1.collapsed).toBe(true)
+    expect(m.subjects.s1.name).toBe('科目一')
+  })
+
+  it('本地新建章节（云端还没有）→ 并集保留本地章节', () => {
+    const cloud = { subjects: { s1: { id: 's1', name: '科目一', chapterIds: ['c1'] } }, chapters: {}, generatedExams: {} }
+    const local = { subjects: { s1: { id: 's1', name: '科目一', chapterIds: ['c1', 'c2'] } }, chapters: {}, generatedExams: {} }
+    const m = mergeStates(local, cloud).state
+    expect(m.subjects.s1.chapterIds).toEqual(['c1', 'c2'])
+  })
+
+  it('云端独有科目保留', () => {
+    const cloud = { subjects: { s1: { id: 's1', chapterIds: ['c1'] }, s2: { id: 's2', chapterIds: ['c3'] } }, chapters: {}, generatedExams: {} }
+    const local = { subjects: { s1: { id: 's1', chapterIds: ['c1'] } }, chapters: {}, generatedExams: {} }
+    const m = mergeStates(local, cloud).state
+    expect(Object.keys(m.subjects).sort()).toEqual(['s1', 's2'])
+  })
+})

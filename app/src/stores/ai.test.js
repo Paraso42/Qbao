@@ -15,6 +15,7 @@ vi.mock('../services/aiApi', () => ({
 
 import { useAiStore } from './ai'
 import { useDataStore } from './data'
+import { useUserStore } from './user'
 import { useUiStore } from './ui'
 import { STORAGE_KEY } from '../services/persistence'
 import { getAiApiKey } from '../services/aiKeys'
@@ -97,6 +98,24 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
     expect(ui.toasts.some((t) => t.message.includes('请先上传复习资料'))).toBe(true)
   })
 
+  it('enqueueGenerate：任意一轮未做完（含旧轮）→ 拒绝入队并提示（K1 守卫同服务端 409 口径）', () => {
+    const { ai, ui } = setupStores()
+    const data = useDataStore()
+    useUserStore().applyAuth({ token: 't', user: { id: 1, username: 'test' } })
+    data.state.chapterMaterials['c1'] = [{ id: 'm1', name: '资料' }]
+    const ch = data.state.chapters.c1
+    ch.quizSets = [
+      { questions: [{ id: 'q1', question: '旧轮第一题', type: 'single', options: ['A', 'B'], answer: 0 }], userAnswers: [null], currentIdx: 0, createdAt: 1 },
+      { questions: [{ id: 'q2', question: '新轮第一题', type: 'single', options: ['A', 'B'], answer: 0 }], userAnswers: [0], currentIdx: 0, createdAt: 2 },
+    ]
+    ch.currentQuizSetIdx = 1
+    ai.enqueueGenerate('c1', { single: 1, judge: 0, term: 0, short: 0 })
+    expect(data.state.aiTaskQueue).toHaveLength(0)
+    expect(ui.toasts.some((t) => t.message.includes('还有未做完的题目'))).toBe(true)
+    // 全部答完后守卫放行（不再提示未完成，避免启动 runner 故直接断言守卫数据源）
+    ch.quizSets[0].userAnswers = [0]
+    expect(data.hasUnfinishedQuizSet(ch)).toBe(false)
+  })
   it('hasTaskForChapter：章节已有 pending/running 任务时防重复入队（K1 守卫）', () => {
     const { ai } = setupStores()
     const data = useDataStore()
