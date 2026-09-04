@@ -6,6 +6,7 @@ const path = require('path');
 const { getProvider, getProviderByModel, getAllProviders } = require('../providers');
 const { asyncHandler, ApiError } = require('../lib/errorHandler');
 const { validate } = require('../lib/validate');
+const { buildChapterHistoryPrompt } = require('../lib/chapterHistoryPrompt');
 const { aiGenerateBodySchema, aiTestBodySchema } = require('../schemas/ai.schema');
 const { parseAiHeaders, resolveAiTarget, normalizeTypeCounts, calculateMaxTokens } = require('../lib/aiRequest');
 const { getCachedOrExtractFileText } = require('../services/aiMaterialCache');
@@ -260,32 +261,7 @@ let userText = textContent || '';
       const poolFilesStatus = poolRes.poolFilesStatus;
       if (!userText) userText = '请生成一些通用练习题';
 
-      if (chapterHistory && chapterHistory.tagStats) {
-        var tagEntries = Object.entries(chapterHistory.tagStats);
-        if (tagEntries.length > 0) {
-          var chTotalQ = chapterHistory.totalQuestions || 0;
-          var progressLines = ['\n---\n【已有学习进度】已完成 ' + chTotalQ + ' 道题。'];
-          progressLines.push('各知识点标签及考察情况：');
-          tagEntries.forEach(function(e) {
-            var ts = e[1];
-            progressLines.push('- ' + e[0] + ': 出过' + ts.total + '题，对' + ts.correct + '错' + ts.wrong);
-          });
-          if (chapterHistory.topWrongTags && chapterHistory.topWrongTags.length > 0) {
-            progressLines.push('');
-            progressLines.push('薄弱知识点（错题最多）：' + chapterHistory.topWrongTags.slice(0, 5).join('、'));
-          }
-          progressLines.push('');
-          progressLines.push('要求：');
-          progressLines.push('- 对于已有知识点标签，请出同知识点但不同问法、不同场景的变式题');
-          progressLines.push('- 对于已有标签中已掌握的内容（错题少），出少量巩固题即可');
-          progressLines.push('- 对于已有标签中出题少的（少于3题），请补充出题');
-          progressLines.push('- 对于资料中未覆盖的新知识点，请创建新标签并出题');
-          progressLines.push('- 为每道题标注 tag 时，如果知识点与已有标签相似，请归入已有标签；如果是全新知识点，请创建新标签');
-          progressLines.push('- 输出顺序必须严格按照：单选题(single) → 判断题(judge) → 名词解释(term) → 简答题(short)。同题型内部按知识点分组排列');
-          userText += progressLines.join('\n');
-        }
-      }
-
+      userText += buildChapterHistoryPrompt(chapterHistory);
       const totalQ = safeTc.single + safeTc.judge + safeTc.term + safeTc.short;
       let content = userText;
       const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content }];

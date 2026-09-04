@@ -21,6 +21,7 @@ const { assertChapterCanGenerate } = require('./chapterSessionGuard');
 const pointsService = require('./pointsService');
 const P = require('../config/points');
 const { loadPoolTextForChapter } = require('../lib/poolText');
+const { buildChapterHistoryPrompt } = require('../lib/chapterHistoryPrompt');
 
 const TASK_STATUS = {
   QUEUED: 'queued',
@@ -42,9 +43,11 @@ let workerRunning = false;
 const DEFAULT_SYSTEM_PROMPT = [
   '你是一个出题助手。请根据提供的资料生成考试题目。',
   '只输出纯 JSON 数组，不要包含代码块标记或解释。',
-  '每道题包含：type(single/judge/term/short)、question、options(数组)、answer(数字下标)、tag、strategy(error/review/new)、explanation。',
+  '每道题包含：id、type(single/judge/term/short)、question、options(数组)、answer(数字下标)、tag、strategy(error/review/new)、explanation。',
   '单选题 4 个选项且 answer 为 0-3；判断题 options 为 ["正确","错误"] 且 answer 为 0 或 1；名词解释和简答题不需要 options/answer。',
-  '数学公式使用 $...$ 或 $$...$$ 包裹。',
+  '不得输出与资料示例或此前已出题目雷同的题，同知识点请变换问法、场景或数值。',
+  '输出顺序：单选题 → 判断题 → 名词解释 → 简答题。',
+  '数学公式使用 $...$ 或 $...$ 包裹。',
 ].join('\n');
 
 function formatTask(row) {
@@ -183,9 +186,11 @@ async function runTaskGeneration(task, secret, signal) {
   console.log('[ai-task] task id=' + task.id + ' chapterId=' + (body.chapterId || 'none') +
     ' textContentLen=' + textContent.length + ' poolFiles=' + poolFilesStatus.length);
 
+  const historyPrompt = buildChapterHistoryPrompt(body.chapterHistory);
+  const userContent = (textContent || '请生成一些通用练习题') + historyPrompt;
   const messages = [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: textContent || '请生成一些通用练习题' },
+    { role: 'user', content: userContent },
   ];
 
   const baseOpts = {
@@ -207,7 +212,7 @@ async function runTaskGeneration(task, secret, signal) {
   // 纠正性重试：JSON 解析失败或 0 题时，携带上次输出重试（≤2 次）
   if (!rawQuestions || rawQuestions.length === 0) {
     rawQuestions = await retryProviderContent({
-      target, secret, systemPrompt, textContent, body, signal, lastRaw: output,
+      target, secret, systemPrompt, textContent, body, signal, lastRaw: output, historyPrompt,
     });
   }
 
@@ -232,7 +237,7 @@ async function runTaskGeneration(task, secret, signal) {
 }
 
 // 纠正性重试：把上次的无效输出（或错误信息）附到用户消息里，要求模型重新输出纯 JSON 数组。
-async function retryProviderContent({ target, secret, systemPrompt, textContent, body, signal, lastRaw }) {
+async function retryProviderContent({ target, secret, systemPrompt, textContent, body, signal, lastRaw, historyPrompt }) {
   for (let attempt = 1; attempt <= JSON_RETRY_MAX; attempt++) {
     if (signal && signal.aborted) throw new Error('任务已取消');
     const correction =
@@ -240,7 +245,7 @@ async function retryProviderContent({ target, secret, systemPrompt, textContent,
       '。请修正后重新输出纯JSON数组，不要包含任何其他文字、代码块标记或解释。';
     const retryMessages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: (textContent || '请生成一些通用练习题') + correction },
+      { role: 'user', content: (textContent || '请生成一些通用练习题') + historyPrompt + correction },
     ];
     try {
       const comp = await target.provider.chatCompletions(secret.apiKey, target.model, retryMessages, {
