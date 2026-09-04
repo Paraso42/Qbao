@@ -6,6 +6,7 @@
 import { fetchWithAuth, getToken, getStoredUser } from './api'
 import { stripAiSecretsFromState } from './aiKeys'
 import { migrateState, STORAGE_KEY, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite } from './persistence'
+import { rebuildChapterAnswersFromSets } from './questions'
 
 export const SYNC_PENDING_KEY = 'qbao_sync_pending'
 export const LAST_SYNC_KEY = 'qbao_lastSync'
@@ -62,16 +63,30 @@ function questionKey(q) {
   } catch (e) { return null }
 }
 
-// quizSets 并集：按题目签名去重（云端在前、本地新增在后），答案保留各自原值。
+// quizSets 并集：按题目签名去重（云端在前、本地新增在后）。
+// 同轮次（签名相同）多端各自作答时，重复方不整轮丢弃，而是把已答答案补进
+// 保留副本的空位（未答/-1/undefined 视为空位；双方都答同一题时保留先入方，
+// 与题库并集“云端优先、本地补漏”的语义一致）——多端并发答题任何一侧进度不丢。
 function mergeQuizSets(localSets, cloudSets) {
   const out = []
-  const seen = new Set()
+  const seen = new Map()
   const pushSet = (set) => {
     if (!set || !Array.isArray(set.questions)) return
     const sig = set.questions.map(questionKey).filter(Boolean).join('\u0001')
     if (!sig) return
-    if (seen.has(sig)) return
-    seen.add(sig)
+    if (seen.has(sig)) {
+      const target = out[seen.get(sig)]
+      if (!target || !Array.isArray(target.userAnswers)) return
+      const src = Array.isArray(set.userAnswers) ? set.userAnswers : []
+      for (let j = 0; j < src.length && j < target.userAnswers.length; j++) {
+        const sa = src[j]
+        if (sa === undefined || sa === null || sa === -1) continue
+        const ta = target.userAnswers[j]
+        if (ta === undefined || ta === null || ta === -1) target.userAnswers[j] = sa
+      }
+      return
+    }
+    seen.set(sig, out.length)
     out.push(JSON.parse(JSON.stringify(set)))
   }
   ;(cloudSets || []).forEach(pushSet)
@@ -139,6 +154,11 @@ function mergeChapter(localCh, cloudCh) {
 
   // 2) quizSets 并集（云端在前、本地在后，按签名去重）
   out.quizSets = mergeQuizSets(L.quizSets, out.quizSets)
+  // 有轮次的章节：题库答案以轮次为准按题干重新对齐（去重合并可能使
+  // ch.questions 与各轮顺序错位，逐位置覆盖会串题），保证统计与报告不错位
+  if (Array.isArray(out.quizSets) && out.quizSets.length > 0) {
+    rebuildChapterAnswersFromSets(out)
+  }
 
   // 3) 操作性字段本地优先（正在作答的进度、策略、最近生成状态）
   ;['currentQuizSetIdx', 'currentIdx', 'strategy', '_hasNewFilesSinceLastGen', '_lastGenTime'].forEach((k) => {

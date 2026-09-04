@@ -11,7 +11,8 @@ import { useUiStore } from './ui'
 import { usePointsStore } from './points'
 import { fetchWithAuth } from '../services/api'
 import {
-  calcStats, syncSingleAnswerToTagMeta, autoUpdateChapterWeakTags
+  calcStats, syncSingleAnswerToTagMeta, autoUpdateChapterWeakTags,
+  rebuildChapterAnswersFromSets
 } from '../services/questions'
 import { saveQuizHistory } from '../services/history'
 import { checkAchievements } from '../services/achievements'
@@ -53,14 +54,15 @@ export const useQuizStore = defineStore('quiz', () => {
   const stats = computed(() => calcStats(activeSet.value))
 
   // —— 服务端答题会话同步（节流 5s，语义同 legacy） ——
-  function syncAnswerToServer() {
+  function syncAnswerToServer(opts) {
     if (!user.isOnline || !user.token) return
+    const keepalive = !!(opts && opts.keepalive)
     const now = Date.now()
     if (!_firstSyncDone) {
       _firstSyncDone = true
     } else if (now - _lastSyncTime < 5000) {
       if (_syncPendingTimer) clearTimeout(_syncPendingTimer)
-      _syncPendingTimer = setTimeout(syncAnswerToServer, 5000 - (now - _lastSyncTime))
+      _syncPendingTimer = setTimeout(() => syncAnswerToServer(opts), 5000 - (now - _lastSyncTime))
       return
     }
     _lastSyncTime = now
@@ -77,6 +79,7 @@ export const useQuizStore = defineStore('quiz', () => {
     const syncStatus = (answered >= as.questions.length) ? 'completed' : 'in_progress'
     fetchWithAuth('/quiz/session', {
       method: 'POST',
+      keepalive,
       body: JSON.stringify({
         chapterId,
         subjectId,
@@ -90,7 +93,11 @@ export const useQuizStore = defineStore('quiz', () => {
     })
       // 结算（completed）响应带最新余额 → 实时同步积分显示
       .then((res) => (res && res.ok ? res.json().catch(() => null) : null))
-      .then((d) => { if (d && typeof d.balance === 'number') points.applyBalance(d.balance) })
+      .then((d) => {
+        if (d && typeof d.balance === 'number') points.applyBalance(d.balance)
+        // 已答全部题目且服务端确认完成 → 标记本轮已结算（供补结算钩子跳过）
+        if (syncStatus === 'completed' && d && d.session && as._ref) as._ref._serverCompleted = true
+      })
       .catch((e) => console.warn('syncAnswerToServer failed:', e))
   }
 
@@ -121,7 +128,10 @@ export const useQuizStore = defineStore('quiz', () => {
     })
       // 结算响应带最新余额 → 实时同步积分显示
       .then((res) => (res && res.ok ? res.json().catch(() => null) : null))
-      .then((d) => { if (d && typeof d.balance === 'number') points.applyBalance(d.balance) })
+      .then((d) => {
+        if (d && typeof d.balance === 'number') points.applyBalance(d.balance)
+        if (d && d.session && as._ref) as._ref._serverCompleted = true
+      })
       .catch((e) => console.warn('syncAnswerToServerFinal failed:', e))
   }
 
@@ -129,15 +139,39 @@ export const useQuizStore = defineStore('quiz', () => {
     if (_syncPendingTimer) { clearTimeout(_syncPendingTimer); _syncPendingTimer = null }
     _firstSyncDone = true
     _lastSyncTime = 0
-    syncAnswerToServer()
+    // keepalive：页面销毁期间请求不被浏览器取消，尽力把当前进度/完成态送到服务端
+    syncAnswerToServer({ keepalive: true })
+  }
+
+  // 本轮题目已全部作答但尚未收到服务端“completed”确认（离线作答、
+  // 结算请求中断、刷新打断等）→ 补发一次最终结算，避免服务端 in_progress
+  // 残留导致“开始出题”被 409 锁死；服务端按增量结算，重复发送幂等。
+  let _lastEnsureAt = 0
+  function ensureActiveSetCompleted() {
+    if (!user.isOnline || !user.token) return
+    const as = activeSet.value
+    if (!as || !as.questions || !as.questions.length) return
+    if (as._ref && as._ref._serverCompleted) return
+    const answered = (as.userAnswers || []).filter((a) => a !== undefined && a !== null && a !== -1).length
+    if (answered < as.questions.length) return
+    syncAnswerToServerFinal()
   }
 
   function bindLifecycle() {
     if (_lifecycleBound) return
     _lifecycleBound = true
     window.addEventListener('beforeunload', flushBeforeUnload)
+    // 回到页面/恢复在线：本地已全答完但未收到结算确认 → 自动补结算
+    window.addEventListener('online', () => {
+      if (Date.now() - _lastEnsureAt < 15000) return
+      _lastEnsureAt = Date.now()
+      ensureActiveSetCompleted()
+    })
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushBeforeUnload()
+      if (document.visibilityState === 'hidden') { flushBeforeUnload(); return }
+      if (Date.now() - _lastEnsureAt < 15000) return
+      _lastEnsureAt = Date.now()
+      ensureActiveSetCompleted()
     })
   }
 
@@ -209,10 +243,15 @@ export const useQuizStore = defineStore('quiz', () => {
       const newSet = { questions: srvQs.slice(), userAnswers: cleanAnswers, currentIdx: 0, createdAt: Date.now() }
       ch.quizSets.push(newSet)
       ch.currentQuizSetIdx = ch.quizSets.length - 1
-      if (!ch.questions) ch.questions = []
-      ch.questions = srvQs.slice()
-      if (!ch.userAnswers) ch.userAnswers = []
-      ch.userAnswers = cleanAnswers
+      // 服务端会话并入本地题库（按题干去重补漏），绝不整体覆盖——多端合并时
+      // 本地题库可能比服务端会话更大更全，覆盖即丢题
+      if (!Array.isArray(ch.questions)) ch.questions = []
+      const have = new Set(ch.questions.map((q) => (q && q.question) || null))
+      srvQs.forEach((q) => {
+        if (q && q.question && !have.has(q.question)) { have.add(q.question); ch.questions.push(q) }
+      })
+      if (!Array.isArray(ch.userAnswers)) ch.userAnswers = []
+      rebuildChapterAnswersFromSets(ch)
     }
     data.saveState()
   }
@@ -365,6 +404,7 @@ export const useQuizStore = defineStore('quiz', () => {
     if (!as) return
     as.userAnswers = new Array(as.questions.length).fill(undefined)
     as.setCurrentIdx(0)
+    if (as._ref) { delete as._ref._finalized; delete as._ref._serverCompleted }
     data.saveState()
     if (as._isSet) { openQuiz('quiz'); return }
     closeQuiz()
@@ -378,21 +418,17 @@ export const useQuizStore = defineStore('quiz', () => {
   }
 
   function syncSetAnswersToChapter(ch, as) {
-    if (!as._isSet || !ch || !ch.quizSets || !ch.userAnswers) return
-    const qsIdx = ch.currentQuizSetIdx
-    if (qsIdx >= 0 && qsIdx < ch.quizSets.length) {
-      let offset = 0
-      for (let s = 0; s < qsIdx; s++) offset += ch.quizSets[s].questions.length
-      const qsA = ch.quizSets[qsIdx].userAnswers
-      for (let a = 0; a < qsA.length && (offset + a) < ch.userAnswers.length; a++) {
-        if (qsA[a] !== undefined && qsA[a] !== null) ch.userAnswers[offset + a] = qsA[a]
-      }
-    }
+    if (!as._isSet || !ch || !ch.quizSets) return
+    // 多端合并后题库可能经过去重（ch.questions 与各轮拼接不同序不同长），
+    // 逐位置偏移写入会串题；改为按题干把各轮答案重新对齐到题库
+    rebuildChapterAnswersFromSets(ch)
   }
 
   function endExam() {
     const as = activeSet.value
     if (!as) return
+    // 双击“查看报告/结束”防重：本轮只结算一次，避免重复历史记录/重复请求
+    if (isSetFinalized(as)) { openQuiz('report'); return }
     if (as._isSet) { endQuizSessionForSet(as); return }
     if (as.isExam) { endExamGenerated(); return }
     // 兼容旧数据路径
@@ -402,8 +438,12 @@ export const useQuizStore = defineStore('quiz', () => {
     syncAnswerToServerFinal()
     data.saveState()
     session.endedFromExam = false
+    markSetFinalized(as)
     openQuiz('report')
   }
+
+  function isSetFinalized(as) { return !!(as && as._ref && as._ref._finalized) }
+  function markSetFinalized(as) { if (as && as._ref) as._ref._finalized = true }
 
   function endQuizSessionForSet(as) {
     // 检测流式任务是否仍在运行
@@ -419,6 +459,7 @@ export const useQuizStore = defineStore('quiz', () => {
       checkAchievements(data.state)
       syncAnswerToServerFinal()
       data.saveState()
+      markSetFinalized(as)
       openQuiz('report')
       return
     }
@@ -430,10 +471,13 @@ export const useQuizStore = defineStore('quiz', () => {
     syncAnswerToServerFinal()
     data.saveState()
     session.endedFromExam = false
+    markSetFinalized(as)
     openQuiz('report')
   }
 
   function endExamGenerated() {
+    const as = activeSet.value
+    if (!as) return
     checkAchievements(data.state)
     syncAnswerToServerFinal()
     data.state.currentExamId = null
@@ -459,6 +503,7 @@ export const useQuizStore = defineStore('quiz', () => {
     markDontKnow, resetQuiz, endExam,
     startExam,
     restoreQuizFromServer, syncAnswerToServer, syncAnswerToServerFinal,
+    ensureActiveSetCompleted,
     bindLifecycle
   }
 })

@@ -48,6 +48,10 @@ function seedState() {
   }
 }
 
+function setupStores() {
+  return { ai: useAiStore(), ui: useUiStore() }
+}
+
 describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   let storage
   beforeEach(() => {
@@ -60,12 +64,8 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   })
   afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
 
-  function setup() {
-    return { ai: useAiStore(), ui: useUiStore() }
-  }
-
   it('saveAiConfig：模型记忆 + 密钥走 aiKeys 存储（state 不含明文）+ apiKeySet 置位', () => {
-    const { ai } = setup()
+    const { ai } = setupStores()
     ai.saveAiConfig({ provider: 'deepseek', model: 'deepseek-v4-pro', apiKey: 'sk-ds-1', systemPrompt: '你是助教' })
     const data = useDataStore()
     expect(data.state.aiConfig.provider).toBe('deepseek')
@@ -80,7 +80,7 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   })
 
   it('clearApiKey：清除后 apiKeySet 同步为 false', () => {
-    const { ai } = setup()
+    const { ai } = setupStores()
     const data = useDataStore()
     ai.saveAiConfig({ provider: 'ecnu', apiKey: 'sk-e' })
     expect(data.state.aiConfig.apiKeySet).toBe(true)
@@ -90,7 +90,7 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   })
 
   it('enqueueGenerate 前置校验：无复习资料拒绝入队（toast 提示）', () => {
-    const { ai, ui } = setup()
+    const { ai, ui } = setupStores()
     ai.enqueueGenerate('c1', { single: 2, judge: 0, term: 0, short: 0 })
     const data = useDataStore()
     expect(data.state.aiTaskQueue).toHaveLength(0)
@@ -98,7 +98,7 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   })
 
   it('hasTaskForChapter：章节已有 pending/running 任务时防重复入队（K1 守卫）', () => {
-    const { ai } = setup()
+    const { ai } = setupStores()
     const data = useDataStore()
     expect(ai.hasTaskForChapter('c1')).toBe(false)
     data.state.aiTaskQueue.push({ id: 't1', chapterId: 'c1', status: 'pending' })
@@ -110,14 +110,14 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   })
 
   it('testConnection：未配置密钥时抛出可读错误（不裸奔到网络层）', async () => {
-    const { ai } = setup()
+    const { ai } = setupStores()
     const data = useDataStore()
     data.state.aiConfig.provider = 'ecnu'
     await expect(ai.testConnection()).rejects.toThrow('请先保存 API 密钥')
   })
 
   it('rememberModel/recalledModel 按 provider 记忆模型', () => {
-    const { ai } = setup()
+    const { ai } = setupStores()
     const data = useDataStore()
     data.state.aiConfig.modelByProvider = undefined
     expect(ai.recalledModel('ecnu')).toBe('ecnu-plus') // 默认回退
@@ -126,3 +126,88 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   })
 })
 
+describe('resumeQueuedTasks 刷新恢复 (round4)', () => {
+  let storage
+  beforeEach(() => {
+    storage = makeLocalStorageStub({})
+    globalThis.localStorage = storage
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+
+  function seed(queue) {
+    const st = seedState()
+    st.aiTaskQueue = queue
+    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+  }
+
+  it('刷新前已在途的本地直连任务（_wasRunning 且无 serverTaskId）→ 标记失败并给出明确提示，不静默重复调用 AI', async () => {
+    seed([{ id: 't1', chapterId: 'c1', chapterName: '章一', status: 'pending', _wasRunning: true,
+      promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null,
+      questionCount: 0, error: '', streamQuestionCount: 0, streamSetRef: null, _expectedTotal: 5 }])
+    const { ai } = setupStores()
+    const data = useDataStore()
+    const task = data.state.aiTaskQueue[0]
+    expect(task.status).toBe('failed')
+    expect(task.error).toContain('页面被刷新')
+    expect(task._wasRunning).toBeUndefined()
+    // 没有空格子：会话/章节可重新出题（hasTaskForChapter 只看 pending/running）
+    expect(ai.hasTaskForChapter('c1')).toBe(false)
+  })
+
+  it('未开始的排队任务 → 自动续跑（runner 启动，开始执行任务）', async () => {
+    seed([{ id: 't2', chapterId: 'c1', chapterName: '章一', status: 'pending',
+      promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null,
+      questionCount: 0, error: '', streamQuestionCount: 0, streamSetRef: null, _expectedTotal: 5 }])
+    const { ai } = setupStores()
+    // 无资料 → 执行路径会以“资料已被删除”失败收场，但状态流转证明 runner 已接管
+    await vi.waitFor(() => {
+      const data = useDataStore()
+      const task = data.state.aiTaskQueue[0]
+      expect(['failed', 'completed']).toContain(task.status)
+      if (task.status === 'failed') expect(task.error).toContain('资料')
+      if (ai.runnerActive) throw new Error('runner 仍在运行')
+    }, { timeout: 2000, interval: 50 })
+  })
+})
+
+describe('pruneTaskQueue 队列剪枝 (round4)', () => {
+  let storage
+  beforeEach(() => {
+    storage = makeLocalStorageStub({})
+    globalThis.localStorage = storage
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+
+  it('completed/failed 只留最近 40 条，pending 任务与顺序不受影响', () => {
+    const st = seedState()
+    const mk = (id, status) => ({ id, chapterId: 'c1', chapterName: id, status, promptText: 'p'.repeat(100), materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null, questionCount: 0, error: '', streamQuestionCount: 0, _expectedTotal: 1 })
+    const queue = []
+    for (let i = 0; i < 60; i++) queue.push(mk('hist' + i, 'completed'))
+    queue.push(mk('pending1', 'pending'))
+    st.aiTaskQueue = queue
+    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+    const ai = useAiStore()
+    const data = useDataStore()
+    // 直接调用 prune（store 初始化时的自动 resume 已把 pending1 交给 runner，
+    // 无资料会失败收场——此处只验证剪枝语义本身）
+    ai.pruneTaskQueue()
+    const q = data.state.aiTaskQueue
+    // 60 条历史被裁到最近 40 条以内（剩余为最新历史，顺序保持原序）
+    expect(q.length).toBe(40)
+    expect(q[0].id).toBe('hist21')
+    expect(q.every((t) => t.id !== 'hist0' && t.id !== 'hist19')).toBe(true)
+    // 进行中/排队任务永不清除：构造 60 条历史 + 1 条 pending 后直接调用
+    data.state.aiTaskQueue = []
+    for (let i = 0; i < 60; i++) data.state.aiTaskQueue.push(mk('h' + i, 'failed'))
+    data.state.aiTaskQueue.push(mk('live1', 'pending'))
+    ai.pruneTaskQueue()
+    const q2 = data.state.aiTaskQueue
+    expect(q2.length).toBe(41)
+    expect(q2[q2.length - 1].id).toBe('live1')
+    expect(q2[0].id).toBe('h20')
+  })
+})

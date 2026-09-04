@@ -376,3 +376,95 @@ describe('mergeStates', () => {
     expect(m.chapterMaterials.c1[0].id).toBe('upload_7')
   })
 })
+
+describe('多端并发出题/答题合并 (round4)', () => {
+  const q = (text, ans) => ({ question: text, type: 'single', options: ['a','b','c','d'], answer: ans })
+
+  it('同轮次多端各自作答：mergeQuizSets 按题并集，任何一侧已答都不丢', () => {
+    const local = {
+      subjects: {}, chapters: {
+        c1: {
+          id: 'c1', name: '章一', questions: [q('Q1',0), q('Q2',1), q('Q3',2), q('Q4',3)],
+          userAnswers: [0, undefined, 2, undefined], currentIdx: 0,
+          quizSets: [{ questions: [q('Q1',0), q('Q2',1), q('Q3',2), q('Q4',3)], userAnswers: [0, undefined, 2, undefined], currentIdx: 1, createdAt: 1 }],
+        },
+      }, history: [], lastScreen: 'start', aiConfig: {},
+    }
+    const cloud = {
+      subjects: {}, chapters: {
+        c1: {
+          id: 'c1', name: '章一', questions: [q('Q1',0), q('Q2',1), q('Q3',2), q('Q4',3)],
+          userAnswers: [undefined, 1, undefined, 3], currentIdx: 0,
+          quizSets: [{ questions: [q('Q1',0), q('Q2',1), q('Q3',2), q('Q4',3)], userAnswers: [undefined, 1, undefined, 3], currentIdx: 2, createdAt: 1 }],
+        },
+      }, history: [], lastScreen: 'start', aiConfig: {},
+    }
+    const m = mergeStates(local, cloud).state
+    const set = m.chapters.c1.quizSets[0]
+    // 并集：本地答的 Q1/Q3 + 云端答的 Q2/Q4 全部保留
+    expect(set.userAnswers).toEqual([0, 1, 2, 3])
+    // 题库答案同步对齐
+    expect(m.chapters.c1.userAnswers).toEqual([0, 1, 2, 3])
+  })
+
+  it('同轮次去重合并后题库答案按题干对齐（池去重 ≠ 轮次和的场景）', () => {
+    // 云端池去重后 [A,B,C]；云端两轮：{A,B} 已答 B、{C} 已答 C；
+    // 本地同轮 {A,B} 已答 A → 合并后：池 3 题，答案按题干对齐为 [A:0, B:1, C:2]
+    const local = {
+      subjects: {}, chapters: {
+        c1: {
+          id: 'c1', name: '章一',
+          questions: [q('A',0), q('B',1), q('A',0), q('C',2)],
+          userAnswers: [0, undefined, undefined, undefined], currentIdx: 0,
+          quizSets: [{ questions: [q('A',0), q('B',1)], userAnswers: [0, undefined], currentIdx: 0, createdAt: 1 }],
+        },
+      }, history: [], lastScreen: 'start', aiConfig: {},
+    }
+    const cloud = {
+      subjects: {}, chapters: {
+        c1: {
+          id: 'c1', name: '章一',
+          questions: [q('A',0), q('B',1), q('C',2)],
+          userAnswers: [undefined, 1, 2], currentIdx: 0,
+          quizSets: [
+            { questions: [q('A',0), q('B',1)], userAnswers: [undefined, 1], currentIdx: 1, createdAt: 1 },
+            { questions: [q('C',2)], userAnswers: [2], currentIdx: 0, createdAt: 2 },
+          ],
+        },
+      }, history: [], lastScreen: 'start', aiConfig: {},
+    }
+    const m = mergeStates(local, cloud).state
+    const ch = m.chapters.c1
+    expect(ch.questions.map((x) => x.question)).toEqual(['A', 'B', 'C'])
+    // 池按文本对齐：A←本地轮 0（云端该题未答）；B←云端 1；C←云端第二轮 2
+    expect(ch.userAnswers).toEqual([0, 1, 2])
+    // {A,B} 轮合并为 1 轮（答案并集 [0,1]），{C} 轮独立保留
+    expect(ch.quizSets).toHaveLength(2)
+    expect(ch.quizSets[0].userAnswers).toEqual([0, 1])
+    expect(ch.quizSets[1].questions.map((x) => x.question)).toEqual(['C'])
+  })
+
+  it('本地未答、云端已答 → 合并后仍显示云端答案（进度不倒退）', () => {
+    const local = {
+      subjects: {}, chapters: {
+        c1: {
+          id: 'c1', name: '章一', questions: [q('A',0), q('B',1)],
+          userAnswers: [undefined, undefined], currentIdx: 0,
+          quizSets: [{ questions: [q('A',0), q('B',1)], userAnswers: [undefined, undefined], currentIdx: 0, createdAt: 1 }],
+        },
+      }, history: [], lastScreen: 'start', aiConfig: {},
+    }
+    const cloud = {
+      subjects: {}, chapters: {
+        c1: {
+          id: 'c1', name: '章一', questions: [q('A',0), q('B',1)],
+          userAnswers: [0, 1], currentIdx: 0,
+          quizSets: [{ questions: [q('A',0), q('B',1)], userAnswers: [0, 1], currentIdx: 0, createdAt: 1 }],
+        },
+      }, history: [], lastScreen: 'start', aiConfig: {},
+    }
+    const m = mergeStates(local, cloud).state
+    expect(m.chapters.c1.quizSets[0].userAnswers).toEqual([0, 1])
+    expect(m.chapters.c1.userAnswers).toEqual([0, 1])
+  })
+})

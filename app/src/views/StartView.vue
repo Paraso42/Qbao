@@ -149,8 +149,12 @@ const quickInfo = computed(() => {
 })
 
 function onQuickAction() {
-  if (setFinished.value && setTotal.value > 0) quiz.openQuiz('report')
-  else quiz.startSession()
+  if (setFinished.value && setTotal.value > 0) {
+    // 查看已完成轮次的报告：顺带补发最终结算（离线作答/结算中断时服务端还停在
+    // in_progress，不补会锁死“开始出题”）；服务端增量结算，重复发送幂等
+    quiz.ensureActiveSetCompleted()
+    quiz.openQuiz('report')
+  } else quiz.startSession()
 }
 
 function createFirstSubject() {

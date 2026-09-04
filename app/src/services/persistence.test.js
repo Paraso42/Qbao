@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 // T12: saveState 写失败可见化 + 体积预警 + 瞬态字段恢复
 // （node 环境无 localStorage，用内存 stub 模拟）
@@ -158,5 +158,58 @@ describe('persistence.saveState (T12)', () => {
     expect(res.ok).toBe(true)
     expect(hooks.some((h) => !h.fatal && h.msg.includes('接近上限'))).toBe(true)
     expect(storage.getItem(mod.STORAGE_KEY)).toBeTruthy()
+  })
+})
+
+
+describe('大考卷活动会话 (round4)', () => {
+  let storage
+  let mod
+  beforeEach(async () => {
+    storage = makeLocalStorageStub()
+    globalThis.localStorage = storage
+    vi.resetModules()
+    mod = await import('./persistence')
+  })
+  afterEach(() => { delete globalThis.localStorage })
+  it('大考卷活动会话同步持久化：答题中刷新考卷题目/答案/进度不丢', async () => {
+    const state = {
+      currentExamId: 'exam_x1',
+      generatedExams: {
+        exam_x1: {
+          id: 'exam_x1', name: '大考卷', subjectId: 's1',
+          questions: [{ id: 1, question: 'E1' }, { id: 2, question: 'E2' }, { id: 3, question: 'E3' }],
+          userAnswers: [1, undefined, 0],
+          currentIdx: 2,
+        },
+      },
+      subjects: {}, chapters: {},
+    }
+    mod.saveState(state)
+    const raw = storage.getItem(mod.ACTIVE_EXAM_KEY)
+    expect(raw).toBeTruthy()
+    const exam = JSON.parse(raw)
+    expect(exam.examId).toBe('exam_x1')
+    expect(exam.questions).toHaveLength(3)
+    expect(exam.userAnswers).toEqual([1, null, 0])
+    expect(exam.currentIdx).toBe(2)
+
+    // 骨架态（无 generatedExams）+ 活动键 → hydrate 完整回填考卷
+    const skeleton = { currentExamId: 'exam_x1', generatedExams: {}, subjects: {}, chapters: {} }
+    await mod.hydrateState(skeleton)
+    const restored = skeleton.generatedExams.exam_x1
+    expect(restored.questions).toHaveLength(3)
+    expect(restored.userAnswers).toEqual([1, undefined, 0])
+    expect(restored.currentIdx).toBe(2)
+
+    // 考卷已从 IDB/云端恢复时：活动键答案优先覆盖（活动键每次保存必最新）
+    const withExam = {
+      currentExamId: 'exam_x1',
+      generatedExams: { exam_x1: { id: 'exam_x1', name: '大考卷', subjectId: 's1', questions: [{ id: 1, question: 'E1' }, { id: 2, question: 'E2' }], userAnswers: [9, 9], currentIdx: 0 } },
+      subjects: {}, chapters: {},
+    }
+    await mod.hydrateState(withExam)
+    expect(withExam.generatedExams.exam_x1.userAnswers).toEqual([1, undefined])
+    expect(withExam.generatedExams.exam_x1.currentIdx).toBe(2)
   })
 })
