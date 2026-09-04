@@ -32,6 +32,12 @@ describe('桌面端镜像分发 API', () => {
     expect(r2.status).toBe(404);
   });
 
+  it('短链 /download 302 跳转到下载端点', async () => {
+    const r = await request(app).get('/download');
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/api/v1/desktop/download');
+  });
+
   it('latest 返回最新版元信息（meta.json 优先，含 sha256/大小/日期）', async () => {
     putFile('Qbao-Setup-3.33.1.exe', 'old');
     putFile('Qbao-Setup-3.34.0.exe', Buffer.alloc(2048, 7));
