@@ -269,8 +269,12 @@ export const useAiStore = defineStore('ai', () => {
     task.questionCount = task.questionCount || 0
     abortController.value = null
     data.saveState()
-    const msg = task.chapterName + ' 完成，生成 ' + task.questionCount + ' 题'
-    ui.toast(msg, 'ok')
+    const expected = task._expectedTotal
+    const short = typeof expected === 'number' && expected > 0 && task.questionCount < expected
+    const msg = short
+      ? task.chapterName + ' 完成，生成 ' + task.questionCount + '/' + expected + ' 题（AI 未能补足题量，可重试一次）'
+      : task.chapterName + ' 完成，生成 ' + task.questionCount + ' 题'
+    ui.toast(msg, short ? 'info' : 'ok')
   }
 
   function failTask(task, error) {

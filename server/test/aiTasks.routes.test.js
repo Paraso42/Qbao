@@ -18,6 +18,7 @@ describe('AI 后台任务 API', () => {
     let insertedRequest = null;
     installFakePool([
       [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
+      [/INSERT INTO ai_generation_locks/, async () => ({ rows: [{ id: 1 }] })],
       [/INSERT INTO ai_tasks \(user_id, chapter_id, status, request_json\)/, async (_sql, params) => {
         insertedRequest = JSON.parse(params[3]);
         return {
@@ -56,6 +57,7 @@ describe('AI 后台任务 API', () => {
   it('同一章节已有进行中任务 → 409（多端并发防重复生成 round5.1）', async () => {
     installFakePool([
       [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
+      [/INSERT INTO ai_generation_locks/, async () => ({ rows: [{ id: 1 }] })],
       [/SELECT id FROM ai_tasks WHERE user_id = \$1 AND chapter_id = \$2 AND status IN/, async () => ({ rows: [{ id: 7 }] })],
     ]);
 
@@ -68,7 +70,43 @@ describe('AI 后台任务 API', () => {
       .send({ textContent: '资料', typeCounts: { single: 1, judge: 0, term: 0, short: 0 }, chapterId: 'ch1' });
 
     expect(res.status).toBe(409);
-    expect(res.body.error).toContain('已有任务在生成中');
+    expect(res.body.error).toContain('正在生成中');
+  });
+
+  it('同章节生成锁被直连生成占用 → 创建任务 409（round6 跨路径互斥）', async () => {
+    installFakePool([
+      [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
+      // 不 stub 锁插入 → 视为锁已被占用（直连生成中）
+    ]);
+
+    const res = await request(app)
+      .post('/api/v1/ai/tasks')
+      .set('Authorization', 'Bearer ' + token)
+      .set('x-ai-api-key', 'sk-test-key-1234567890')
+      .set('x-ai-provider', 'ecnu')
+      .set('x-ai-model', 'ecnu-plus')
+      .send({ textContent: '资料', typeCounts: { single: 1, judge: 0, term: 0, short: 0 }, chapterId: 'ch1' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('正在生成中');
+  });
+
+  it('直连 /ai/generate 遇同章节任务/直连生成进行中 → 409（不调用模型，round6）', async () => {
+    installFakePool([
+      [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
+      // answer_sessions 无进行中会话 + 锁插入失败（已有生成）→ 409
+    ]);
+
+    const res = await request(app)
+      .post('/api/v1/ai/generate')
+      .set('Authorization', 'Bearer ' + token)
+      .set('x-ai-api-key', 'sk-test-key-1234567890')
+      .set('x-ai-provider', 'ecnu')
+      .set('x-ai-model', 'ecnu-plus')
+      .send({ textContent: '资料', typeCounts: { single: 1, judge: 0, term: 0, short: 0 }, chapterId: 'ch1' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('正在生成中');
   });
 
   it('未知 Provider 创建任务 → 422', async () => {
