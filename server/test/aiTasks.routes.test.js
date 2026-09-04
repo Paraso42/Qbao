@@ -53,6 +53,24 @@ describe('AI 后台任务 API', () => {
     expect(JSON.stringify(insertedRequest)).not.toContain('sk-test-key');
   });
 
+  it('同一章节已有进行中任务 → 409（多端并发防重复生成 round5.1）', async () => {
+    installFakePool([
+      [/SELECT is_banned FROM users/, async () => ({ rows: [] })],
+      [/SELECT id FROM ai_tasks WHERE user_id = \$1 AND chapter_id = \$2 AND status IN/, async () => ({ rows: [{ id: 7 }] })],
+    ]);
+
+    const res = await request(app)
+      .post('/api/v1/ai/tasks')
+      .set('Authorization', 'Bearer ' + token)
+      .set('x-ai-api-key', 'sk-test-key-1234567890')
+      .set('x-ai-provider', 'ecnu')
+      .set('x-ai-model', 'ecnu-plus')
+      .send({ textContent: '资料', typeCounts: { single: 1, judge: 0, term: 0, short: 0 }, chapterId: 'ch1' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('已有任务在生成中');
+  });
+
   it('未知 Provider 创建任务 → 422', async () => {
     installFakePool([[/SELECT is_banned FROM users/, async () => ({ rows: [] })]]);
 
