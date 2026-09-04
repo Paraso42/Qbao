@@ -45,6 +45,54 @@ export const useAiStore = defineStore('ai', () => {
 
   const aiConfig = computed(() => data.state.aiConfig || {})
 
+  // —— 任务执行归属（round5.1：多端重复生成修复） ——
+  // 多窗口/多端同时在线时，云端队列合并会把一端创建的任务带到另一端；老逻辑对
+  // “合并进来的 pending 任务”也自动执行 → 一次点击被多处生成（14:38/15:24 实测
+  // 各多出一轮本地直连题目：一端走服务端任务、另一端本地直连，两轮内容不同）。
+  // 现在任务只允许创建它的实例执行：
+  //  · enqueueGenerate 打 _owner（标签页会话 id，sessionStorage；刷新同标签页不变，
+  //    新标签页/新端是新 id）
+  //  · 他端见到的 pending 任务不执行，等属主结果（服务端任务由轮询导入，不重复调 AI）
+  //  · 属主失联（创建超过 CLAIM_MS 仍 pending/running 无进展）才允许接管/标记
+  //  · 旧版本遗留无属主任务：只接管陈旧的，避免误执行他端新任务
+  const CLAIM_MS = 10 * 60 * 1000
+  let _myOwner = null
+  function myOwnerId() {
+    if (_myOwner) return _myOwner
+    try {
+      const k = 'qbao_task_owner'
+      const ss = (typeof sessionStorage !== 'undefined') ? sessionStorage : null
+      let v = ss ? ss.getItem(k) : null
+      if (!v) {
+        v = 'o_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9)
+        if (ss) ss.setItem(k, v)
+      }
+      _myOwner = v
+    } catch (e) {
+      _myOwner = 'o_' + Date.now().toString(36)
+    }
+    return _myOwner
+  }
+  function taskStale(t) {
+    const created = typeof t.createdAt === 'number' ? t.createdAt : 0
+    return !created || Date.now() - created > CLAIM_MS
+  }
+  // 本端是否可以执行该任务（AI 调用全局只能发生一次）：
+  //  · 带 serverTaskId → 执行只是轮询复用已有服务端任务，不会重复调 AI → 任何端都可（恢复路径）
+  //  · 无 serverTaskId（本地直连）→ 仅属主可执行；无属主/他端任务只在他端失联后才接管
+  function mayExecutePending(t) {
+    if (!t || t.status !== 'pending') return false
+    if (t.serverTaskId) return true
+    if (!t._owner) return taskStale(t)
+    if (t._owner === myOwnerId()) return true
+    return taskStale(t)
+  }
+  // 失败标记类操作（刷新取消/在途判定）只对“属主为本端或无属主旧任务”生效，
+  // 不干预他端正在执行的任务（本地优先合并不会覆盖属主副本，标记只会造成噪音）
+  function taskOwnedByMeOrLegacy(t) {
+    return !t || !t._owner || t._owner === myOwnerId()
+  }
+
   const providersError = ref('')
   async function ensureProviders(force = false) {
     if (providersLoaded.value && !force) return providers.value
@@ -157,6 +205,7 @@ export const useAiStore = defineStore('ai', () => {
 
     const task = {
       id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2),
+      _owner: myOwnerId(),
       chapterId,
       chapterName: ch.name,
       status: 'pending',
@@ -184,7 +233,8 @@ export const useAiStore = defineStore('ai', () => {
 
   async function runnerLoop() {
     while (runnerActive.value) {
-      const pendingTask = data.state.aiTaskQueue.find((t) => t.status === 'pending')
+      // 只执行本端有归属的任务（他端任务等属主结果；服务端任务轮询复用）
+      const pendingTask = data.state.aiTaskQueue.find((t) => mayExecutePending(t))
       if (!pendingTask) { runnerActive.value = false; return }
       await executeTask(pendingTask)
       if (!runnerActive.value) return
@@ -430,19 +480,24 @@ export const useAiStore = defineStore('ai', () => {
     queue.forEach((t) => {
       if (!t) return
       if (t.status === 'running' && !t.serverTaskId) {
-        // 云端带回的“运行中”本地直连任务 = 刷新/断线中断残留，本端无执行体
-        t.status = 'failed'
-        t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
-        changed = true
+        // 云端带回的“运行中”本地直连任务：属主为本端/旧任务/属主失联 → 明确失败防止
+        // 卡死或重复调用 AI；他端在途任务不干预（由属主实例继续/善后）
+        if (taskOwnedByMeOrLegacy(t) || taskStale(t)) {
+          t.status = 'failed'
+          t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
+          changed = true
+        }
       }
       if (t._wasRunning && !t.serverTaskId && t.status !== 'failed') {
-        // 刷新前已在途、AI 请求可能已扣费 → 明确失败，不静默重跑
-        t.status = 'failed'
-        t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
-        changed = true
+        // 刷新前已在途、AI 请求可能已扣费 → 属主明确失败，不静默重跑
+        if (taskOwnedByMeOrLegacy(t)) {
+          t.status = 'failed'
+          t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
+          changed = true
+        }
       }
       delete t._wasRunning
-      if (t.status === 'pending') needRunner = true
+      if (t.status === 'pending' && mayExecutePending(t)) needRunner = true
       if (t.serverTaskId && (t.status === 'pending' || t.status === 'running')) needPolling = true
     })
     if (changed) data.saveState()
@@ -465,10 +520,12 @@ export const useAiStore = defineStore('ai', () => {
       // 本地直连且刷新前已在途（_wasRunning）：无法得知 AI 请求是否已扣费/已生成，
       // 直接续跑会重复调用 AI → 标记失败并明确提示，让用户重试
       if (t._wasRunning && !t.serverTaskId) {
-        t.status = 'failed'
-        t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
-        changed = true
-        dropEmptyStreamSet(t)
+        if (taskOwnedByMeOrLegacy(t)) {
+          t.status = 'failed'
+          t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
+          changed = true
+          dropEmptyStreamSet(t)
+        }
       }
       delete t._wasRunning
     })

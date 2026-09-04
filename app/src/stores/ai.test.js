@@ -30,6 +30,25 @@ function makeLocalStorageStub(seed = {}) {
   }
 }
 
+function makeSessionStorageStub(seed = {}) {
+  const map = new Map(Object.entries(seed))
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { map.set(k, String(v)) },
+    removeItem: (k) => { map.delete(k) },
+    _map: map,
+  }
+}
+
+// 与 store 内 myOwnerId() 同键的会话属主 id（每个测试进程稳定）
+function ownerId() {
+  const key = 'qbao_task_owner'
+  if (!globalThis.sessionStorage) globalThis.sessionStorage = makeSessionStorageStub()
+  let v = globalThis.sessionStorage.getItem(key)
+  if (!v) { v = 'o_test_instance'; globalThis.sessionStorage.setItem(key, v) }
+  return v
+}
+
 function seedState() {
   return {
     subjects: { s1: { id: 's1', name: '科目', chapterIds: ['c1'], collapsed: false } },
@@ -58,12 +77,13 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
   beforeEach(() => {
     storage = makeLocalStorageStub({})
     globalThis.localStorage = storage
+      globalThis.sessionStorage = makeSessionStorageStub()
     setActivePinia(createPinia())
     storage.setItem(STORAGE_KEY, JSON.stringify(seedState()))
     useDataStore()
     vi.clearAllMocks()
   })
-  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.sessionStorage; vi.restoreAllMocks() })
 
   it('saveAiConfig：模型记忆 + 密钥走 aiKeys 存储（state 不含明文）+ apiKeySet 置位', () => {
     const { ai } = setupStores()
@@ -150,10 +170,11 @@ describe('resumeQueuedTasks 刷新恢复 (round4)', () => {
   beforeEach(() => {
     storage = makeLocalStorageStub({})
     globalThis.localStorage = storage
+      globalThis.sessionStorage = makeSessionStorageStub()
     setActivePinia(createPinia())
     vi.clearAllMocks()
   })
-  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.sessionStorage; vi.restoreAllMocks() })
 
   function seed(queue) {
     const st = seedState()
@@ -178,7 +199,7 @@ describe('resumeQueuedTasks 刷新恢复 (round4)', () => {
   it('未开始的排队任务 → 自动续跑（runner 启动，开始执行任务）', async () => {
     seed([{ id: 't2', chapterId: 'c1', chapterName: '章一', status: 'pending',
       promptText: 'p', materialNames: [], strategySnapshot: null, createdAt: 1, completedAt: null,
-      questionCount: 0, error: '', streamQuestionCount: 0, streamSetRef: null, _expectedTotal: 5 }])
+      questionCount: 0, error: '', streamQuestionCount: 0, streamSetRef: null, _expectedTotal: 5, _owner: ownerId() }])
     const { ai } = setupStores()
     // 无资料 → 执行路径会以“资料已被删除”失败收场，但状态流转证明 runner 已接管
     await vi.waitFor(() => {
@@ -196,10 +217,11 @@ describe('pruneTaskQueue 队列剪枝 (round4)', () => {
   beforeEach(() => {
     storage = makeLocalStorageStub({})
     globalThis.localStorage = storage
+      globalThis.sessionStorage = makeSessionStorageStub()
     setActivePinia(createPinia())
     vi.clearAllMocks()
   })
-  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.sessionStorage; vi.restoreAllMocks() })
 
   it('completed/failed 只留最近 40 条，pending 任务与顺序不受影响', () => {
     const st = seedState()
@@ -236,10 +258,11 @@ describe('reconcileQueue 合并后重裁决 (round4.1)', () => {
   beforeEach(() => {
     storage = makeLocalStorageStub({})
     globalThis.localStorage = storage
+      globalThis.sessionStorage = makeSessionStorageStub()
     setActivePinia(createPinia())
     vi.clearAllMocks()
   })
-  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.sessionStorage; vi.restoreAllMocks() })
 
   function setupSeed(queue, opts = {}) {
     const st = seedState()
@@ -295,5 +318,88 @@ describe('reconcileQueue 合并后重裁决 (round4.1)', () => {
       expect(['running', 'failed', 'completed']).toContain(t.status)
     }, { timeout: 2000, interval: 50 })
     // 无资料环境最终以失败收场（资料已被删除）——关键是从 pending 被接管执行
+  })
+})
+
+describe('reconcileQueue 执行归属：同一任务只允许一个端执行 (round5.1)', () => {
+  let storage
+  beforeEach(() => {
+    storage = makeLocalStorageStub({})
+    globalThis.localStorage = storage
+    globalThis.sessionStorage = makeSessionStorageStub()
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.sessionStorage; vi.restoreAllMocks() })
+
+  function seed(queue) {
+    const st = seedState()
+    st.aiTaskQueue = queue
+    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+  }
+  function makeTask(over) {
+    return { id: 't_x', chapterId: 'c1', chapterName: '章一', status: 'pending',
+      promptText: 'p', materialNames: [], strategySnapshot: null,
+      createdAt: Date.now(), completedAt: null, questionCount: 0, error: '',
+      streamQuestionCount: 0, streamSetRef: null, _expectedTotal: 5, ...(over || {}) }
+  }
+
+  it('他端（不同 _owner）新 pending 任务 → 本端不执行，保持排队等属主', () => {
+    seed([makeTask({ id: 't_foreign', _owner: 'o_other_device' })])
+    const ai = useAiStore()
+    const task = useDataStore().state.aiTaskQueue[0]
+    expect(task.status).toBe('pending')
+    expect(task.error).toBe('')
+    expect(ai.runnerActive).toBe(false)
+  })
+
+  it('本端属主 pending 任务 → 正常进入执行（无资料以失败收场，状态流转证明归属生效）', async () => {
+    seed([makeTask({ id: 't_mine', _owner: ownerId() })])
+    const ai = useAiStore()
+    await vi.waitFor(() => {
+      const data = useDataStore()
+      const task = data.state.aiTaskQueue[0]
+      expect(['failed', 'completed']).toContain(task.status)
+      if (task.status === 'failed') expect(task.error).toContain('资料')
+      if (ai.runnerActive) throw new Error('runner 仍在运行')
+    }, { timeout: 2500, interval: 50 })
+  })
+
+  it('他端失联（创建超 10 分钟）的 pending 任务 → 本端接管执行', async () => {
+    const old = Date.now() - 11 * 60 * 1000
+    seed([makeTask({ id: 't_stale', _owner: 'o_dead_device', createdAt: old })])
+    const ai = useAiStore()
+    await vi.waitFor(() => {
+      const data = useDataStore()
+      const task = data.state.aiTaskQueue[0]
+      expect(['failed', 'completed']).toContain(task.status)
+      if (ai.runnerActive) throw new Error('runner 仍在运行')
+    }, { timeout: 2500, interval: 50 })
+  })
+
+  it('他端在途/待处理任务（云端带回）→ 本端不标记失败、不执行（本地优先合并不覆盖属主）', () => {
+    seed([makeTask({ id: 't_run', _owner: 'o_other_device', status: 'running' })])
+    useAiStore()
+    const task = useDataStore().state.aiTaskQueue[0]
+    // migrateState 会把 running 归一为 pending+_wasRunning；因非属主，不做失败标记
+    expect(task.status).toBe('pending')
+    expect(task.error).toBe('')
+  })
+
+  it('带 serverTaskId 的 pending 任务（任意端）→ 走复用轮询路径（不新建服务端任务、不本地调 AI）', async () => {
+    seed([makeTask({ id: 't_server', _owner: 'o_other_device', serverTaskId: 99 })])
+    const ai = useAiStore()
+    // 复用路径会启动轮询（本测试 stub 无有效响应 → 最终以失败/完成收场，证明它被接管
+    // 而非卡在 pending；关键在于不会 createAiServerTask/本地直连）
+    await vi.waitFor(() => {
+      const data = useDataStore()
+      const task = data.state.aiTaskQueue[0]
+      if (task.status === 'pending') throw new Error('未被接管')
+    }, { timeout: 3000, interval: 50 })
+    const task = useDataStore().state.aiTaskQueue[0]
+    expect(['failed', 'completed']).toContain(task.status)
+    // 未创建任何新服务端任务（createAiServerTask 未被调用）
+    const { createAiServerTask } = await import('../services/aiApi')
+    expect(createAiServerTask).not.toHaveBeenCalled()
   })
 })

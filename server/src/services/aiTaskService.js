@@ -70,6 +70,16 @@ async function createAiTask(userId, { providerName, model, apiKey, body }) {
   // 章节未完成规则校验（与 /ai/generate 一致）：未做完题目不允许继续出题
   await assertChapterCanGenerate(userId, body.chapterId || null);
 
+  // 同一章节已有进行中（queued/running）任务 → 409（round5.1：多端/多窗口并发点击时
+  // 客户端执行归属是第一道防线，这里做服务端兜底，防止两个端都为同一次出题建任务）
+  const activeSameChapter = await pool.query(
+    "SELECT id FROM ai_tasks WHERE user_id = $1 AND chapter_id = $2 AND status IN ('queued', 'running') LIMIT 1",
+    [userId, body.chapterId || null]
+  );
+  if (activeSameChapter.rows.length > 0) {
+    throw new ApiError(409, '该章节已有任务在生成中，请等待完成后再试');
+  }
+
   // 队列公平：每用户同时 queued+running 任务数上限（防一人占满串行 worker）
   const queueCount = await pool.query(
     "SELECT COUNT(*)::int AS c FROM ai_tasks WHERE user_id = $1 AND status IN ('queued', 'running')",
