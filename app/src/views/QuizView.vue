@@ -29,7 +29,7 @@
 
         <!-- 主观题作答 -->
         <div v-else class="quiz-options">
-          <textarea v-if="!hasAnswer" v-model="subjective" class="textarea subj-input" rows="4"
+          <textarea v-if="!hasAnswer" ref="subjInput" v-model="subjective" class="textarea subj-input" rows="4"
             placeholder="输入你的答案..." @keydown="onSubjKeydown"></textarea>
           <div v-else class="subj-done">
             <div class="subj-label">你的答案</div>
@@ -144,6 +144,7 @@ const ui = useUiStore()
 const user = useUserStore()
 
 const subjective = ref('')
+const subjInput = ref(null)
 const wrongOnly = ref(false)
 const typeMap = { single: '单选题', judge: '判断题', term: '名词解释', short: '简答题' }
 
@@ -288,6 +289,23 @@ watch(() => quiz.session.view, (v) => {
 // 修复：主观题答案复用 — 切换题目时清空输入框，防止上一题答案带入下一题
 // （已答题由 hasAnswer 分支显示历史答案，不受影响）
 watch(idx, () => { subjective.value = '' })
+
+// 主观题自动聚焦：进入名词解释/简答题且未作答时，光标自动落入输入框并闪烁，
+// 用户可直接全键盘操作（答题→回车提交→下一题自动聚焦），省去一次鼠标点击
+function focusSubjectiveInput() {
+  const qq = q.value
+  if (!qq || !qq.type || (qq.type !== 'term' && qq.type !== 'short')) return
+  if (hasAnswer.value) return
+  requestAnimationFrame(() => {
+    try { if (subjInput.value && typeof subjInput.value.focus === 'function') subjInput.value.focus() } catch (e) { /* noop */ }
+  })
+}
+watch(
+  [() => quiz.session.modalOpen, () => quiz.session.view, idx, hasAnswer],
+  () => {
+    if (quiz.session.modalOpen && quiz.session.view === 'quiz') focusSubjectiveInput()
+  }
+)
 
 // 键盘快捷键（同 legacy setupQuizKeyboard）
 function onKeydown(e) {

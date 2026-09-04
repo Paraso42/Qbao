@@ -68,11 +68,8 @@ export function createServerTaskController({ data, user, ui }) {
         }
       }
     })
-    // 已导入/已结束的任务不再占列表（防止重复导入按钮）
-    serverTasks.value = serverTasks.value.filter((st) => {
-      if (st.status === 'completed' && isServerTaskImported(st.id)) return false
-      return true
-    })
+    // 历史保留：已完成（含已导入）任务继续留在列表供查看出题历史；
+    // 重复导入由 importServerTaskResult / isServerTaskImported 幂等守卫拦截
   }
 
   function isServerTaskImported(id) {
@@ -118,8 +115,7 @@ export function createServerTaskController({ data, user, ui }) {
     const set = data.createQuizSetForChapter(questions, serverTask.chapterId)
     markServerTaskImported(serverTask.id)
     data.saveState()
-    // 导入后立即从列表移除，按钮消失
-    serverTasks.value = serverTasks.value.filter((st) => st.id !== serverTask.id)
+    // 保留在列表中并显示"已导入"（出题历史可查）
     ui.toast('已导入 ' + questions.length + ' 题', 'ok')
     return set
   }

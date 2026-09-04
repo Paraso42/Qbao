@@ -8,6 +8,7 @@ import { getToken } from './api'
 import { sleep, fetchWithRetry } from './utils'
 import { idbGetMaterial } from './materialsDb'
 import { aiUploadFiles, aiStreamGenerate } from './aiApi'
+import { computeStrategyTargets } from './strategy'
 
 export const AI_MAX_ATTEMPTS = 3
 
@@ -28,13 +29,18 @@ export function applyStrategyCompliance(task, questions) {
   })
   const st = task.strategySnapshot
   const totalQ2 = (st ? st.typeCounts.single + st.typeCounts.judge + st.typeCounts.term + st.typeCounts.short : questions.length) || questions.length
-  const expErr = Math.round(totalQ2 * (st ? st.errPct : 60) / 100)
-  const expRev = Math.round(totalQ2 * (st ? st.reviewPct : 20) / 100)
-  const expNew = totalQ2 - expErr - expRev
+  // 与 generatePromptText 同一配额换算（取整 clamp、无标签并入 new）——期望值与提示词一致
+  const target = computeStrategyTargets(
+    totalQ2,
+    st ? st.errPct : 60,
+    st ? st.reviewPct : 20,
+    st ? st.errorTags : [],
+    st ? st.reviewTags : []
+  )
   task.strategyCompliance = {
-    expected: { error: expErr, review: expRev, new: expNew },
+    expected: { error: target.error, review: target.review, new: target.new },
     actual: sc,
-    ok: Math.abs(sc.error - expErr) <= 2 && Math.abs(sc.review - expRev) <= 2 && Math.abs(sc.new - expNew) <= 2
+    ok: Math.abs(sc.error - target.error) <= 2 && Math.abs(sc.review - target.review) <= 2 && Math.abs(sc.new - target.new) <= 2
   }
 }
 

@@ -120,6 +120,23 @@ export function applyDualSlider(s, v1, v2) {
   return { err: v1, review: rPct, newP: nPct }
 }
 
+// ===== 出题策略配额换算（生成提示词 / 策略符合度核算共用） =====
+// err/review 按百分比取整、new 取余——顺序 clamp 防取整溢出为负数
+// （如 5 题、错题50%+复习50% 时 round(2.5)+round(2.5)=6 > 5，旧逻辑会得到 -1 道）。
+// 错题/复习标签为空时无从出"对应标签变式题"，该类配额并入新考点（提示词文案同步说明）。
+export function computeStrategyTargets(totalQ, errPct, reviewPct, errorTags, reviewTags) {
+  const errTarget = Math.max(0, Math.min(totalQ, Math.round(totalQ * (errPct || 0) / 100)))
+  const reviewTarget = Math.max(0, Math.min(totalQ - errTarget, Math.round(totalQ * (reviewPct || 0) / 100)))
+  let newTarget = totalQ - errTarget - reviewTarget
+  const errMerged = errTarget > 0 && !(Array.isArray(errorTags) && errorTags.length > 0)
+  const revMerged = reviewTarget > 0 && !(Array.isArray(reviewTags) && reviewTags.length > 0)
+  let errOut = errTarget
+  let reviewOut = reviewTarget
+  if (errMerged) { newTarget += errOut; errOut = 0 }
+  if (revMerged) { newTarget += reviewOut; reviewOut = 0 }
+  return { error: errOut, review: reviewOut, new: newTarget, errMerged, revMerged }
+}
+
 // ===== 出题提示词（语义同 legacy generatePromptText） =====
 export function generatePromptText(state, chId) {
   const s = getChStrategy(state, chId)
@@ -130,7 +147,6 @@ export function generatePromptText(state, chId) {
   const short = s.typeCounts.short || 0
   const errPct = s.errPct || 0
   const reviewPct = s.reviewPct || 0
-  const newPct = s.newPct || 0
 
   const parts = []
   if (single > 0) parts.push(single + ' 道单选题')
@@ -139,9 +155,10 @@ export function generatePromptText(state, chId) {
   if (short > 0) parts.push(short + ' 道简答题')
   const qStr = parts.join('，') || '请自行决定题型与数量'
   const totalQ = single + judge + term + short
-  const errTarget = Math.round(totalQ * errPct / 100)
-  const reviewTarget = Math.round(totalQ * reviewPct / 100)
-  const newTarget = totalQ - errTarget - reviewTarget
+  const allocation = computeStrategyTargets(totalQ, errPct, reviewPct, s.errorTags, s.reviewTags)
+  const errTarget = allocation.error
+  const reviewTarget = allocation.review
+  const newTarget = allocation.new
 
   const errorTags = s.errorTags || []
   const reviewTags = s.reviewTags || []
@@ -166,19 +183,31 @@ export function generatePromptText(state, chId) {
   base += '注意：复习标签和错题标签都可能包含正确率不为 100% 的标签。正确率仅作为出题侧重参考，不是分类依据。\n\n'
   base += '【出题要求】\n'
   base += '1. 题型与数量：' + qStr + '。\n'
-  base += '2. 内容来源：必须严格基于提供的资料。\n'
-  base += '3. 格式要求：只输出纯文本的 JSON 数组。含有数学符号、上下标、分式、根号、积分、求和等内容的题目，必须使用 $...$ 包裹行内公式（如 $E=mc^2$、$x_1$），使用 $$...$$ 包裹独立公式块（如 $$\\sum_{i=1}^{n} x_i$$）。\n'
-  base += '4. JSON 字段结构：所有题目必须包含 id, type("single"/"judge"/"term"/"short"), tag(知识点标签), question, explanation, strategy("error"/"review"/"new")。\n'
+  base += '2. 内容来源：必须严格基于提供的资料，不得编造资料中不存在的事实。\n'
+  base += '3. 避免重复：同一知识点不得输出与资料示例或此前已出题目雷同的题，请变换问法、场景或数值（变式题）。\n'
+  base += '4. 格式要求：只输出纯文本的 JSON 数组。含有数学符号、上下标、分式、根号、积分、求和等内容的题目，必须使用 $...$ 包裹行内公式（如 $E=mc^2$、$x_1$），使用 $$...$$ 包裹独立公式块（如 $$\\sum_{i=1}^{n} x_i$$）。\n'
+  base += '5. JSON 字段结构：所有题目必须包含 id, type("single"/"judge"/"term"/"short"), tag(知识点标签), question, explanation, strategy("error"/"review"/"new")。\n'
   base += '   单选增加 options(数组), answer(索引 0-3)；判断增加 options(["正确","错误"]), answer(0或1)；名词解释和简答不需要 options 和 answer。\n'
-  base += '5. 出题策略分配 — 严格遵循：\n'
-  base += '   - 错题回顾 (error)：' + errTarget + ' 道 — 从错题标签范围出变式题，tag 使用对应错题标签\n'
-  base += '   - 滚动复习 (review)：' + reviewTarget + ' 道 — 从复习标签范围出巩固题，tag 使用对应复习标签\n'
-  base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从资料中挖掘尚未被以上标签覆盖的全新知识点\n'
+  base += '6. 出题策略分配（数量已按当前标签实际情况换算，请严格遵循）：\n'
+  if (allocation.errMerged) {
+    base += '   - 当前没有错题标签 → 错题回顾的配额已并入下方"新考点探索"，无需再出 strategy="error" 的题。\n'
+  }
+  if (allocation.revMerged) {
+    base += '   - 当前没有复习标签 → 滚动复习的配额已并入下方"新考点探索"，无需再出 strategy="review" 的题。\n'
+  }
+  if (errTarget > 0) {
+    base += '   - 错题回顾 (error)：' + errTarget + ' 道 — 从错题标签范围出变式题，tag 使用对应错题标签\n'
+  }
+  if (reviewTarget > 0) {
+    base += '   - 滚动复习 (review)：' + reviewTarget + ' 道 — 从复习标签范围出巩固题，tag 使用对应复习标签\n'
+  }
+  if (newTarget > 0) {
+    base += '   - 新考点探索 (new)：' + newTarget + ' 道 — 从资料中挖掘尚未被以上标签覆盖的全新知识点\n'
+  }
   base += '   每道题的 strategy 字段必须恰好是 "error"、"review"、"new" 之一。\n'
   if (newTarget > 0) {
-    base += '   【重要】strategy="new" 的题目：其 tag 必须是与错题标签、复习标签不同的全新知识点标签（从资料中挖掘未覆盖的考点）。禁止在 new 题上复用错题标签或复习标签中的已有标签。如果新知识点标签列表非空则优先使用，否则自行从资料中提取新知识点作为 tag。\n'
+    base += '   【重要】strategy="new" 的题目：其 tag 必须是与错题标签、复习标签不同的全新知识点标签（从资料中挖掘未覆盖的考点）。如果新知识点标签列表非空则优先使用，否则自行从资料中提取新知识点作为 tag。\n'
   }
-  base += '   如果某个区块写"暂无"，则该区块分配的数量归入新考点探索。\n'
-  base += '6. strategy="error"或"review"的题目，tag 应使用对应的已有标签；只有 strategy="new"的题目才创建新标签。\n'
+  base += '7. strategy="error"或"review"的题目，tag 应使用对应的已有标签；只有 strategy="new"的题目才创建新标签。\n'
   return base
 }

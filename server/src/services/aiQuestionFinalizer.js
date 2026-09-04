@@ -19,9 +19,11 @@ const TOPUP_MAX_ATTEMPTS = 2;
 const TOPUP_SYSTEM_PROMPT = [
   '你是一个出题助手。请根据提供的资料生成考试题目。',
   '只输出纯JSON数组，不要包含代码块标记或解释。',
-  '每道题包含：type(single/judge/term/short)、question、options(数组)、answer(数字下标)、tag、strategy(error/review/new)、explanation。',
+  '每道题包含：id、type(single/judge/term/short)、question、options(数组)、answer(数字下标)、tag、strategy(error/review/new)、explanation。',
   '单选题 4 个选项且 answer 为 0-3；判断题 options 为 ["正确","错误"] 且 answer 为 0 或 1；名词解释和简答题不需要 options/answer。',
-  '数学公式使用 $...$ 或 $$...$$ 包裹。',
+  '不得输出与资料示例或此前已出题目雷同的题，同知识点请变换问法、场景或数值。',
+  '输出顺序：单选题 → 判断题 → 名词解释 → 简答题。',
+  '数学公式使用 $...$ 或 $...$ 包裹。',
 ].join('\n');
 
 function hasShortfall(s) {
