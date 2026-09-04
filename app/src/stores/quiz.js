@@ -315,6 +315,13 @@ export const useQuizStore = defineStore('quiz', () => {
   function closeQuiz() {
     session.modalOpen = false
     session.wrongOnly = false
+    // 已结束的大考卷：报告关闭后清掉 currentExamId（残留会遮蔽章节轮次的答题上下文）；
+    // 未结束的考卷（答到一半关闭）保留以便续答
+    if (session.endedFromExam && data.state.currentExamId) {
+      data.state.currentExamId = null
+      session.endedFromExam = false
+      data.saveState()
+    }
   }
 
   function selectOption(idx) {
@@ -480,9 +487,11 @@ export const useQuizStore = defineStore('quiz', () => {
     if (!as) return
     checkAchievements(data.state)
     syncAnswerToServerFinal()
-    data.state.currentExamId = null
-    data.saveState()
+    // 关键：报告视图的 activeSet 依赖 currentExamId 指向本考卷——
+    // 此处若清空，报告会回落到“当前章节的轮次”，出现题目对不上的错报（B1）。
+    // 上下文保留到报告关闭时由 closeQuiz 清理。
     session.endedFromExam = true
+    data.saveState()
     openQuiz('report')
   }
 
@@ -491,8 +500,19 @@ export const useQuizStore = defineStore('quiz', () => {
     const ex = data.state.generatedExams[examId]
     if (!ex) return
     data.state.currentExamId = examId
+    session.endedFromExam = false
     data.saveState()
     openQuiz('quiz')
+  }
+
+  // 已结束考卷的「查看报告」入口：activeSet 指向该考卷并直接进入报告视图
+  function openExamReport(examId) {
+    const ex = data.state.generatedExams[examId]
+    if (!ex) return
+    data.state.currentExamId = examId
+    session.endedFromExam = true
+    data.saveState()
+    openQuiz('report')
   }
 
   return {
@@ -501,7 +521,7 @@ export const useQuizStore = defineStore('quiz', () => {
     openQuiz, closeQuiz,
     startSession, selectOption, submitAnswer, nextQuestion, goToQuestion,
     markDontKnow, resetQuiz, endExam,
-    startExam,
+    startExam, openExamReport,
     restoreQuizFromServer, syncAnswerToServer, syncAnswerToServerFinal,
     ensureActiveSetCompleted,
     bindLifecycle

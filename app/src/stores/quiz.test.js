@@ -176,3 +176,78 @@ describe('quiz store 核心流转 (P1.4)', () => {
     expect(quiz.session.wrongOnly).toBe(false)
   })
 })
+
+describe('大考卷报告上下文 (round4.1)', () => {
+  let storage
+  beforeEach(() => {
+    storage = makeLocalStorageStub({})
+    globalThis.localStorage = storage
+    setActivePinia(createPinia())
+  })
+  afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
+
+  function setupWithExam() {
+    const state = seedState()
+    const eqs = [q('考卷题一'), q('考卷题二'), q('考卷题三')]
+    state.generatedExams = {
+      exam1: {
+        id: 'exam1', name: '我的大考卷', subjectId: 's1', type: 'exam', createdAt: Date.now(),
+        questions: eqs, userAnswers: [0, 1, 0], currentIdx: 2,
+      },
+    }
+    state.currentExamId = 'exam1'
+    storage.setItem(STORAGE_KEY, JSON.stringify(state))
+    const data = useDataStore()
+    const quiz = useQuizStore()
+    const ui = useUiStore()
+    return { data, quiz, ui, eqs }
+  }
+
+  it('endExam（考卷结算）后：报告视图仍指向该考卷，而不是回落到章节轮次', () => {
+    const { data, quiz, eqs } = setupWithExam()
+    quiz.openQuiz('quiz')
+    quiz.endExam()
+    expect(quiz.session.view).toBe('report')
+    // currentExamId 保留 → activeSet 仍是考卷（报告题目与考卷一致）
+    expect(data.state.currentExamId).toBe('exam1')
+    const as = quiz.activeSet
+    expect(as.setId).toBe('exam1')
+    expect(as.questions.map((x) => x.question)).toEqual(eqs.map((x) => x.question))
+    expect(quiz.stats.total).toBe(3)
+    // 章节轮次被正确遮蔽（此前 bug：报告显示章节 c1 的三题）
+    expect(as.questions[0].question).not.toBe('第一题')
+  })
+
+  it('关闭考卷报告 → currentExamId 清理，章节答题不再被遮蔽', () => {
+    const { data, quiz } = setupWithExam()
+    quiz.openQuiz('quiz')
+    quiz.endExam()
+    quiz.closeQuiz()
+    expect(data.state.currentExamId).toBeNull()
+    expect(quiz.session.modalOpen).toBe(false)
+  })
+
+  it('答到一半关闭考卷（未结束）→ 保留 currentExamId 便于续答', () => {
+    const { data, quiz } = setupWithExam()
+    quiz.openQuiz('quiz')
+    quiz.closeQuiz()
+    expect(data.state.currentExamId).toBe('exam1')
+  })
+
+  it('startExam / openExamReport 重置或设置结束上下文', () => {
+    const { data, quiz } = setupWithExam()
+    // 模拟上一次结束后关闭已清空 → 重新开始考卷
+    data.state.currentExamId = null
+    quiz.startExam('exam1')
+    expect(data.state.currentExamId).toBe('exam1')
+    quiz.endExam()
+    expect(quiz.session.view).toBe('report')
+    // 关闭后重开报告入口
+    quiz.closeQuiz()
+    expect(data.state.currentExamId).toBeNull()
+    quiz.openExamReport('exam1')
+    expect(data.state.currentExamId).toBe('exam1')
+    expect(quiz.session.view).toBe('report')
+    expect(quiz.activeSet.setId).toBe('exam1')
+  })
+})

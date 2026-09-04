@@ -408,42 +408,75 @@ export const useAiStore = defineStore('ai', () => {
   //  · 本地直连且 AI 请求已在途的任务 → 无法得知请求是否已扣费/已生成，直接继续会
   //    重复调用 AI（重复扣费/可能生成重复轮次）→ 标记失败并明确提示，让用户重试。
   let _resumed = false
+  // 清理可能残留的空流式 set
+  function dropEmptyStreamSet(t) {
+    if (!t.streamSetRef) return
+    const ch = data.state.chapters[t.chapterId]
+    if (ch && ch.quizSets) {
+      const idx = ch.quizSets.indexOf(t.streamSetRef)
+      if (idx >= 0 && (!t.streamSetRef.questions || t.streamSetRef.questions.length === 0)) {
+        ch.quizSets.splice(idx, 1)
+      }
+    }
+    delete t.streamSetRef
+  }
+
+  // 队列恢复/重裁决（启动时 + 每次云端合并后调用，幂等）：
+  //  · pending（未开始/服务端任务）→ 启动 runner 执行（executeServerTask 复用 serverTaskId）；
+  //  · running 且无 serverTaskId（本地直连在途，可能被云端旧状态带回）→ 明确失败防卡死/防重复调用 AI；
+  //  · 服务端任务 running → 启动轮询以便续跑与导入。
+  function reconcileQueue() {
+    const queue = data.state.aiTaskQueue || []
+    let changed = false
+    let needRunner = false
+    let needPolling = false
+    queue.forEach((t) => {
+      if (!t) return
+      if (t.status === 'running' && !t.serverTaskId) {
+        // 云端带回的“运行中”本地直连任务 = 刷新/断线中断残留，本端无执行体
+        t.status = 'failed'
+        t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
+        changed = true
+      }
+      if (t._wasRunning && !t.serverTaskId && t.status !== 'failed') {
+        // 刷新前已在途、AI 请求可能已扣费 → 明确失败，不静默重跑
+        t.status = 'failed'
+        t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
+        changed = true
+      }
+      delete t._wasRunning
+      if (t.status === 'pending') needRunner = true
+      if (t.serverTaskId && (t.status === 'pending' || t.status === 'running')) needPolling = true
+    })
+    if (changed) data.saveState()
+    if (needRunner && !runnerActive.value) {
+      // runner 未在运行 → 启动（运行中则其循环会自行拾取 pending 任务）
+      runnerActive.value = true
+      runnerLoop()
+    }
+    if (needPolling) startServerTaskPolling()
+    pruneTaskQueue()
+  }
+
   function resumeQueuedTasks() {
     if (_resumed) return
     _resumed = true
     const queue = data.state.aiTaskQueue || []
-    const pending = queue.filter((t) => t.status === 'pending')
-    if (pending.length === 0) return
     let changed = false
-    pending.forEach((t) => {
+    queue.forEach((t) => {
+      if (!t) return
+      // 本地直连且刷新前已在途（_wasRunning）：无法得知 AI 请求是否已扣费/已生成，
+      // 直接续跑会重复调用 AI → 标记失败并明确提示，让用户重试
       if (t._wasRunning && !t.serverTaskId) {
         t.status = 'failed'
         t.error = '出题过程中页面被刷新，本轮已取消，请重新点击「开始出题」'
         changed = true
-        // 清理可能残留的空流式 set
-        if (t.streamSetRef) {
-          const ch = data.state.chapters[t.chapterId]
-          if (ch && ch.quizSets) {
-            const idx = ch.quizSets.indexOf(t.streamSetRef)
-            if (idx >= 0 && (!t.streamSetRef.questions || t.streamSetRef.questions.length === 0)) {
-              ch.quizSets.splice(idx, 1)
-            }
-          }
-          delete t.streamSetRef
-        }
+        dropEmptyStreamSet(t)
       }
       delete t._wasRunning
     })
     if (changed) data.saveState()
-    // 仍有可继续的任务 → 启动 runner；有服务端任务 → 同时启动轮询以便导入
-    if (data.state.aiTaskQueue.some((t) => t.status === 'pending')) {
-      runnerActive.value = true
-      runnerLoop()
-    }
-    if (data.state.aiTaskQueue.some((t) => t.serverTaskId && (t.status === 'pending' || t.status === 'running'))) {
-      startServerTaskPolling()
-    }
-    pruneTaskQueue()
+    reconcileQueue()
   }
 
   // 任务队列剪枝：已完成/失败任务无限累积（含大 promptText）会缓慢撑大 localStorage；
@@ -468,7 +501,7 @@ export const useAiStore = defineStore('ai', () => {
     getChapterMaterials, saveChapterMaterials,
     ensureProviders, getProvider, defaultModelFor, rememberModel, recalledModel, effectiveModel,
     saveAiConfig, clearApiKey, testConnection,
-    enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter, resumeQueuedTasks, pruneTaskQueue,
+    enqueueGenerate, cancelTask, cancelAll, hasTaskForChapter, resumeQueuedTasks, reconcileQueue, pruneTaskQueue,
     refreshServerTasks, importServerTaskResult, cancelServerTask,
     openQueueDialog, closeQueueDialog,
     startServerTaskPolling, stopServerTaskPolling, hasActiveServerTasks, isServerTaskImported,
