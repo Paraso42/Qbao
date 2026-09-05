@@ -203,6 +203,11 @@ describe('桌面端统一分发 API v2 (manifest-first)', () => {
     expect(p.text).toContain('已撤回');
     expect(p.text).toContain('历史版本');
     expect(p.text).toContain('Get-FileHash');
+    // v3.36 手机竖屏：单列卡片化样式 + data-label + 触控优化（落地页在手机上可读可点）
+    expect(p.text).toContain('@media (max-width:640px)');
+    expect(p.text).toContain('data-label="版本"');
+    expect(p.text).toContain('data-label="操作"');
+    expect(p.text).toContain('touch-action:manipulation');
     const b = await request(app).get('/dl?channel=beta');
     expect(b.text).toContain('3.35.0-beta.1');
     expect(b.text).toContain('测试版');

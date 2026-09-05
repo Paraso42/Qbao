@@ -22,7 +22,7 @@
           云端同步状态：<span class="ok">已启用</span><span v-if="sync.syncing">（有未同步的更改）</span>
         </template>
         <template v-else>
-          云端同步：<span class="off">离线模式</span>
+          云端同步：<span class="off">未登录（登录后自动云端同步）</span>
         </template>
       </p>
     </div>

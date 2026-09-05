@@ -17,7 +17,6 @@ import { useAiStore } from './ai'
 import { useDataStore } from './data'
 import { useUserStore } from './user'
 import { useUiStore } from './ui'
-import { STORAGE_KEY } from '../services/persistence'
 import { getAiApiKey } from '../services/aiKeys'
 
 function makeLocalStorageStub(seed = {}) {
@@ -79,7 +78,8 @@ describe('ai store 核心流转 (P1.4/P1.3 路径)', () => {
     globalThis.localStorage = storage
       globalThis.sessionStorage = makeSessionStorageStub()
     setActivePinia(createPinia())
-    storage.setItem(STORAGE_KEY, JSON.stringify(seedState()))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(seedState()))
     useDataStore()
     vi.clearAllMocks()
   })
@@ -179,7 +179,8 @@ describe('resumeQueuedTasks 刷新恢复 (round4)', () => {
   function seed(queue) {
     const st = seedState()
     st.aiTaskQueue = queue
-    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(st))
   }
 
   it('刷新前已在途的本地直连任务（_wasRunning 且无 serverTaskId）→ 标记失败并给出明确提示，不静默重复调用 AI', async () => {
@@ -230,7 +231,8 @@ describe('pruneTaskQueue 队列剪枝 (round4)', () => {
     for (let i = 0; i < 60; i++) queue.push(mk('hist' + i, 'completed'))
     queue.push(mk('pending1', 'pending'))
     st.aiTaskQueue = queue
-    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(st))
     const ai = useAiStore()
     const data = useDataStore()
     // 直接调用 prune（store 初始化时的自动 resume 已把 pending1 交给 runner，
@@ -269,7 +271,8 @@ describe('reconcileQueue 合并后重裁决 (round4.1)', () => {
     st.aiTaskQueue = queue
     if (opts.materials) st.chapterMaterials = opts.materials
     if (opts.aiConfig) st.aiConfig = { ...st.aiConfig, ...opts.aiConfig }
-    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(st))
     const ai = useAiStore()
     const data = useDataStore()
     return { ai, data }
@@ -335,7 +338,8 @@ describe('reconcileQueue 执行归属：同一任务只允许一个端执行 (ro
   function seed(queue) {
     const st = seedState()
     st.aiTaskQueue = queue
-    storage.setItem(STORAGE_KEY, JSON.stringify(st))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(st))
   }
   function makeTask(over) {
     return { id: 't_x', chapterId: 'c1', chapterName: '章一', status: 'pending',

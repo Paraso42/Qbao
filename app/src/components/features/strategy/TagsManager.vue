@@ -19,6 +19,8 @@
           title="双击重命名">
           <span class="tag-name">{{ t }}</span>
           <span v-if="tagMetaText(t)" class="tag-stat">{{ tagMetaText(t) }}</span>
+          <!-- 触屏无双击：coarse 指针下显示显式重命名按钮（桌面保留双击） -->
+          <button type="button" class="tag-edit" title="重命名" @click.stop="renameTag(cat.key, t)"><Icon name="edit" :size="11" /></button>
           <span class="tag-del" @click.stop="removeTag(cat.key, t)">×</span>
         </span>
       </div>
@@ -35,6 +37,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useDataStore } from '../../../stores/data'
 import { useUiStore } from '../../../stores/ui'
+import Icon from '../../ui/Icon.vue'
 import {
   tagArr, addTagToCategory, removeTagFromCategory,
   moveTagBetweenColumns, mergeTagInCategory, renameTag as renameTagService
@@ -171,6 +174,19 @@ async function renameTag(cat, name) {
 .tag-stat { color: var(--text-muted); font-size: 10px; }
 .tag-del { color: var(--text-muted); cursor: pointer; font-weight: 700; padding: 0 2px; }
 .tag-del:hover { color: var(--color-danger); }
+.tag-edit {
+  color: var(--text-muted);
+  cursor: pointer;
+  display: none; /* 桌面：双击重命名足够；触屏：显示显式按钮 */
+  padding: 2px;
+  line-height: 1;
+}
+.tag-edit:hover { color: var(--color-primary); }
+/* 触屏：显式重命名按钮 + 大一点的删除/编辑热区 */
+@media (pointer: coarse) {
+  .tag-edit { display: inline-flex; align-items: center; }
+  .tag-del, .tag-edit { min-width: 30px; min-height: 30px; justify-content: center; }
+}
 .tag-col-input {
   width: 100%;
   margin-top: 6px;

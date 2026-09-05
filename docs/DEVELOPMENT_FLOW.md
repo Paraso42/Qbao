@@ -64,7 +64,8 @@
 
 ### ④ DoD（部署前必须全绿）
 - `server`: `npx vitest run` 全绿（基线 166 用例，v3.35 后 187）
-- `app`: `npx vitest run` 全绿（基线 175 用例，v3.35 后 177）
+- `app`: `npx vitest run` 全绿（基线 175 用例，v3.35 后 177，v3.36 后 203）；**登录门禁（v3.36.1）：未登录整页登录门禁、匿名零写盘（公共键停用）、匿名改动锁重建**
+- **手机竖屏检查（v3.36 新增，涉及展示层改动时必做）**：≤768px（360/390 两档）无横向滚动、输入控件 ≥16px（iOS 不聚焦缩放）、主操作按钮 ≤1 屏内可达、无「查看报告」章节入口、活动会话大键不落 localStorage（>1MB 走 IndexedDB）
 - `scripts`: `node --test scripts/installer-lib.test.js` 全绿（发布工具，零依赖）
 - `desktop`: `node --check main.js preload.js updater.js updater-util.js` + `node --test desktop/test` 全绿
 - `npx eslint .`（app/server）0 error

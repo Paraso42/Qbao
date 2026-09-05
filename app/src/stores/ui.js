@@ -7,7 +7,6 @@ export const useUiStore = defineStore('ui', {
   state: () => ({
     sidebarOpen: false,
     activeScreen: 'start',
-    authOpen: false,
     settingsOpen: false,
     settingsTab: 'personalize',
     userCenterOpen: false,
@@ -21,8 +20,6 @@ export const useUiStore = defineStore('ui', {
     toggleSidebar() { this.sidebarOpen = !this.sidebarOpen },
     closeSidebar() { this.sidebarOpen = false },
     showScreen(name) { this.activeScreen = name; this.closeSidebar() },
-    openAuth() { this.authOpen = true },
-    closeAuth() { this.authOpen = false },
     openSettings(tab) { this.settingsOpen = true; this.settingsTab = tab || 'personalize' },
     closeSettings() { this.settingsOpen = false },
     setSettingsTab(tab) { this.settingsTab = tab },

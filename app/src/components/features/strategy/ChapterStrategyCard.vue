@@ -1,8 +1,12 @@
 <!-- 章节出题策略卡：题型数量 + 三比例（自 legacy strategy.js UI 迁移，直接绑定 strategy 对象） -->
 <template>
   <div class="card">
-    <h3>出题策略 — <span class="ch-name">{{ ch.name }}</span></h3>
+    <div class="csc-head" role="button" :aria-expanded="String(!collapsed)" @click="collapsed = !collapsed">
+      <h3>出题策略 — <span class="ch-name">{{ ch.name }}</span></h3>
+      <span class="csc-caret"><Icon name="chevron-down" :size="14" :class="{ rotated: collapsed }" /></span>
+    </div>
 
+    <div v-show="!collapsed">
     <h4>第一步：各题型数量</h4>
     <div class="type-counts">
       <div v-for="t in types" :key="t.key" class="type-count-item">
@@ -39,20 +43,30 @@
     <h4>第三步：知识点标签管理</h4>
     <p class="hint">拖拽标签可调整分类，同列内拖标签到另一个标签上可合并</p>
     <TagsManager :chapter-id="ch.id" />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useDataStore } from '../../../stores/data'
 import { adjustStrategyPct, applyDualSlider } from '../../../services/strategy'
 import TagsManager from './TagsManager.vue'
+import Icon from '../../ui/Icon.vue'
 
 const props = defineProps({ chapterId: { type: String, required: true } })
 const data = useDataStore()
 
 const ch = computed(() => data.state.chapters[props.chapterId])
 const strategy = computed(() => (ch.value ? data.getChStrategy(props.chapterId) : { typeCounts: {}, errPct: 0, reviewPct: 0, newPct: 0 }))
+
+// v3.36：策略卡可折叠 — 手机窄屏默认收起（主操作首屏可达），桌面默认展开
+const collapsed = ref(false)
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    try { collapsed.value = window.matchMedia('(max-width: 768px)').matches } catch (e) { /* 保持展开 */ }
+  }
+})
 
 const types = [
   { key: 'single', label: '单选' },
@@ -166,6 +180,18 @@ function onPctInput(idx) {
 .sv-item.review .sv-num { color: #F59E0B; }
 .sv-item.new .sv-num { color: #10B981; }
 .sv-label { font-size: var(--fs-xs); color: var(--text-secondary); display: inline-flex; align-items: center; gap: 5px; }
+.csc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: var(--space-sm);
+}
+.csc-head h3 { margin: 0; }
+.csc-caret { display: flex; color: var(--text-muted); transition: transform var(--transition-fast); }
+.csc-caret .icon.rotated { transform: rotate(-180deg); }
 @media (max-width: 768px) {
   .dual-range-wrap input[type="range"]::-webkit-slider-thumb { width: 28px; height: 28px; }
 }

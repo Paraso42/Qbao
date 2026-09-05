@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mergeStates, createSyncEngine, getSyncPending, setSyncPending } from './sync'
+import { mergeStates, createSyncEngine, getSyncPending, setSyncPending, setAccountSwitching } from './sync'
 
 // —— P1.2 引擎级测试基建：内存 localStorage + fetch mock ——
 function makeLocalStorageStub(seed = {}) {
@@ -583,5 +583,59 @@ describe('quizSets 轮次删除墓碑 aiTombstones (round5.1)', () => {
     const local = ctx({}, [setA, setB], [])
     const m = mergeStates(local, cloud).state
     expect(m.chapters.c1.quizSets.map((x) => x.questions[0].question)).toEqual(['A1', 'C1', 'B1'])
+  })
+})
+
+describe('引擎账号守卫 (v3.36.1)', () => {
+  let storage
+  let fetchSt
+  beforeEach(() => {
+    storage = makeLocalStorageStub({ qbao_token: 'tok', qbao_user: JSON.stringify({ id: 'u1', username: 'a' }) })
+    globalThis.localStorage = storage
+    fetchSt = installFetchMock({ cloudState: { state_json: JSON.stringify(baseState()), rev: 0 } })
+  })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.fetch })
+
+  it('切换冻结期（setAccountSwitching）→ 推送/拉取/轮询全部停摆，不发任何请求', async () => {
+    const holder = { state: baseState() }
+    const engine = createSyncEngine({
+      getState: () => holder.state,
+      replaceState: (m) => { holder.state = m },
+      isOnline: () => true,
+      onStatus: () => {},
+      notify: () => {},
+      accountId: () => 'u1', // 引擎武装账号 u1
+    })
+    engine.setSyncingReady(true)
+    setSyncPending(true)
+    setAccountSwitching(true)
+    engine.scheduleSync()
+    await engine.flushSync()
+    await engine.resumePendingSync()
+    expect(fetchSt.putCount).toBe(0)
+    expect(fetchSt.getCount).toBe(0)
+    expect(fetchSt.revCount).toBe(0)
+    setAccountSwitching(false)
+    await engine.flushSync()
+    expect(fetchSt.putCount + fetchSt.getCount + fetchSt.revCount).toBeGreaterThan(0)
+  })
+
+  it('数据属主变化（无冻结标志）→ 引擎停摆（防御未触发 reload 的路径）', async () => {
+    const holder = { state: baseState() }
+    let owner = 'u1'
+    const engine = createSyncEngine({
+      getState: () => holder.state,
+      replaceState: (m) => { holder.state = m },
+      isOnline: () => true,
+      onStatus: () => {},
+      notify: () => {},
+      accountId: () => owner,
+    })
+    engine.setSyncingReady(true)
+    setSyncPending(true)
+    owner = 'u2' // 属主漂移（理论上由 reload 重建，这里模拟任何遗漏路径）
+    await engine.flushSync()
+    expect(fetchSt.putCount).toBe(0)
+    expect(fetchSt.getCount).toBe(0)
   })
 })

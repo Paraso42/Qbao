@@ -70,7 +70,7 @@
           <template v-else>
             <button v-if="idx > 0" class="btn btn-ghost" @click="quiz.goToQuestion(idx - 1)">上一题</button>
             <button v-if="idx < as.questions.length - 1" class="btn btn-primary" @click="quiz.nextQuestion">下一题</button>
-            <button v-else class="btn btn-primary" @click="quiz.endExam">查看报告</button>
+            <button v-else class="btn btn-primary" @click="quiz.endExam">{{ as.isExam ? '查看报告' : '完成本轮' }}</button>
           </template>
           <button class="btn btn-ghost btn-small qa-share" @click="shareCurrent" title="分享当前题目给好友"><Icon name="share" :size="14" /> 分享</button>
           <button v-if="as.isExam" class="btn btn-danger" @click="quiz.endExam">结束</button>
@@ -243,7 +243,8 @@ function submit() {
 }
 
 function onSubjKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  // v3.36：中文输入法组合期（选词）回车不提交
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
     e.preventDefault()
     submit()
   }
@@ -311,6 +312,8 @@ watch(
 function onKeydown(e) {
   if (!quiz.session.modalOpen || quiz.session.view !== 'quiz') return
   if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return
+  // v3.36：IME 组合期（中文输入法候选/拼音）不响应方向键与回车快捷键
+  if (e.isComposing || e.keyCode === 229) return
   const s = as.value
   if (!s) return
   const qq = q.value
@@ -416,7 +419,22 @@ watch(() => quiz.session.modalOpen, (open) => {
 .dot.current { background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 600; }
 .dot.answered { border-color: var(--color-success); color: var(--color-success); }
 .dot.wrong { border-color: var(--color-danger); color: var(--color-danger); }
-.quiz-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-top: var(--space-lg); }
+/* v3.36：答题任务操作栏贴底（sticky 于弹窗滚动容器）——长题/长解析时按钮始终可见；
+   负外边距抵消弹窗内边距形成通栏，safe-area 兜底 iPhone 底部 */
+.quiz-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-lg);
+  position: sticky;
+  bottom: 0;
+  margin-left: calc(-1 * var(--space-2xl));
+  margin-right: calc(-1 * var(--space-2xl));
+  padding: var(--space-md) var(--space-2xl) calc(var(--space-md) + env(safe-area-inset-bottom));
+  background: var(--surface-card);
+  border-top: 1px solid var(--border-light);
+  z-index: 1;
+}
 
 .report-shell { display: flex; flex-direction: column; }
 .rp-title { margin-bottom: var(--space-md); }
@@ -460,8 +478,27 @@ watch(() => quiz.session.modalOpen, (open) => {
 @media (max-width: 768px) {
   .report-grid { grid-template-columns: repeat(2, 1fr); }
   .quiz-actions .btn { flex: 1; }
-.quiz-actions .qa-share { flex: 0 0 auto; margin-left: auto; align-self: center; }
+  .quiz-actions .qa-share { flex: 0 0 auto; margin-left: auto; align-self: center; }
   .quiz-legend { font-size: 12px; }
   .lg-dot { width: 14px; height: 14px; }
+  /* 题号点横滑（替代换行堆叠），单点尺寸加大 */
+  .quiz-nav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .quiz-nav::-webkit-scrollbar { display: none; }
+  .dot { width: 36px; height: 36px; flex-shrink: 0; font-size: var(--fs-sm); }
+  /* 选项触发行加厚 */
+  .quiz-option { min-height: 48px; padding: 14px; }
+  /* 任务操作栏随弹窗内边距收窄对齐 */
+  .quiz-actions {
+    margin-left: calc(-1 * var(--space-xl));
+    margin-right: calc(-1 * var(--space-xl));
+    padding: var(--space-md) var(--space-xl) calc(var(--space-md) + env(safe-area-inset-bottom));
+  }
+  /* 短内容（单题无滚动）时操作栏也贴底：弹窗撑满 + auto 边距推到底部 */
+  .quiz-shell { min-height: calc(100dvh - 48px); }
+  .quiz-actions { margin-top: auto; }
+}
+/* 触屏（coarse）：题号点 ≥40px 触控目标 */
+@media (pointer: coarse) {
+  .dot { width: 40px; height: 40px; }
 }
 </style>

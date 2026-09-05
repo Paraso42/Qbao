@@ -7,7 +7,7 @@ import { useUserStore } from '../stores/user'
 import { useSyncStore } from '../stores/sync'
 import { useUiStore } from '../stores/ui'
 import { createSyncEngine } from '../services/sync'
-import { setPersistWarningHook, hydrateState, setStateSource, flushBigFieldsNow } from '../services/persistence'
+import { setPersistWarningHook, hydrateState, setStateSource, flushBigFieldsNow, getStateOwnerUid } from '../services/persistence'
 import { getToken } from '../services/api'
 import { initSecureKeyStore } from '../services/aiKeys'
 import { useQuizStore } from '../stores/quiz'
@@ -33,6 +33,8 @@ export function initApp(pinia) {
     getState: () => data.state,
     replaceState: (merged) => data.replaceState(merged),
     isOnline: () => user.isOnline,
+    // v3.36.1 账户隔离：引擎武装账号 = 内存数据属主；账号变更（切换冻结期/重建）即停摆
+    accountId: () => getStateOwnerUid(),
     onStatus: (s) => {
       syncStore.setSyncing(s.syncing)
       if (typeof s.lastSyncAt === 'number') syncStore.lastSyncAt = s.lastSyncAt

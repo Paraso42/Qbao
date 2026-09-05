@@ -6,7 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useQuizStore } from './quiz'
 import { useDataStore } from './data'
 import { useUiStore } from './ui'
-import { STORAGE_KEY } from '../services/persistence'
+import { CLOUD_STORAGE_PREFIX } from '../services/persistence'
 
 function makeLocalStorageStub(seed = {}) {
   const map = new Map(Object.entries(seed))
@@ -67,7 +67,8 @@ describe('quiz store 核心流转 (P1.4)', () => {
   afterEach(() => { delete globalThis.localStorage; vi.restoreAllMocks() })
 
   function setup(state) {
-    storage.setItem(STORAGE_KEY, JSON.stringify(state))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(state))
     const data = useDataStore()
     const quiz = useQuizStore()
     const ui = useUiStore()
@@ -96,7 +97,7 @@ describe('quiz store 核心流转 (P1.4)', () => {
     quiz.selectOption(2)
     expect(as.userAnswers[0]).toBe(1)
     // 落盘：localStorage 骨架被更新（saveState 生效）
-    const saved = JSON.parse(storage.getItem(STORAGE_KEY))
+    const saved = JSON.parse(storage.getItem('quizEngineState_cloud_u1'))
     expect(saved.chapters.c1).toBeTruthy()
   })
 
@@ -137,15 +138,17 @@ describe('quiz store 核心流转 (P1.4)', () => {
     expect([1, 2, 3]).toContain(recorded)
   })
 
-  it('endExam（轮次结算）：未答置 -1、历史入账、报告视图', () => {
-    const { quiz, data } = setup(seedState())
+  it('endExam（v3.36 轮次结算）：未答置 -1、历史入账、不再弹报告（引导去答题历史）', () => {
+    const { quiz, data, ui } = setup(seedState())
     quiz.startSession() // 归正 null → undefined（模拟刷新后真实入口）
     quiz.selectOption(0) // 第 1 题答对
     quiz.nextQuestion()
     quiz.selectOption(0) // 第 2 题答对
     quiz.nextQuestion() // 第 3 题不答
     quiz.endExam()
-    expect(quiz.session.view).toBe('report')
+    // 章节轮次答完：弹窗关闭 + 引导提示（查看报告功能已移除，回顾去答题历史）
+    expect(quiz.session.modalOpen).toBe(false)
+    expect(ui.toasts.some((t) => t.message.includes('答题历史'))).toBe(true)
     expect(data.state.history).toHaveLength(1)
     const rec = data.state.history[0]
     expect(rec.total).toBe(3)
@@ -196,7 +199,8 @@ describe('大考卷报告上下文 (round4.1)', () => {
       },
     }
     state.currentExamId = 'exam1'
-    storage.setItem(STORAGE_KEY, JSON.stringify(state))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+    storage.setItem('quizEngineState_cloud_u1', JSON.stringify(state))
     const data = useDataStore()
     const quiz = useQuizStore()
     const ui = useUiStore()

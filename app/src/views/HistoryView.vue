@@ -172,4 +172,8 @@ function sessionQuestions(record) {
 @media (max-width: 768px) {
   .hs-stats { gap: 6px; }
 }
+@media (max-width: 480px) {
+  .hs-stats { flex-wrap: wrap; gap: 4px 10px; }
+  .hs-session-head { flex-wrap: wrap; }
+}
 </style>
