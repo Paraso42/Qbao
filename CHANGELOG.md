@@ -1,3 +1,12 @@
+## v3.35.0
+- **下载安装体系工程化重构（manifest-first 统一分发/更新平台，模仿行业成熟项目）**：
+  - 服务器储藏室升级为清单驱动：downloads/manifest.json（schemaVersion 1；stable/beta 双渠道、多版本留存、sha256/sha512/大小/日期/更新说明/required 强制门槛/retracted 撤回标记），旧 meta.json 废弃；新增端点：/api/v1/desktop/manifest（版本清单）、/api/v1/desktop/download?file=<文件名>（任意留存版本精确下载，断点续传）、/api/v1/desktop/update/<channel>/latest.yml 与 exe/blockmap（electron-updater 自托管更新源）、/api/v1/desktop/stats（下载统计，013 迁移）、公开落地页 /dl（中国大陆镜像下载站，动态渲染版本历史/校验值/撤回横幅）；/api/v1/desktop/latest 保持兼容；/download 短链语义不变
+  - **桌面端更新彻底脱离 GitHub**：updater 改走当前配置服务器的 generic feed（运行时 setFeedURL，随用户填写的服务器地址切换；apiBase 为空时静默禁用）；检查节奏：启动 8s + 每 6h（自动检查开关，默认开）；设置页新增下载进度条/更新渠道/更新源展示
+  - **测试版/稳定版渠道纪律**：测试版（X.Y.Z-beta.N，electron-builder extraMetadata 构建覆盖，不改任何跟踪文件、不推 tag、不进 CHANGELOG）只发布到 beta 渠道且**永不强制更新**；稳定版唯一出口 = 用户验收通过后的正式 tag（release.yml 增加 prerelease 守卫：tag 含 - 一律跳过 Release）；发布工具 scripts/publish-installer.js（add/promote/retract/verify/ls，latest.yml 与安装包逐字节交叉校验、原子写清单 + 滚动备份、渠道准入双重强制、留存剪枝保底 latest+上一可回退版）
+  - **强制更新（required）仅限稳定版且显式 promote 设置**（白名单场景：API 破坏性变更/安全漏洞/数据迁移）；低于门槛的版本自动更新被阻断提示，下载列表标注「已停止服务」；普通版本更新永远由用户确认
+  - **用户自助回退 + 维护者 retract 两级机制**：桌面端「历史版本」面板与网页端版本历史/下载页一致，用户可自行下载**任意旧版**覆盖安装（主进程下载 + sha256 校验 + 唤起安装器，覆盖安装不丢数据），发现问题走内置反馈工单（FeedbackBubble → 管理员）；维护者确认坏版本后可 retract 熔断（manifest 标撤回、latest 自动回退上一可用版本、自动清除相关 required 防升级死循环、下载端点 410、桌面端撤回感知弹窗引导打开下载页）
+  - docs/PUBLISHING.md 固化发布/事故处置流程；DEVELOPMENT_FLOW.md v1.0→v1.1（新增版本与渠道纪律、事故处置章节）；DEPLOY.md 更新分发拓扑
+  - 量表：server 33→36 文件 162→183/183（+21：路由 10、manifest 9、stats 2）、app 175→177/177（+2 manifest/stats/parse）、scripts +6（node:test 发布工具）、desktop +5（node:test 更新工具）、三端 eslint 0 error
 ## v3.34.2
 - **工程修复（v3.34.1 发布事故）**：v3.34.1 初次推送时包管理器锁文件（package-lock.json ×3）在版本替换过程中损坏，CI/Release 的 `npm ci` 全部失败、未产生任何 Release 资产；已从上一提交恢复锁文件并以 JSON 正规方式升为 3.34.2，三端 `npm ci` 本地实测通过；从未发布的 v3.34.1 标签删除，改发 **v3.34.2**。
 - **桌面端分发改版：网页端「设置 → 桌面端」新增国内镜像下载（C 方案，不跳转 GitHub）**：

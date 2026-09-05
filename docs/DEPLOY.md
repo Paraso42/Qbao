@@ -132,16 +132,40 @@ rsync -a /srv/qbao/uploads/ /backup/uploads/
 4. 执行新增迁移：`cd server && node scripts/run_migration.js`（历史已手工导入则先 `--mark-applied` 再跑，避免重复执行基线）。
 5. 验证四用户凭原账号密码登录、数据完整。
 
-### 桌面版发布与自动更新
+### 桌面版分发（v3.35 · 自托管更新源 + 统一下载站）
 
-桌面端（desktop/）通过 GitHub Releases 自动更新，不依赖服务器：
+桌面端更新、下载完全由本站服务器提供（**不依赖 GitHub**；GitHub 仅作 CI 与发布归档，服务器永不直连 GitHub）。
 
-1. 更新版本号（desktop/package.json → version，与前端版本一致）。
-2. 打 tag 并推送：`git tag v3.25.0 && git push origin v3.25.0`。
-3. CI（.github/workflows/release.yml）自动构建 NSIS 安装包并发布到 GitHub Release（含 latest.yml 与 blockmap）。
-4. 桌面端启动后自动检测新版本，提示下载并重启安装（electron-updater）。
+1. **储藏室目录结构**（QBAO_DESKTOP_DIR，默认 `<repo>/downloads`，位于 server/ 之外，发布清理脚本不触碰）：
 
-> 更新源国内下载慢时，用户可在桌面设置里切换镜像源（Phase 6）。安装包默认不含服务器地址，用户首次使用时在 desktop/config.local.json 或应用设置里填写。
+```
+downloads/
+  manifest.json            # 唯一事实源（scripts/publish-installer.js 生成，服务器只读）
+  manifest.json.bak        # 每次发布前的滚动备份（回滚依据）
+  stable/latest.yml  Qbao-Setup-<v>.exe  Qbao-Setup-<v>.exe.blockmap
+  beta/latest.yml   ...
+```
+
+2. **公开端点**（全部无鉴权、支持断点续传 / GET 自动支持 HEAD）：
+   - `/api/v1/desktop/manifest?channel=stable|beta` — 版本清单（latest 在前，含 required/retracted/stopped）
+   - `/api/v1/desktop/latest` — 最新稳定版元信息（旧版兼容，字段不变）
+   - `/api/v1/desktop/download?file=<fileName>` — 任意留存版本精确下载（缺省=最新稳定版；retracted → 410）
+   - `/api/v1/desktop/update/<channel>/latest.yml` 与 `<file>` — 桌面端 electron-updater generic feed（exe/blockmap）
+   - `/api/v1/desktop/stats` — 下载统计（版本×日聚合，无 PII）
+   - `/dl` — 公开下载落地页（中国大陆镜像站点，服务端动态渲染）
+   - `/download` — 短链 302 → /api/v1/desktop/download
+
+3. **nginx 追加/确认**（反代 `/api` 已覆盖全部 API 端点）：
+
+```nginx
+location = /download { return 302 /api/v1/desktop/download; }
+location ^~ /dl { proxy_pass http://127.0.0.1:3000; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+# 大文件下载需放宽读超时（https://<host>/download 完整直出 85MB+ 安装包）
+proxy_read_timeout 1800s;
+```
+
+4. **数据库迁移**：`013_desktop_download_stats.sql`（下载统计表；`run_migration.js` 自动应用）。
+5. **发布安装包**：见 `docs/PUBLISHING.md`（scripts/publish-installer.js：add/promote/retract/verify/ls）。
 
 ### 防火墙端口矩阵（内网 VPN 模式，推荐）
 

@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   build-desktop:
+    # v3.35 通道纪律：测试版 tag（含 - 后缀，如 v3.35.0-beta.1）不触发稳定版 Release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +46,7 @@ jobs:
           node --check desktop/main.js
           node --check desktop/preload.js
           node --check desktop/updater.js
+          node --check desktop/updater-util.js
           for f in server/src/*.js server/src/routes/*.js server/src/providers/*.js server/src/lib/*.js server/src/schemas/*.js server/src/services/*.js server/scripts/*.js; do node --check "$f"; done
       - name: 构建 NSIS 安装包
         working-directory: desktop
