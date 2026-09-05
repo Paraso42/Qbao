@@ -20,6 +20,13 @@ contextBridge.exposeInMainWorld('__qbaoDesktop', Object.freeze({
   setServer: (url, label) => ipcRenderer.invoke('qbao:save-server', url, label),
   checkForUpdates: () => ipcRenderer.invoke('qbao:check-updates'),
   quitAndInstall: () => ipcRenderer.invoke('qbao:quit-and-install'),
+  // v3.35：更新信息 / 自动检查开关 / 历史版本自助回退下载
+  getUpdateInfo: () => ipcRenderer.invoke('qbao:get-update-info'),
+  setAutoCheck: (enabled) => ipcRenderer.invoke('qbao:set-auto-check', enabled),
+  downloadVersion: (args) => ipcRenderer.invoke('qbao:download-version', args),
+  onRollbackProgress: (cb) => {
+    ipcRenderer.on('qbao:rollback-progress', (_e, s) => { try { cb(s); } catch (err) {} })
+  },
   // P1.3：凭据安全存储（safeStorage，主进程加密；renderer 无明文落盘）
   secretAvailable: () => ipcRenderer.invoke('qbao:secret-available'),
   secretSave: (name, value) => ipcRenderer.invoke('qbao:secret-save', name, value),

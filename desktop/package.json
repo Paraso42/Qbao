@@ -1,6 +1,6 @@
 {
   "name": "qbao-desktop",
-  "version": "3.34.2",
+  "version": "3.35.0",
   "description": "Qbao 全能互动做题引擎 — Windows 桌面客户端",
   "main": "main.js",
   "author": "Paraso42",
@@ -26,6 +26,7 @@
       "main.js",
       "preload.js",
       "updater.js",
+      "updater-util.js",
       "config.json",
       "!config.local.json",
       {
@@ -35,10 +36,8 @@
     ],
     "publish": [
       {
-        "provider": "github",
-        "owner": "Paraso42",
-        "repo": "Qbao",
-        "releaseType": "release"
+        "provider": "generic",
+        "url": "https://update.qbao.example.com"
       }
     ],
     "win": {

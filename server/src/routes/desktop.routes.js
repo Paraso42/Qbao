@@ -1,115 +1,386 @@
 'use strict';
 
-// 桌面端国内镜像分发（v3.34.1）
-// 背景：多数用户网络无法稳定访问 GitHub → 网页端「桌面端」页不再跳 GitHub Release，
-// 改由本站服务器直接分发安装包（配合 app SettingsModal 网页版视图）。
-// 文件目录：QBAO_DESKTOP_DIR（默认 <server>/../downloads），文件名 Qbao-Setup-<semver>.exe，
-// 可选同目录 meta.json（由放包脚本写入：{ version, fileName, sha256, size, publishedAt }）。
-// 端点（公开、无鉴权；仅静态文件信息，不含任何用户数据）：
-//   GET /api/v1/desktop/latest    → 最新版信息（版本/大小/SHA256/发布日期）
-//   GET /api/v1/desktop/download  → 附件方式下载最新安装包（支持断点续传）
+// 桌面端统一分发 API（v2 · manifest-first，v3.35）
+// 数据源：downloads/manifest.json（scripts/publish-installer.js 生成，服务器只读）。
+// 端点（公开、无鉴权；GET 路由自动支持 HEAD）：
+//   GET /api/v1/desktop/manifest?channel=stable|beta  版本清单（latest 在前，含 required/retracted/stopped）
+//   GET /api/v1/desktop/latest                         旧版兼容：最新稳定版元信息（字段不变）
+//   GET /api/v1/desktop/download?file=<fileName>       按文件下载（缺省=最新稳定版；Range/断点续传）
+//   GET /api/v1/desktop/update/:channel/latest.yml     桌面端 generic feed（electron-updater）
+//   GET /api/v1/desktop/update/:channel/:file          exe / *.exe.blockmap（差分更新）
+//   GET /api/v1/desktop/stats                          下载统计（版本×日 聚合，无 PII）
+//   GET /dl                                            公开下载落地页（中国大陆镜像站点）
+//   GET /download                                      短链 → /api/v1/desktop/download
+// 纪律：retracted 版本下载 → 410；stable 禁止 prerelease、beta 禁止 required/retracted（服务层强校验）；
+//       下载计数仅记 HTTP 200 完整请求（206 分片续传不重复计）。
+
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const {
+  CHANNELS,
+  NAME_RE,
+  downloadsDir,
+  tryGetManifest,
+  releasesOf,
+  topOf,
+  latestRequired,
+  isStopped,
+  findReleaseByFile,
+  filePathOf,
+} = require('../services/desktopManifest');
+const statsService = require('../services/desktopStats');
 
-const FILE_RE = /^Qbao-Setup-(\d+)\.(\d+)\.(\d+)\.exe$/i;
-
-function downloadsDir() {
-  // 默认 <repo根>/downloads（server/src/routes 上溯三级）；位于 server/ 之外，
-  // 部署时不会被 deploy 清理脚本删除——服务器即安装包储藏室
-  return process.env.QBAO_DESKTOP_DIR || path.join(__dirname, '..', '..', '..', 'downloads');
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-function listInstallers() {
-  let names = [];
-  try { names = fs.readdirSync(downloadsDir()); } catch (e) { return []; }
-  return names
-    .map((name) => {
-      const m = FILE_RE.exec(name);
-      if (!m) return null;
-      return {
-        name,
-        abs: path.join(downloadsDir(), name),
-        version: m[1] + '.' + m[2] + '.' + m[3],
-        ver: { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) },
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (b.ver.major - a.ver.major) || (b.ver.minor - a.ver.minor) || (b.ver.patch - a.ver.patch));
+function formatBytes(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return '—';
+  if (num >= 1073741824) return (num / 1073741824).toFixed(2) + ' GB';
+  if (num >= 1048576) return (num / 1048576).toFixed(1) + ' MB';
+  if (num >= 1024) return Math.round(num / 1024) + ' KB';
+  return num + ' B';
 }
 
-function readMeta() {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(downloadsDir(), 'meta.json'), 'utf8'));
-  } catch (e) {
-    return null;
-  }
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const p = (x) => String(x).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
 
-// sha256 兜底（meta.json 缺失时惰性计算一次并缓存）
-const shaCache = new Map();
-function sha256Of(abs) {
-  if (!shaCache.has(abs)) {
-    shaCache.set(abs, new Promise((resolve, reject) => {
-      const hash = crypto.createHash('sha256');
-      const stream = fs.createReadStream(abs);
-      stream.on('error', reject);
-      stream.on('data', (chunk) => hash.update(chunk));
-      stream.on('end', () => resolve(hash.digest('hex')));
-    }).catch((e) => { shaCache.delete(abs); throw e; }));
-  }
-  return shaCache.get(abs);
-}
-
-function latestInstaller() {
-  const files = listInstallers();
-  return files.length > 0 ? files[0] : null;
+function serializeRelease(channel, r) {
+  return {
+    version: r.version,
+    fileName: r.fileName,
+    sizeBytes: r.sizeBytes,
+    sha256: r.sha256,
+    releaseDate: r.releaseDate,
+    releaseNotes: r.releaseNotes || [],
+    required: r.required || null,
+    retracted: r.retracted ? { reason: r.retracted.reason, at: r.retracted.at || null } : null,
+    stopped: isStopped(channel, r),
+  };
 }
 
 module.exports = function desktopRoutes(app) {
-  app.get('/api/v1/desktop/latest', async (req, res) => {
-    try {
-      const top = latestInstaller();
-      if (!top) {
-        return res.status(404).json({ ok: false, error: '桌面端安装包暂未发布，请稍后再试' });
-      }
-      const meta = readMeta();
-      const metaMatch = meta && meta.fileName === top.name ? meta : null;
-      let sha256 = (metaMatch && metaMatch.sha256) || '';
-      let sizeBytes = (metaMatch && metaMatch.size) || 0;
-      if (!sha256) sha256 = await sha256Of(top.abs);
-      if (!sizeBytes) {
-        try { sizeBytes = fs.statSync(top.abs).size; } catch (e) { sizeBytes = 0; }
-      }
-      res.json({
-        ok: true,
-        version: top.version,
-        fileName: top.name,
-        sizeBytes,
-        sha256,
-        publishedAt: (metaMatch && metaMatch.publishedAt) || null,
-        downloadUrl: '/api/v1/desktop/download',
-      });
-    } catch (e) {
-      console.error('[desktop] latest error:', e.message);
-      if (!res.headersSent) res.status(500).json({ ok: false, error: '服务器内部错误' });
+  // —— 版本清单 ——
+  app.get('/api/v1/desktop/manifest', (req, res) => {
+    const channel = String(req.query.channel || 'stable');
+    if (!CHANNELS.includes(channel)) {
+      return res.status(400).json({ ok: false, error: '未知渠道' });
     }
-  });
-
-  app.get('/api/v1/desktop/download', (req, res) => {
-    const top = latestInstaller();
-    if (!top) {
+    const { manifest } = tryGetManifest();
+    if (!manifest) {
       return res.status(404).json({ ok: false, error: '桌面端安装包暂未发布，请稍后再试' });
     }
-    res.download(top.abs, top.name, (err) => {
-      if (!err) return;
-      if (!res.headersSent) res.status(404).json({ ok: false, error: '安装包读取失败' });
-      else res.end();
+    const list = releasesOf(channel) || [];
+    res.json({
+      ok: true,
+      channel,
+      required: latestRequired(channel),
+      releases: list.map((r) => serializeRelease(channel, r)),
     });
   });
 
-  // 短链别名：https://<host>/download → 最新安装包（方便口头分发）
+  // —— 旧版兼容：最新稳定版元信息 ——
+  app.get('/api/v1/desktop/latest', (req, res) => {
+    const { manifest } = tryGetManifest();
+    if (!manifest) {
+      return res.status(404).json({ ok: false, error: '桌面端安装包暂未发布，请稍后再试' });
+    }
+    const top = topOf('stable');
+    if (!top) {
+      return res.status(404).json({ ok: false, error: '桌面端安装包暂未发布，请稍后再试' });
+    }
+    res.json({
+      ok: true,
+      version: top.version,
+      fileName: top.fileName,
+      sizeBytes: top.sizeBytes,
+      sha256: top.sha256,
+      publishedAt: top.releaseDate,
+      downloadUrl: '/api/v1/desktop/download',
+    });
+  });
+
+  // —— 下载：缺省最新稳定版；file= 精确下载（Range/断点续传）——
+  app.get('/api/v1/desktop/download', (req, res) => {
+    const { manifest } = tryGetManifest();
+    if (!manifest) {
+      return res.status(404).json({ ok: false, error: '桌面端安装包暂未发布，请稍后再试' });
+    }
+    const fileParam = String(req.query.file || '').trim();
+    let hit = null;
+    if (fileParam) {
+      if (!NAME_RE.test(fileParam)) {
+        return res.status(404).json({ ok: false, error: '安装包不存在' });
+      }
+      hit = findReleaseByFile(fileParam);
+      if (!hit) {
+        return res.status(404).json({ ok: false, error: '安装包不存在' });
+      }
+    } else {
+      const top = topOf('stable');
+      if (!top) {
+        return res.status(404).json({ ok: false, error: '桌面端安装包暂未发布，请稍后再试' });
+      }
+      hit = { channel: 'stable', release: top };
+    }
+    const { channel, release } = hit;
+    if (release.retracted) {
+      return res.status(410).json({ ok: false, error: '该版本安装包已被撤回，请下载其他版本' });
+    }
+    const abs = filePathOf(channel, release.fileName);
+    if (!fs.existsSync(abs)) {
+      return res.status(404).json({ ok: false, error: '安装包文件缺失' });
+    }
+    res.on('finish', () => {
+      if (req.method === 'GET' && res.statusCode === 200 && !req.headers.range) {
+        statsService.recordDownload(release.version, release.fileName);
+      }
+    });
+    res.sendFile(abs, {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': 'attachment; filename="' + release.fileName + '"',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    }, (err) => {
+      if (!err) return;
+      if (!res.headersSent) {
+        res.status(err.code === 'ENOENT' ? 404 : 500).json({ ok: false, error: '安装包读取失败' });
+      } else {
+        res.end();
+      }
+    });
+  });
+
+  // —— 桌面端 generic feed：latest.yml ——
+  app.get('/api/v1/desktop/update/:channel/latest.yml', (req, res) => {
+    if (!CHANNELS.includes(req.params.channel)) {
+      return res.status(404).json({ ok: false, error: '未知渠道' });
+    }
+    const abs = path.join(downloadsDir(), req.params.channel, 'latest.yml');
+    if (!fs.existsSync(abs)) {
+      return res.status(404).json({ ok: false, error: '更新源尚未就绪' });
+    }
+    res.type('text/yaml');
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(abs, (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  });
+
+  // —— 桌面端 generic feed：exe / blockmap（差分更新）——
+  app.get('/api/v1/desktop/update/:channel/:file', (req, res) => {
+    const channel = req.params.channel;
+    if (!CHANNELS.includes(channel)) {
+      return res.status(404).json({ ok: false, error: '未知渠道' });
+    }
+    const name = String(req.params.file || '');
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
+      return res.status(404).json({ ok: false, error: '文件不存在' });
+    }
+    const isExe = name.endsWith('.exe');
+    const isBlockmap = name.endsWith('.exe.blockmap');
+    if (!isExe && !isBlockmap) {
+      return res.status(404).json({ ok: false, error: '文件不存在' });
+    }
+    const target = isExe ? name : name.slice(0, -'.blockmap'.length);
+    const list = releasesOf(channel) || [];
+    if (!list.some((r) => r.fileName === target)) {
+      return res.status(404).json({ ok: false, error: '文件不存在' });
+    }
+    const abs = path.join(downloadsDir(), channel, name);
+    if (!fs.existsSync(abs)) {
+      return res.status(404).json({ ok: false, error: '文件缺失' });
+    }
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Cache-Control', 'public, max-age=300');
+    res.sendFile(abs, (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  });
+
+  // —— 下载统计（公开聚合，无 PII）——
+  app.get('/api/v1/desktop/stats', async (req, res) => {
+    try {
+      const s = await statsService.getStats();
+      res.json({ ok: true, perVersion: s.perVersion, last30d: s.last30d });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: '统计服务暂不可用' });
+    }
+  });
+
+  // —— 公开下载落地页（中国大陆镜像站点；无框架、无用户数据）——
+  app.get('/dl', (req, res) => {
+    const want = String(req.query.channel || 'stable');
+    const channel = CHANNELS.includes(want) ? want : 'stable';
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Referrer-Policy', 'no-referrer');
+    res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
+    const { manifest } = tryGetManifest();
+    if (!manifest) {
+      return res.type('html').send(landingPageHtml(channel, [], null, false));
+    }
+    const hasBeta = !!(manifest.channels && manifest.channels.beta && manifest.channels.beta.releases.length > 0);
+    res.type('html').send(landingPageHtml(channel, releasesOf(channel) || [], latestRequired(channel), hasBeta));
+  });
+
+  // —— 短链：/download → 最新安装包 ——
   app.get('/download', (req, res) => {
     res.redirect(302, '/api/v1/desktop/download');
   });
 };
+
+// ================= 落地页渲染（纯拼接，不经模板引擎） =================
+
+function landingPageHtml(channel, releases, required, hasBeta) {
+  const top = releases.find((r) => !r.retracted) || releases[0] || null;
+  const isBeta = channel === 'beta';
+  const rows = releases.map((r, i) => releaseRow(r, i === 0 && !r.retracted)).join('\n');
+  const hero = top
+    ? '<div class="hero">'
+        + '<div class="hero-ver">Qbao 桌面版 <b>' + esc(top.version) + '</b>'
+        + (isBeta ? ' <span class="badge badge-beta">测试版</span>' : ' <span class="badge badge-stable">稳定版</span>')
+        + '</div>'
+        + '<div class="hero-meta">' + formatBytes(top.sizeBytes) + ' · 更新于 ' + formatDate(top.releaseDate) + ' · Windows 10/11 x64</div>'
+        + '<a class="btn-download" href="/api/v1/desktop/download?file=' + encodeURIComponent(top.fileName) + '">立即下载</a>'
+        + '<div class="hero-sha">SHA256：<code class="sha">' + esc(top.sha256) + '</code>'
+        + ' <button class="btn-copy" data-copy="' + esc(top.sha256) + '" onclick="copySha(this)">复制</button></div>'
+        + '</div>'
+    : '<div class="hero"><div class="hero-ver">桌面版安装包暂未发布</div></div>';
+  const betaLink = hasBeta
+    ? '<p class="channel-line">'
+        + (isBeta
+            ? '当前展示测试版（beta）渠道。<a href="/dl">返回稳定版下载</a>'
+            : '如需体验最新测试功能，可查看 <a href="/dl?channel=beta">测试版渠道</a>（仅供测试，使用风险自负）')
+        + '</p>'
+    : '';
+  const betaBanner = isBeta
+    ? '<div class="warn">测试版（beta）仅用于提前验证新功能，可能存在缺陷，不提供强制更新保障。正式使用请安装稳定版。</div>'
+    : '';
+  const reqNote = required
+    ? '<div class="note">提示：低于 <b>' + esc(required) + '</b> 的旧版本已与当前服务器不兼容（标记「已停止服务」），请升级后使用。</div>'
+    : '';
+  return '<!DOCTYPE html>'
+    + '<html lang="zh-CN"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>Qbao 桌面版下载 - 中国大陆镜像站</title>'
+    + '<style>'
+    + 'body{margin:0;font-family:"Microsoft YaHei",system-ui,sans-serif;background:#f5f7fb;color:#24292f}'
+    + '.wrap{max-width:860px;margin:0 auto;padding:28px 20px 48px}'
+    + 'h1{font-size:22px;margin:0 0 4px}'
+    + '.sub{color:#57606a;margin:0 0 22px;font-size:13px}'
+    + '.card{background:#fff;border:1px solid #e3e7ee;border-radius:10px;padding:20px;margin-bottom:18px}'
+    + '.hero{text-align:center;padding:26px 12px}'
+    + '.hero-ver{font-size:18px;margin-bottom:8px}'
+    + '.hero-meta{color:#57606a;font-size:13px;margin-bottom:16px}'
+    + '.btn-download{display:inline-block;background:#1f6feb;color:#fff;font-size:16px;padding:11px 34px;border-radius:8px;text-decoration:none;font-weight:600}'
+    + '.btn-download:hover{background:#1960d3}'
+    + '.hero-sha{margin-top:14px;font-size:12px;color:#57606a;word-break:break-all}'
+    + '.sha{background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:11px}'
+    + '.btn-copy{margin-left:6px;border:1px solid #c9cfd8;background:#fff;border-radius:5px;font-size:12px;padding:3px 10px;cursor:pointer}'
+    + 'table{width:100%;border-collapse:collapse;font-size:13px}'
+    + 'th{text-align:left;color:#57606a;font-weight:600;border-bottom:2px solid #e3e7ee;padding:8px 6px}'
+    + 'td{border-bottom:1px solid #edf0f4;padding:9px 6px;vertical-align:top}'
+    + '.badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;margin-left:6px}'
+    + '.badge-stable{background:#dafbe1;color:#1a7f37}'
+    + '.badge-beta{background:#fff8c5;color:#9a6700}'
+    + '.badge-gone{background:#f6f8fa;color:#57606a}'
+    + '.badge-old{background:#ddf4ff;color:#0969da}'
+    + '.badge-stop{background:#ffebe9;color:#cf222e}'
+    + '.dl-btn{display:inline-block;background:#1f6feb;color:#fff;font-size:12px;padding:4px 14px;border-radius:5px;text-decoration:none}'
+    + '.dl-btn.disabled{background:#c9cfd8;cursor:not-allowed;pointer-events:none}'
+    + '.row-sha{font-size:11px;color:#57606a;word-break:break-all;margin-top:4px}'
+    + '.warn{background:#fff8c5;border:1px solid #eac54f;color:#7d4e00;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px}'
+    + '.note{background:#ddf4ff;border:1px solid #54aeff66;color:#0a4c7e;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:18px}'
+    + '.channel-line{font-size:13px;color:#57606a;margin:0 0 14px}'
+    + 'h2{font-size:16px;margin:0 0 12px}'
+    + 'ol{font-size:13px;color:#24292f;line-height:1.9;margin:0;padding-left:22px}'
+    + 'code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:12px}'
+    + '.foot{color:#8c959f;font-size:12px;text-align:center;margin-top:26px}'
+    + 'a{color:#1f6feb}'
+    + '</style></head><body><div class="wrap">'
+    + '<h1>Qbao 桌面版下载</h1>'
+    + '<p class="sub">由本站服务器直接分发（中国大陆镜像），不依赖 GitHub。与网页版账号数据云端同步。</p>'
+    + betaBanner + reqNote
+    + '<div class="card">' + hero + channelLine(channel, hasBeta) + '</div>'
+    + '<div class="card"><h2>历史版本（均支持覆盖安装，旧数据保留）</h2>'
+    + '<table><tr><th>版本</th><th>状态</th><th>大小</th><th>更新日期</th><th>操作</th></tr>' + rows + '</table>'
+    + '<p class="sub" style="margin-top:10px">覆盖安装（降级/重装）不会影响您的数据：账号数据云端同步，本地配置保留。</p>'
+    + '</div>'
+    + '<div class="card"><h2>校验安装包完整性</h2>'
+    + '<ol>'
+    + '<li>下载完成后，在安装包所在目录打开 PowerShell，执行：<br><code>Get-FileHash .\Qbao-Setup-*.exe -Algorithm SHA256</code></li>'
+    + '<li>将输出值与上方对应版本的 SHA256 逐一对比，一致即完整可信（本站 HTTPS 传输 + 双重校验）。</li>'
+    + '</ol></div>'
+    + '<div class="card"><h2>安装与更新说明</h2><ol>'
+    + '<li>已安装桌面端的用户将通过「设置 → 桌面端 → 检查更新」自动升级，无需重复下载；</li>'
+    + '<li>新版本发布后，自动更新通道只提示「新版本可用」，是否更新由你决定（强制更新仅发生在服务器不再兼容旧版等必要场景并会明确提示）；</li>'
+    + '<li>如某个版本出现问题，可随时回到本页下载任意旧版覆盖安装；发现问题也欢迎通过 Qbao 内的反馈入口告知管理员。</li>'
+    + '</ol></div>'
+    + '<p class="foot">Qbao · 华东师范大学 · 本页由服务器动态渲染，与网页端「设置 → 桌面端」信息同源</p>'
+    + '<script>'
+    + 'function copySha(btn){'
+    + '  var v=btn.getAttribute("data-copy")||"";'
+    + '  var done=function(){btn.textContent="已复制";setTimeout(function(){btn.textContent="复制"},1200);};'
+    + '  if(navigator.clipboard&&navigator.clipboard.writeText){'
+    + '    navigator.clipboard.writeText(v).then(done,function(){fallbackCopy(v,done);});'
+    + '  }else{fallbackCopy(v,done);}'
+    + '}'
+    + 'function fallbackCopy(v,done){'
+    + '  var ta=document.createElement("textarea");ta.value=v;document.body.appendChild(ta);ta.select();'
+    + '  try{document.execCommand("copy");done();}catch(e){}'
+    + '  document.body.removeChild(ta);'
+    + '}'
+    + '</script>'
+    + '</body></html>';
+}
+
+function channelLine(channel, hasBeta) {
+  if (!hasBeta) return '';
+  if (channel === 'beta') {
+    return '<p class="channel-line">当前展示测试版（beta）渠道。<a href="/dl">返回稳定版下载</a></p>';
+  }
+  return '<p class="channel-line">如需提前体验新功能，可查看 <a href="/dl?channel=beta">测试版渠道</a>（仅供测试，不提供强制更新保障）。</p>';
+}
+
+function releaseRow(r, isTop) {
+  const downloadParam = 'file=' + encodeURIComponent(r.fileName);
+  const statusBadge = r.retracted
+    ? '<span class="badge badge-gone">已撤回</span>'
+    : isTop
+      ? (r.version.indexOf('-') !== -1 ? '<span class="badge badge-beta">最新测试版</span>' : '<span class="badge badge-stable">当前最新</span>')
+      : r.stopped
+        ? '<span class="badge badge-stop">已停止服务</span>'
+        : '<span class="badge badge-old">旧版</span>';
+  const action = r.retracted
+    ? '<span style="color:#8c959f;font-size:12px">已下架</span>'
+    : '<a class="dl-btn' + (r.stopped ? ' disabled' : '') + '" href="/api/v1/desktop/download?' + downloadParam + '">下载</a>';
+  const retractNote = r.retracted
+    ? '<div class="row-sha">撤回原因：' + esc(r.retracted.reason || '') + '</div>'
+    : '';
+  const notes = r.releaseNotes && r.releaseNotes.length
+    ? '<div class="row-sha">' + r.releaseNotes.map(esc).join('；') + '</div>'
+    : '';
+  return '<tr>'
+    + '<td><b>' + esc(r.version) + '</b>' + statusBadge + retractNote + '</td>'
+    + '<td>' + (r.stopped ? '与当前服务器不兼容' : '可用') + '</td>'
+    + '<td>' + formatBytes(r.sizeBytes) + '</td>'
+    + '<td>' + formatDate(r.releaseDate) + '</td>'
+    + '<td>' + action
+    + '<div class="row-sha">SHA256<br><code class="sha">' + esc(r.sha256) + '</code>'
+    + ' <button class="btn-copy" data-copy="' + esc(r.sha256) + '" onclick="copySha(this)">复制</button></div>'
+    + notes + '</td>'
+    + '</tr>';
+}

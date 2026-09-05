@@ -86,8 +86,10 @@ if (!gotLock) {
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null); // 隐藏默认 File/Edit 菜单（应用内自带导航）
     app.setAppUserModelId('com.paraso42.qbao'); // Windows 通知/任务栏分组所需的 AppUserModelID
+    const runtime = loadRuntimeConfig();
     createWindow();
-    setupUpdater(() => mainWindow);
+    // v3.35：更新源跟随用户配置的服务器（generic feed），运行时注入 runtime 供 updater 使用
+    setupUpdater(() => mainWindow, runtime);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
   app.on('window-all-closed', () => { if (recreatingWindow) return; if (process.platform !== 'darwin') app.quit(); });
@@ -119,7 +121,7 @@ ipcMain.handle('qbao:get-app-info', () => {
   const runtime = loadRuntimeConfig();
   let autoStart = false;
   try { autoStart = app.getLoginItemSettings().openAtLogin; } catch (e) { /* 忽略 */ }
-  return { version: app.getVersion(), apiBase: runtime.apiBase, serverLabel: runtime.serverLabel, autoStart };
+  return { version: app.getVersion(), apiBase: runtime.apiBase, serverLabel: runtime.serverLabel, autoStart, updateChannel: runtime.updateChannel };
 });
 // 开机自启开关（Windows 写入注册表 Run 键；仅打包版有意义，开发模式同样可切换）
 ipcMain.handle('qbao:set-auto-start', (_e, enabled) => {

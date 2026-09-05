@@ -1,4 +1,4 @@
-<!-- 设置弹窗：个性化 + AI 配置 + 桌面端（自 legacy settings.js 迁移，DeepSeek 风格重设计） -->
+<!-- 设置弹窗：个性化 + AI 配置 + 桌面端（自 legacy settings.js 迁移，DeepSeek 风格重设计；v3.35 版本历史/自助回退） -->
 <template>
   <Modal :open="ui.settingsOpen" wide full @close="ui.closeSettings">
     <div class="sm-body">
@@ -6,7 +6,7 @@
         <div class="sm-nav-title">设置</div>
         <div class="sm-nav-item" :class="{ active: activeTab === 'personalize' }" @click="ui.setSettingsTab('personalize')"><Icon name="settings" :size="15" />个性化</div>
         <div class="sm-nav-item" :class="{ active: activeTab === 'aiconfig' }" @click="ui.setSettingsTab('aiconfig')"><Icon name="sparkle" :size="15" />AI 配置</div>
-        <!-- 桌面端：桌面环境=应用信息/检查更新；网页环境=国内镜像下载（v3.34.1） -->
+        <!-- 桌面端：桌面环境=应用信息/检查更新/回退；网页环境=国内镜像下载（v3.35 manifest-first） -->
         <div class="sm-nav-item" :class="{ active: activeTab === 'desktop' }" @click="ui.setSettingsTab('desktop')"><Icon name="download" :size="15" />桌面端</div>
       </nav>
 
@@ -72,7 +72,7 @@
 
         <!-- 桌面端 -->
         <section v-else-if="activeTab === 'desktop'" class="sm-tab">
-          <!-- 桌面端内：应用信息 + 检查更新（保持现状，v3.34.1 不改动） -->
+          <!-- 桌面端内：应用信息 + 软件更新（检查更新保持现状，v3.35 增加进度/渠道/自动检查）+ 历史版本自助回退 -->
           <div v-if="isDesktop" class="card">
             <div class="settings-section">
               <h4>应用信息</h4>
@@ -90,17 +90,61 @@
             </div>
             <div class="settings-section">
               <h4>软件更新</h4>
+              <div class="settings-row">
+                <label>自动检查</label>
+                <span class="row-desc">启动后每 6 小时自动检查新版本</span>
+                <Toggle :model-value="desktopInfo.autoCheck !== false" @change="setAutoCheck" />
+              </div>
+              <div class="settings-row">
+                <label>更新渠道</label>
+                <span class="row-val">{{ updateInfo.channel === 'beta' ? '测试版（beta）' : '稳定版（stable）' }}</span>
+              </div>
+              <div v-if="updateInfo.feedUrl" class="settings-row">
+                <label>更新源</label>
+                <span class="row-val break upd-feed">{{ updateInfo.feedUrl }}</span>
+              </div>
               <div class="ai-status" :class="'ai-status-' + updateState">{{ updateMessage }}</div>
+              <div v-if="updateState === 'progress'" class="upd-track-wrap">
+                <div class="upd-track"><div class="upd-progress-bar" :style="{ width: (updatePercent || 0) + '%' }"></div></div>
+                <span class="upd-percent">{{ updatePercent || 0 }}%</span>
+              </div>
               <div class="ai-actions">
                 <button class="btn btn-primary btn-small" :disabled="updateChecking" @click="checkUpdates">检查更新</button>
+              </div>
+              <p class="ai-help-note">普通版本更新始终由你确认；仅当服务器不再兼容旧版（安全/数据迁移等）时才出现强制更新提示。</p>
+            </div>
+            <div class="settings-section">
+              <h4>历史版本（自助回退）</h4>
+              <p class="col-hint">发现当前版本异常时，可自行下载任意旧版覆盖安装（不丢失数据），并可向管理员反馈问题。</p>
+              <div v-if="rollback.active" class="upd-track-wrap">
+                <div class="upd-track"><div class="upd-progress-bar" :style="{ width: rollback.percent + '%' }"></div></div>
+                <span class="upd-percent">{{ rollback.percent }}%</span>
+              </div>
+              <div class="dl-list">
+                <div v-for="r in desktopReleases" :key="r.version" class="dl-row">
+                  <div class="dl-row-main">
+                    <span class="dl-ver">v{{ r.version }}</span>
+                    <span class="ver-badge" :class="verBadgeClass(r)">{{ verBadgeText(r) }}</span>
+                  </div>
+                  <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="dlStatsMap[r.version]" class="dl-count">下载 {{ dlStatsMap[r.version] }} 次</span></div>
+                  <div class="dl-row-actions">
+                    <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                    <button class="btn btn-primary btn-small" :disabled="!canDownload(r) || rollback.active" @click="downloadVersionClick(r)">{{ r.version === desktopInfo.version ? '重装此版本' : '下载此版本' }}</button>
+                  </div>
+                </div>
+                <div v-if="desktopReleases.length === 0" class="dl-empty">暂无版本信息（{{ dlMsg }}）</div>
+              </div>
+              <div class="ai-actions">
+                <button class="btn btn-secondary btn-small" :disabled="webDl.loading" @click="loadDesktopVersions">刷新版本列表</button>
+                <button class="btn btn-secondary btn-small" @click="openIssuesPanel">遇到问题？向管理员反馈</button>
               </div>
             </div>
           </div>
           <!-- 网页端：国内镜像下载分发（内容与桌面端不同：不含检查更新/开机自启） -->
           <div v-else class="card">
             <div class="settings-section">
-              <h4>桌面版应用</h4>
-              <p class="col-hint">电脑端独立窗口、开机自启、自动更新；账号数据与网页版云端同步。</p>
+              <h4>桌面版应用 <span class="ver-badge b-latest">稳定版渠道</span></h4>
+              <p class="col-hint">电脑端独立窗口、开机自启、自动更新；账号数据与网页版云端同步。安装包由本站服务器提供（国内镜像）。</p>
               <div class="settings-row"><label>最新版本</label><span class="row-val">{{ webDl.version }}</span></div>
               <div class="settings-row"><label>安装包大小</label><span class="row-val">{{ webDl.sizeText }}</span></div>
               <div class="settings-row"><label>更新日期</label><span class="row-val">{{ webDl.dateText }}</span></div>
@@ -108,6 +152,25 @@
               <div class="ai-actions">
                 <button class="btn btn-primary btn-small" :disabled="!webDl.ready" @click="startWebDownload"><Icon name="download" :size="13" /> 下载桌面版</button>
                 <button class="btn btn-secondary btn-small" :disabled="webDl.loading" @click="loadWebDesktopRelease">刷新</button>
+                <button class="btn btn-secondary btn-small" @click="openDownloadPage">查看下载页</button>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h4>版本历史（可自行选择旧版）</h4>
+              <div class="dl-list">
+                <div v-for="r in webDl.releases" :key="r.version" class="dl-row">
+                  <div class="dl-row-main">
+                    <span class="dl-ver">v{{ r.version }}</span>
+                    <span class="ver-badge" :class="verBadgeClass(r, true)">{{ verBadgeText(r, true) }}</span>
+                  </div>
+                  <div class="dl-row-sub">{{ r.sizeText }} · {{ r.dateText }}<span v-if="webStatsMap[r.version]" class="dl-count">下载 {{ webStatsMap[r.version] }} 次</span></div>
+                  <div class="dl-row-actions">
+                    <button class="btn btn-secondary btn-small" :disabled="!r.sha256" @click="copySha(r.sha256)">SHA256</button>
+                    <a v-if="canDownload(r)" class="btn btn-primary btn-small dl-a" :href="dlUrl(r.fileName)">下载</a>
+                    <button v-else class="btn btn-secondary btn-small" disabled>{{ r.retracted ? '已撤回' : '不可用' }}</button>
+                  </div>
+                </div>
+                <div v-if="webDl.releases.length === 0" class="dl-empty">暂无版本信息</div>
               </div>
             </div>
             <div class="settings-section">
@@ -116,7 +179,7 @@
                 <code class="sha-code">{{ webDl.sha256 || '—' }}</code>
                 <button class="btn btn-secondary btn-small" :disabled="!webDl.sha256" @click="copySha256">复制</button>
               </div>
-              <p class="ai-help-note">安装包由本站服务器提供（国内镜像），下载后可用校验值核对文件完整性。已安装旧版桌面端的用户，请在桌面端「设置 → 桌面端」点击「检查更新」升级到最新版，无需重复下载。</p>
+              <p class="ai-help-note">下载后可用校验值核对文件完整性。已安装旧版桌面端的用户，请在桌面端「设置 → 桌面端」点击「检查更新」升级到最新版，无需重复下载；如新版本异常，也可在本页或下载页选择任意旧版覆盖安装。</p>
             </div>
           </div>
         </section>
@@ -129,8 +192,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useUiStore } from '../../../stores/ui'
 import { useDataStore } from '../../../stores/data'
+import { useIssuesStore } from '../../../stores/issues'
 import { IS_DESKTOP, desktopBridge, API_BASE } from '../../../core/env'
-import { fetchDesktopRelease, formatSize, formatDate } from '../../../services/desktopRelease'
+import { fetchDesktopManifest, fetchDesktopStats, parseReleases, formatSize, formatDate } from '../../../services/desktopRelease'
 import { applyFontSizes } from '../../../core/fontSizes'
 import Modal from '../../ui/Modal.vue'
 import Icon from '../../ui/Icon.vue'
@@ -139,6 +203,7 @@ import AiConfigSection from './AiConfigSection.vue'
 
 const ui = useUiStore()
 const data = useDataStore()
+const issuesStore = useIssuesStore()
 const aiCfgRef = ref(null)
 
 const settings = computed(() => data.state.settings)
@@ -172,24 +237,49 @@ async function resetDefaults() {
 
 // 桌面端
 const isDesktop = ref(IS_DESKTOP)
-const desktopInfo = ref({ version: '', apiBase: '', serverLabel: '', autoStart: false })
+const desktopInfo = ref({ version: '', apiBase: '', serverLabel: '', autoStart: false, autoCheck: true })
+const updateInfo = ref({ feedUrl: '', channel: 'stable', autoCheck: true })
 const updateState = ref('idle')
 const updateMessage = ref('启动应用后会自动检查更新；有新版本时会提示下载。')
 const updateChecking = ref(false)
+const updatePercent = ref(0)
 
-// 网页端：桌面版下载（国内镜像，v3.34.1——内容与桌面端不同，不跳转 GitHub）
-const webDl = ref({ ready: false, loading: false, state: 'info', message: '正在获取下载信息…', version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '' })
+// 网页端：桌面版下载（国内镜像，v3.35 manifest-first——内容与桌面端不同，不跳转 GitHub）
+const webDl = ref({ ready: false, loading: false, state: 'info', message: '正在获取下载信息…', version: '—', sizeText: '—', dateText: '—', sha256: '', fileName: '', releases: [] })
+const webStatsMap = ref({})
+const dlStatsMap = ref({})
+const desktopReleases = ref([])
+const dlMsg = ref('')
+const rollback = ref({ active: false, percent: 0 })
+
+function buildStatsMap(j) {
+  const m = {}
+  if (j && Array.isArray(j.perVersion)) {
+    for (const r of j.perVersion) m[r.version] = r.downloads
+  }
+  return m
+}
+
 async function loadWebDesktopRelease() {
   webDl.value.loading = true
   webDl.value.state = 'info'
   webDl.value.message = '正在获取下载信息…'
   try {
-    const j = await fetchDesktopRelease()
-    webDl.value.version = 'v' + j.version
-    webDl.value.sizeText = formatSize(j.sizeBytes)
-    webDl.value.dateText = formatDate(j.publishedAt)
-    webDl.value.sha256 = j.sha256 || ''
-    webDl.value.fileName = j.fileName
+    const [mani, stats] = await Promise.all([
+      fetchDesktopManifest(),
+      fetchDesktopStats().catch(() => null),
+    ])
+    const releases = parseReleases(mani)
+    webStatsMap.value = buildStatsMap(stats)
+    webDl.value.releases = releases
+    const top = releases.find((r) => !r.retracted) || releases[0] || null
+    if (top) {
+      webDl.value.version = 'v' + top.version
+      webDl.value.sizeText = top.sizeText
+      webDl.value.dateText = top.dateText
+      webDl.value.sha256 = top.sha256 || ''
+      webDl.value.fileName = top.fileName
+    }
     webDl.value.ready = true
     webDl.value.state = 'ok'
     webDl.value.message = '已就绪，点击「下载桌面版」开始下载'
@@ -201,6 +291,88 @@ async function loadWebDesktopRelease() {
     webDl.value.loading = false
   }
 }
+
+// 桌面端：历史版本列表（manifest 直连当前服务器）
+async function loadDesktopVersions() {
+  webDl.value.loading = true
+  dlMsg.value = '加载中…'
+  try {
+    const [mani, stats] = await Promise.all([
+      fetchDesktopManifest(),
+      fetchDesktopStats().catch(() => null),
+    ])
+    desktopReleases.value = parseReleases(mani)
+    dlStatsMap.value = buildStatsMap(stats)
+    dlMsg.value = '无可用版本'
+  } catch (e) {
+    desktopReleases.value = []
+    dlMsg.value = '获取失败（' + ((e && e.message) || '网络错误') + '）'
+  } finally {
+    webDl.value.loading = false
+  }
+}
+
+function verBadgeClass(r, web) {
+  if (r.retracted) return 'b-retracted'
+  if (r.stopped) return 'b-stopped'
+  if (!web && r.version === desktopInfo.value.version) return 'b-installed'
+  if (r.current) return 'b-latest'
+  return 'b-old'
+}
+function verBadgeText(r, web) {
+  if (r.retracted) return '已撤回'
+  if (r.stopped) return '已停止服务'
+  if (!web && r.version === desktopInfo.value.version) return '已安装'
+  if (r.current) return web ? '当前最新' : '最新'
+  return '旧版'
+}
+function canDownload(r) {
+  return !!r && !r.retracted && !r.stopped
+}
+function dlUrl(fileName) {
+  return API_BASE + '/desktop/download?file=' + encodeURIComponent(fileName)
+}
+function openDownloadPage() {
+  const url = (typeof window !== 'undefined' && window.location ? window.location.origin : '') + '/dl'
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+function openIssuesPanel() {
+  issuesStore.panelOpen = true
+}
+
+// 桌面端：下载指定版本（主进程下载 + sha256 校验 + 唤起安装器）
+async function downloadVersionClick(r) {
+  const d = desktopBridge()
+  if (!d || typeof d.downloadVersion !== 'function') {
+    ui.toast('当前环境不支持自动下载安装包', 'err')
+    return
+  }
+  const ok = await ui.openConfirm('下载 v' + r.version, '将下载该版本安装包并校验完整性，完成后提示运行安装程序（覆盖安装不会影响您的数据）。确定继续？', '下载')
+  if (!ok) return
+  rollback.value.active = true
+  rollback.value.percent = 0
+  try {
+    const res = await d.downloadVersion({ fileName: r.fileName, version: r.version, sha256: r.sha256 })
+    if (res && res.ok) {
+      rollback.value.active = false
+      if (r.version === desktopInfo.value.version) ui.toast('安装包已校验并启动安装器（重装完成即恢复正常）', 'ok')
+      else ui.toast('安装包已校验并启动安装器，完成安装后即为 v' + r.version, 'ok')
+    } else {
+      rollback.value.active = false
+      ui.toast('下载失败: ' + ((res && res.error) || '未知错误'), 'err')
+    }
+  } catch (e) {
+    rollback.value.active = false
+    ui.toast('下载失败: ' + ((e && e.message) || '未知错误'), 'err')
+  }
+}
+
 function startWebDownload() {
   if (!webDl.value.ready) return
   const a = document.createElement('a')
@@ -212,7 +384,9 @@ function startWebDownload() {
   ui.toast('开始下载桌面版 ' + webDl.value.version, 'info')
 }
 function copySha256() {
-  const sha = webDl.value.sha256
+  copySha(webDl.value.sha256)
+}
+function copySha(sha) {
   if (!sha) return
   const done = () => ui.toast('SHA256 已复制', 'ok')
   const fallback = () => {
@@ -231,7 +405,20 @@ function copySha256() {
 function loadDesktopInfo() {
   const d = desktopBridge()
   if (!d || typeof d.getAppInfo !== 'function') return
-  d.getAppInfo().then((info) => { desktopInfo.value = Object.assign({}, info || {}) }).catch(() => {})
+  d.getAppInfo().then((info) => {
+    desktopInfo.value = Object.assign({ autoCheck: true }, info || {})
+  }).catch(() => {})
+  if (d && typeof d.getUpdateInfo === 'function') {
+    d.getUpdateInfo().then((u) => { updateInfo.value = Object.assign({ feedUrl: '', channel: 'stable', autoCheck: true }, u || {}) }).catch(() => {})
+  }
+}
+function setAutoCheck(v) {
+  const d = desktopBridge()
+  if (!d || typeof d.setAutoCheck !== 'function') { ui.toast('当前环境不支持设置自动检查', 'err'); return }
+  d.setAutoCheck(!!v).then((r) => {
+    if (r && r.ok !== false) { desktopInfo.value.autoCheck = !!v; updateInfo.value.autoCheck = !!v; ui.toast(v ? '已开启自动检查' : '已关闭自动检查', 'ok') }
+    else ui.toast('设置失败: ' + ((r && r.error) || '未知错误'), 'err')
+  }).catch(() => {})
 }
 function toggleAutoStart(v) {
   const d = desktopBridge()
@@ -287,9 +474,25 @@ function bindUpdateStatus() {
   if (!d || typeof d.onUpdateStatus !== 'function') return
   d.onUpdateStatus((s) => {
     if (!s) return
-    if (s.state === 'progress') { updateState.value = 'info'; updateMessage.value = '正在下载更新 ' + (s.percent || 0) + '%' }
+    if (s.state === 'checking') { updateState.value = 'info'; updateMessage.value = '正在检查更新…' }
+    else if (s.state === 'progress') {
+      updateState.value = 'progress'
+      updatePercent.value = Math.round(s.percent || 0)
+      updateMessage.value = '正在下载更新 ' + updatePercent.value + '%'
+    }
     else if (s.state === 'downloaded') { updateState.value = 'ok'; updateMessage.value = '更新已下载完成，重启应用即可安装' }
+    else if (s.state === 'up-to-date') { updateState.value = 'ok'; updateMessage.value = '已是最新版本' }
     else if (s.state === 'error') { updateState.value = 'err'; updateMessage.value = (s.message || '检查失败') }
+  })
+}
+function bindRollbackProgress() {
+  const d = desktopBridge()
+  if (!d || typeof d.onRollbackProgress !== 'function') return
+  d.onRollbackProgress((s) => {
+    if (!s) return
+    if (s.state === 'start') { rollback.value.active = true; rollback.value.percent = 0 }
+    else if (s.state === 'progress') { rollback.value.active = true; rollback.value.percent = Math.round(s.percent || 0) }
+    else if (s.state === 'done' || s.state === 'error') { rollback.value.active = false }
   })
 }
 
@@ -298,16 +501,16 @@ watch(() => ui.settingsOpen, (open) => {
     if (activeTab.value === 'aiconfig') {
       if (aiCfgRef.value) aiCfgRef.value.loadForm()
     }
-    if (activeTab.value === 'desktop') { if (isDesktop.value) loadDesktopInfo(); else loadWebDesktopRelease() }
+    if (activeTab.value === 'desktop') { if (isDesktop.value) { loadDesktopInfo(); loadDesktopVersions() } else loadWebDesktopRelease() }
   }
 })
 watch(() => ui.settingsTab, (tab) => {
   if (!ui.settingsOpen) return
   if (tab === 'aiconfig') { if (aiCfgRef.value) aiCfgRef.value.loadForm() }
-  if (tab === 'desktop') { if (isDesktop.value) loadDesktopInfo(); else loadWebDesktopRelease() }
+  if (tab === 'desktop') { if (isDesktop.value) { loadDesktopInfo(); loadDesktopVersions() } else loadWebDesktopRelease() }
 })
 
-onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
+onMounted(() => { bindUpdateStatus(); bindRollbackProgress(); applyFontSizes(settings.value) })
 </script>
 
 <style scoped>
@@ -404,6 +607,26 @@ onMounted(() => { bindUpdateStatus(); applyFontSizes(settings.value) })
 .sha-code { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: var(--fs-xs); color: var(--text-secondary); background: var(--surface-hover); padding: 6px 10px; border-radius: var(--radius-sm); word-break: break-all; }
 .ai-help { font-size: var(--fs-sm); color: var(--text-secondary); line-height: 1.9; }
 .ai-help-note { margin-top: 8px; color: var(--text-muted); font-size: var(--fs-xs); }
+.dl-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.dl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: var(--radius-md); flex-wrap: wrap; }
+.dl-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dl-ver { font-weight: 600; font-size: var(--fs-base); }
+.dl-row-sub { font-size: var(--fs-xs); color: var(--text-muted); width: 100%; }
+.dl-count { color: var(--color-primary); margin-left: 10px; }
+.dl-row-actions { display: flex; gap: 8px; }
+.dl-empty { color: var(--text-muted); font-size: var(--fs-sm); padding: 12px; text-align: center; }
+.dl-a { text-decoration: none; }
+.ver-badge { font-size: 11px; padding: 1px 8px; border-radius: 20px; flex-shrink: 0; }
+.b-latest { background: #dafbe1; color: #1a7f37; }
+.b-installed { background: #ddf4ff; color: #0969da; }
+.b-stopped { background: #ffebe9; color: #cf222e; }
+.b-retracted { background: #f6f8fa; color: #57606a; text-decoration: line-through; }
+.b-old { background: #f0f2f5; color: #57606a; }
+.upd-track-wrap { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.upd-track { flex: 1; background: var(--surface-hover); border-radius: 4px; height: 8px; overflow: hidden; }
+.upd-progress-bar { height: 100%; background: var(--color-primary); transition: width 0.3s; }
+.upd-percent { font-size: var(--fs-xs); color: var(--text-muted); min-width: 38px; text-align: right; }
+.upd-feed { font-size: var(--fs-xs); }
 @media (max-width: 768px) {
   .sm-body { flex-direction: column; margin: calc(var(--space-lg) * -1); }
   .sm-nav { width: 100%; display: flex; align-items: center; gap: 4px; border-right: none; border-bottom: 1px solid var(--border-light); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--space-sm); overflow-x: auto; }

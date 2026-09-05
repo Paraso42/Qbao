@@ -87,3 +87,33 @@ jobs:
       - name: 前端 Lint（eslint，P0.4）
         working-directory: app
         run: npm run lint
+  tooling:
+    name: 发布工具测试（零依赖）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 语法检查 + node:test（scripts/）
+        run: |
+          node --check scripts/installer-lib.js
+          node --check scripts/publish-installer.js
+          node --test scripts/installer-lib.test.js
+
+  desktop-core:
+    name: 桌面端更新工具测试（node:test，无 Electron 依赖）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 主进程语法检查
+        run: |
+          node --check desktop/main.js
+          node --check desktop/preload.js
+          node --check desktop/updater.js
+          node --check desktop/updater-util.js
+      - name: updater 纯函数单测（feed/required/撤回/下载参数校验）
+        run: node --test desktop/test/updater.test.js
