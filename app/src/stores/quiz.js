@@ -431,11 +431,18 @@ export const useQuizStore = defineStore('quiz', () => {
     rebuildChapterAnswersFromSets(ch)
   }
 
+  // v3.36：章节轮次答完不再弹「本轮报告」（查看报告功能已移除，回顾去答题历史）。
+  // 大考卷报告流程不受影响（endExamGenerated / openExamReport 保持）。
+  function finishSetAndClose() {
+    ui.toast('本轮已完成，可在「答题历史」中查看回顾', 'info', 4000)
+    closeQuiz()
+  }
+
   function endExam() {
     const as = activeSet.value
     if (!as) return
     // 双击“查看报告/结束”防重：本轮只结算一次，避免重复历史记录/重复请求
-    if (isSetFinalized(as)) { openQuiz('report'); return }
+    if (isSetFinalized(as)) { finishSetAndClose(); return }
     if (as._isSet) { endQuizSessionForSet(as); return }
     if (as.isExam) { endExamGenerated(); return }
     // 兼容旧数据路径
@@ -446,7 +453,7 @@ export const useQuizStore = defineStore('quiz', () => {
     data.saveState()
     session.endedFromExam = false
     markSetFinalized(as)
-    openQuiz('report')
+    finishSetAndClose()
   }
 
   function isSetFinalized(as) { return !!(as && as._ref && as._ref._finalized) }
@@ -467,7 +474,7 @@ export const useQuizStore = defineStore('quiz', () => {
       syncAnswerToServerFinal()
       data.saveState()
       markSetFinalized(as)
-      openQuiz('report')
+      finishSetAndClose()
       return
     }
     syncSetAnswersToChapter(ch, as)
@@ -479,7 +486,7 @@ export const useQuizStore = defineStore('quiz', () => {
     data.saveState()
     session.endedFromExam = false
     markSetFinalized(as)
-    openQuiz('report')
+    finishSetAndClose()
   }
 
   function endExamGenerated() {

@@ -28,6 +28,16 @@ function getUserStored() {
   return null
 }
 
+// —— v3.36.1 账户隔离加固：内存 state 的数据属主追踪 ——
+// 页面启动时由 loadState 记录“当前内存题库属于哪个账号”；切换账号（applyAuth）
+// 时据此判定是否需要整页重建（防止把上一账号的题库写进新账号的云端/本地键）。
+let _stateOwnerUid = null
+export function getStateOwnerUid() { return _stateOwnerUid }
+// v3.36.1 登录门禁：匿名期（未登录）内存被改动过（saveState 被拒）→ 登录时必须整页重建，
+// 防止匿名改动在“同账号重新登录不重建”路径下被带入账号（防御纵深）
+let _anonymousMutated = false
+export function hadAnonymousMutations() { return _anonymousMutated }
+
 export function loadState() {
   let state
   try {
@@ -35,6 +45,8 @@ export function loadState() {
     if (user && user.id) {
       // 已登录：只读该账号专属键，绝不回退公共键（修复多账号串号：
       // 此前 fallback STORAGE_KEY 会把上一个账号的数据当成新账号的数据）
+      _stateOwnerUid = String(user.id)
+      stateDb.setStateDbUid(user.id) // IndexedDB 大字段按账号分区
       const saved = localStorage.getItem(CLOUD_STORAGE_PREFIX + user.id)
       if (saved) {
         state = JSON.parse(saved)
@@ -43,13 +55,10 @@ export function loadState() {
       }
       return JSON.parse(JSON.stringify(DEFAULT_STATE))
     }
-    // 未登录：读本地公共键
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      state = JSON.parse(saved)
-      state = migrateState(state)
-      return state
-    }
+    // v3.36.1 登录门禁：未登录一律空态启动 —— 不读公共键（拒绝匿名数据参与业务），
+    // 不产生任何本地归属；登录后按账号加载（整页重建，见 user store applyAuth）
+    _stateOwnerUid = null
+    stateDb.setStateDbUid(null)
   } catch (e) { console.warn('[persist] load err', e) }
   return JSON.parse(JSON.stringify(DEFAULT_STATE))
 }
@@ -135,6 +144,9 @@ export function flushBigFieldsNow() {
   if (!state || typeof state !== 'object') return
   if (!hasBigFields(state)) return
   writeBigFieldsToIdb(state)
+  // 活动会话/考卷镜像一并强写（关闭/刷新前最后一份快照的 IDB 通道）
+  saveActiveSession(state)
+  saveActiveExam(state)
 }
 
 // 空闲时全量写大字段到 IndexedDB（requestIdleCallback 不阻塞交互；节流合并高频保存）
@@ -155,6 +167,31 @@ export function scheduleFullIdbWrite(state) {
 export const ACTIVE_SESSION_KEY = 'qbao_active_session'
 // 大考卷（generatedExams）进度同步键：考卷题目/答案/进度走同一条“刷新必达”通道
 export const ACTIVE_EXAM_KEY = 'qbao_active_exam'
+// IndexedDB 镜像键（qbao_state_db global store 内独立 key；无需 DB 版本迁移）
+export const ACTIVE_SESSION_IDB_KEY = 'activeSession'
+export const ACTIVE_EXAM_IDB_KEY = 'activeExam'
+// v3.36 存储配额治理：活动会话镜像仍保留 localStorage 影子键（刷新/关闭必达），
+// 但超过预算的大会话（2000+ 题一轮可达数 MB）只写 IndexedDB —— 防止撑爆 iOS
+// Safari localStorage 约 5MB 总量，导致骨架键写不进、每次答题弹“存储空间已满”。
+export const ACTIVE_SESSION_LS_BUDGET = 1024 * 1024 // 1MB
+
+// 会话镜像落盘后端选择（纯函数，可测）：预算内 → localStorage 影子；超大 → 仅 IndexedDB
+export function pickSessionBackend(bytes) {
+  if (typeof bytes !== 'number' || !(bytes >= 0)) return 'idb'
+  return bytes > ACTIVE_SESSION_LS_BUDGET ? 'idb' : 'ls'
+}
+
+// v3.36.1 账户隔离：localStorage 活动会话/考卷镜像键按账号后缀隔离（旧版全局键仅用于升级回退）
+function activeMirrorKey(base) {
+  try {
+    const u = getUserStored()
+    if (u && u.id) return base + '_u_' + u.id
+  } catch (e) { /* 忽略 */ }
+  return base
+}
+function removeLegacyMirror(base) {
+  try { if (activeMirrorKey(base) !== base) localStorage.removeItem(base) } catch (e) { /* 忽略 */ }
+}
 
 function extractActiveSession(state) {
   try {
@@ -178,10 +215,19 @@ function extractActiveSession(state) {
 function saveActiveSession(state) {
   const session = extractActiveSession(state)
   if (!session) return
+  let serialized = null
+  try { serialized = JSON.stringify(session) } catch (e) { return }
+  // IndexedDB 常备完整镜像（体积无上限，按账号分区）；localStorage 仅保留预算内的小会话影子
+  try { stateDb.saveMisc(ACTIVE_SESSION_IDB_KEY, JSON.parse(serialized)) } catch (e) { /* IDB 失败则依赖云端 */ }
   try {
-    // 用 JSON 序列化（剥离 reactive proxy），体积 = 当前 quizSet 大小（通常 < 100KB）
-    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session))
-  } catch (e) { /* 骨架键已尽力；失败则依赖 IDB/云端 */ }
+    const k = activeMirrorKey(ACTIVE_SESSION_KEY)
+    if (pickSessionBackend(serialized.length) === 'ls') {
+      localStorage.setItem(k, serialized)
+    } else {
+      localStorage.removeItem(k) // 清理可能残留的历史大镜像键
+    }
+    removeLegacyMirror(ACTIVE_SESSION_KEY) // 写入账号键后清旧全局键，防跨账号残留
+  } catch (e) { /* 影子键尽力；失败则依赖 IDB/云端 */ }
 }
 
 function extractActiveExam(state) {
@@ -203,15 +249,44 @@ function extractActiveExam(state) {
 function saveActiveExam(state) {
   const exam = extractActiveExam(state)
   if (!exam) return
+  let serialized = null
+  try { serialized = JSON.stringify(exam) } catch (e) { return }
+  try { stateDb.saveMisc(ACTIVE_EXAM_IDB_KEY, JSON.parse(serialized)) } catch (e) { /* IDB 失败则依赖云端 */ }
   try {
-    localStorage.setItem(ACTIVE_EXAM_KEY, JSON.stringify(exam))
+    const k = activeMirrorKey(ACTIVE_EXAM_KEY)
+    if (pickSessionBackend(serialized.length) === 'ls') {
+      localStorage.setItem(k, serialized)
+    } else {
+      localStorage.removeItem(k) // 清理可能残留的历史大镜像键
+    }
+    removeLegacyMirror(ACTIVE_EXAM_KEY) // 写入账号键后清旧全局键，防跨账号残留
   } catch (e) { /* 失败则依赖 IDB/云端 */ }
 }
 
-function restoreActiveSession(state) {
+async function restoreActiveSession(state) {
+  let raw = null
+  let readKey = null
+  const uidKey = activeMirrorKey(ACTIVE_SESSION_KEY)
+  try { raw = localStorage.getItem(uidKey); readKey = uidKey } catch (e) {}
+  if (raw == null && uidKey !== ACTIVE_SESSION_KEY) {
+    // 升级回退：无账号专属键时读旧全局键（cid 归属由下方骨架引用守卫过滤）
+    try { raw = localStorage.getItem(ACTIVE_SESSION_KEY); readKey = ACTIVE_SESSION_KEY } catch (e) {}
+  }
+  if (raw == null) {
+    // 影子键缺失（大会话本就不写 / 已被清理）→ IndexedDB 完整镜像回退
+    try {
+      const d = await stateDb.loadMisc(ACTIVE_SESSION_IDB_KEY)
+      if (d != null) raw = JSON.stringify(d)
+    } catch (e) { /* 回退不可用则跳过恢复 */ }
+  } else {
+    // 历史遗留超预算大镜像键：读取后一次性清理（数据已常驻 IDB）；
+    // 预算内小影子键保留（下一次保存前刷新仍可恢复，不丢语义）
+    if (raw.length > ACTIVE_SESSION_LS_BUDGET) {
+      try { localStorage.removeItem(readKey) } catch (e) {}
+    }
+  }
+  if (!raw) return
   try {
-    const raw = localStorage.getItem(ACTIVE_SESSION_KEY)
-    if (!raw) return
     const s = JSON.parse(raw)
     const ch = state.chapters && state.chapters[s.cid]
     if (!ch) return
@@ -238,10 +313,29 @@ function restoreActiveSession(state) {
   } catch (e) { console.warn('[persist] restoreActiveSession err', e) }
 }
 
-function restoreActiveExam(state) {
+async function restoreActiveExam(state) {
+  let raw = null
+  let readKey = null
+  const uidKey = activeMirrorKey(ACTIVE_EXAM_KEY)
+  try { raw = localStorage.getItem(uidKey); readKey = uidKey } catch (e) {}
+  if (raw == null && uidKey !== ACTIVE_EXAM_KEY) {
+    // 升级回退：无账号专属键时读旧全局键（归属由骨架引用守卫过滤）
+    try { raw = localStorage.getItem(ACTIVE_EXAM_KEY); readKey = ACTIVE_EXAM_KEY } catch (e) {}
+  }
+  if (raw == null) {
+    try {
+      const d = await stateDb.loadMisc(ACTIVE_EXAM_IDB_KEY)
+      if (d != null) raw = JSON.stringify(d)
+    } catch (e) { /* 回退不可用则跳过恢复 */ }
+  } else {
+    // 历史遗留超预算大镜像键：读取后一次性清理（数据已常驻 IDB）；
+    // 预算内小影子键保留（下一次保存前刷新仍可恢复）
+    if (raw.length > ACTIVE_SESSION_LS_BUDGET) {
+      try { localStorage.removeItem(readKey) } catch (e) {}
+    }
+  }
+  if (!raw) return
   try {
-    const raw = localStorage.getItem(ACTIVE_EXAM_KEY)
-    if (!raw) return
     const s = JSON.parse(raw)
     if (!Array.isArray(s.questions) || s.questions.length === 0) return
     if (!state.generatedExams) state.generatedExams = {}
@@ -273,6 +367,8 @@ const toUndef = (arr) => (Array.isArray(arr) ? arr.map((a) => (a === null ? unde
 
 export async function hydrateState(state) {
   try {
+    // 数据属主与 IDB 分区保持一致（骨架由 loadState 按账号读取）
+    stateDb.setStateDbUid(_stateOwnerUid)
     const [chapters, global] = await Promise.all([stateDb.loadAllChapters(), stateDb.loadGlobal()])
     const chs = state.chapters || {}
     for (const cid of Object.keys(chapters)) {
@@ -291,9 +387,9 @@ export async function hydrateState(state) {
       if (global.generatedExams && (!state.generatedExams || Object.keys(state.generatedExams).length === 0)) state.generatedExams = global.generatedExams
       if (global.history && (!state.history || state.history.length === 0)) state.history = global.history
     }
-    // 恢复活动会话（答题入口/进度）
-    restoreActiveSession(state)
-    restoreActiveExam(state)
+    // 恢复活动会话（答题入口/进度）：localStorage 影子优先 → IDB 镜像回退
+    await restoreActiveSession(state)
+    await restoreActiveExam(state)
   } catch (e) { console.warn('[persist] hydrate err', e) }
 }
 
@@ -322,9 +418,38 @@ export function getChStrategy(state, cid) {
 
 let _persistWarn = null
 export function setPersistWarningHook(fn) { _persistWarn = fn }
+// v3.36：致命告警 30s 冷却 —— 每次答题保存失败都弹会形成“连续报错”刷屏；
+// 冷却期内仅 console.warn 留痕，不再重复打扰（数据安全语义不变）
+let _lastFatalWarnTs = 0
+const FATAL_WARN_COOLDOWN_MS = 30 * 1000
 function persistWarn(msg, fatal) {
   console.warn('[persist] ' + msg)
-  if (_persistWarn) { try { _persistWarn(msg, !!fatal) } catch (e) {} }
+  if (_persistWarn) {
+    if (fatal) {
+      const now = Date.now()
+      if (now - _lastFatalWarnTs < FATAL_WARN_COOLDOWN_MS) return
+      _lastFatalWarnTs = now
+    }
+    try { _persistWarn(msg, !!fatal) } catch (e) {}
+  }
+}
+
+// QuotaExceeded 自愈：优先清理可由 IndexedDB 完整恢复的临时镜像键（活动会话/考卷），
+// 释放空间后由调用方重试一次写盘；返回是否释放了空间
+function tryQuotaRecovery() {
+  let freed = false
+  const keys = [ACTIVE_SESSION_KEY, ACTIVE_EXAM_KEY]
+  for (const base of keys) {
+    // 同时清理账号专属键与旧版全局键（镜像数据已常驻 IDB，可安全释放）
+    const variants = [base, activeMirrorKey(base)]
+    for (const k of new Set(variants)) {
+      try {
+        const raw = localStorage.getItem(k)
+        if (raw != null && raw.length > 0) { localStorage.removeItem(k); freed = true }
+      } catch (e) { /* ignore */ }
+    }
+  }
+  return freed
 }
 
 export const LOCALSTORAGE_WARN_BYTES = 4 * 1024 * 1024 // 4MB 预警（localStorage 约 5MB 上限）
@@ -377,14 +502,16 @@ export function saveState(state) {
   }
 
   try {
-    // 账号隔离：登录态只写账号专属键（不写公共键，避免串号/污染）；
-    // 未登录才写公共键（离线本地使用）
+    // v3.36.1 登录门禁：只允许登录账号落盘（账号专属键；绝不写公共键）。
+    // 未登录不产生任何持久化副作用（含 IDB 大字段与活动镜像），数据只在内存，
+    // 登录后按账号整页重建 —— 从机制上杜绝匿名数据与多账号互相串扰。
     const user = getUserStored()
-    if (user && user.id) {
-      localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, serialized)
-    } else {
-      localStorage.setItem(STORAGE_KEY, serialized)
+    if (!user || !user.id) {
+      // 登录门禁：拒绝匿名落盘；内存可能已含匿名期改动，标记后强制下次登录重建
+      _anonymousMutated = true
+      return { ok: false }
     }
+    localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, serialized)
     // v3.30：大字段（题目/答案/历史）空闲时写 IndexedDB，不再占 localStorage
     scheduleFullIdbWrite(state)
     // 活动会话同步写（答题进度刷新不丢）：当前轮次 + 进行中的大考卷
@@ -392,6 +519,19 @@ export function saveState(state) {
     saveActiveExam(state)
     return { ok: true, bytes }
   } catch (e) {
+    if (e && e.name === 'QuotaExceededError' && tryQuotaRecovery()) {
+      // 自动清理可恢复的临时镜像键后重试一次（大会话镜像已迁 IDB，这里清的是历史遗留）
+      try {
+        const user = getUserStored()
+        if (!user || !user.id) return { ok: false }
+        localStorage.setItem(CLOUD_STORAGE_PREFIX + user.id, serialized)
+        scheduleFullIdbWrite(state)
+        saveActiveSession(state)
+        saveActiveExam(state)
+        persistWarn('本地存储已满，已自动清理临时缓存并保存成功', false)
+        return { ok: true, bytes }
+      } catch (e2) { /* 重试仍失败 → 走致命告警 */ }
+    }
     const fatalMsg = e && e.name === 'QuotaExceededError'
       ? '本地保存失败：存储空间已满。数据暂存内存，请清理空间或登录同步后退出'
       : '本地保存失败：' + (e && e.message ? e.message : e)

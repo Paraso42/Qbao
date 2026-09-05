@@ -5,11 +5,17 @@
 // ============================================================
 import { fetchWithAuth, getToken, getStoredUser } from './api'
 import { stripAiSecretsFromState } from './aiKeys'
-import { migrateState, STORAGE_KEY, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite } from './persistence'
+import { migrateState, CLOUD_STORAGE_PREFIX, buildSkeleton, scheduleFullIdbWrite } from './persistence'
 import { rebuildChapterAnswersFromSets } from './questions'
 
 export const SYNC_PENDING_KEY = 'qbao_sync_pending'
 export const LAST_SYNC_KEY = 'qbao_lastSync'
+
+// v3.36.1 账户隔离加固：账号切换（applyAuth）瞬间冻结同步引擎——
+// 防止切换窗口期把上一账号的内存题库推送到新账号的云端（串账根因）。
+let _accountSwitching = false
+export function setAccountSwitching(v) { _accountSwitching = !!v }
+export function isAccountSwitching() { return _accountSwitching }
 
 // v3.31 (P1.2)：同步标记按账号隔离（与 localStorage 状态键 / aiKeys 同策略），
 // 防止 A 账号遗留的 pending 在 B 登录后被当成 B 的未同步数据补推（多账号串状态）。
@@ -288,10 +294,11 @@ export function mergeStates(localState, cloudState) {
 }
 
 export function persistMergedState(merged) {
-  // 账号隔离（与 persistence.saveState 一致）：登录态只写账号键
-  // v3.30：只存骨架，大字段进 IndexedDB（与 saveState 同策略）
+  // 账号隔离（与 persistence.saveState 一致）：登录态只写账号键；
+  // v3.36.1 登录门禁：未登录一律不落盘（公共键永久停用）
   const user = getStoredUser()
-  const target = (user && user.id) ? CLOUD_STORAGE_PREFIX + user.id : STORAGE_KEY
+  if (!user || !user.id) return
+  const target = CLOUD_STORAGE_PREFIX + user.id
   try {
     localStorage.setItem(target, JSON.stringify(buildSkeleton(merged)))
     scheduleFullIdbWrite(merged)
@@ -310,6 +317,19 @@ export function createSyncEngine(ctx) {
   let _syncInFlight = false
   // 启动门闩：本地 IDB 回填 + 云端恢复完成前禁止推送（防止骨架态覆盖云端题目数据）
   let _syncingReady = false
+  // 引擎武装时的数据属主（= 页面启动时 loadState 记录的账号）；账号变更/切换冻结期
+  // 内一律停摆，等待整页重建后新引擎在新账号下重新武装
+  let _armedAccount = (typeof ctx.accountId === 'function') ? ctx.accountId() : null
+
+  function canSync() {
+    if (_accountSwitching) return false
+    if (_armedAccount === null) return true
+    let cur = null
+    try {
+      if (typeof ctx.accountId === 'function') cur = ctx.accountId()
+    } catch (e) { /* 忽略 */ }
+    return cur === null || cur === _armedAccount
+  }
   let _syncTimer = null
   let _syncRetryTimer = null
   let _pollTimer = null
@@ -341,6 +361,7 @@ export function createSyncEngine(ctx) {
   // 幂等：本地优先 + 实体级并集，任何一侧数据都不丢。
   // 返回 { changed, addedCount }；changed 表示本地状态被合并更新。
   async function pullAndMerge() {
+    if (!canSync()) return { changed: false, addedCount: 0 }
     if (!ctx.isOnline() || !getToken()) return { changed: false, addedCount: 0 }
     try {
       const res = await fetchWithAuth('/data')
@@ -409,6 +430,7 @@ export function createSyncEngine(ctx) {
   }
 
   async function flushSync() {
+    if (!canSync()) return
     if (!_syncingReady) { setSyncPending(true); updateStatus(); return }
     if (_syncInFlight || !ctx.isOnline() || !getToken()) return
     _syncInFlight = true
@@ -495,6 +517,7 @@ export function createSyncEngine(ctx) {
 
   // 由 saveState() 调用：防抖 2s 后推送全量状态
   function scheduleSync() {
+    if (!canSync()) return
     if (!ctx.isOnline() || !getToken()) return
     setSyncPending(true)
     updateStatus()
@@ -505,12 +528,14 @@ export function createSyncEngine(ctx) {
 
   // 登录/恢复后回放未同步数据（返回 flushSync 的 promise，便于调用方串行化等待）
   function resumePendingSync() {
+    if (!canSync()) return Promise.resolve()
     if (getSyncPending() && ctx.isOnline() && getToken()) return flushSync()
     return Promise.resolve()
   }
 
   // —— 轮询：检测其他端写入（轻量 rev 检查，变化才拉全量合并） ——
   async function pollTick() {
+    if (!canSync()) return
     if (_syncInFlight || !ctx.isOnline() || !getToken()) return
     try {
       const res = await fetchWithAuth('/data/rev')
@@ -558,7 +583,7 @@ export function createSyncEngine(ctx) {
     if (_unloadBound || typeof window === 'undefined') return
     _unloadBound = true
     const flushOnUnload = () => {
-      if (!_syncingReady || _syncInFlight || !getSyncPending() || !ctx.isOnline() || !getToken()) return
+      if (!canSync() || !_syncingReady || _syncInFlight || !getSyncPending() || !ctx.isOnline() || !getToken()) return
       // P1.2：与 flushSync 相同的空推检测 —— 内容未变化（如 in-flight 刚完成）不发重复 PUT
       const pp = preparePush()
       if (pp.noop || pp.pushJson === null) return

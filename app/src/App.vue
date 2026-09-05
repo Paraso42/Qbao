@@ -1,28 +1,38 @@
 <template>
   <div id="app">
-    <AppTopbar />
-    <div id="app-body">
-      <AppSidebar />
-      <main id="main">
-        <StartView v-if="ui.activeScreen === 'start'" />
-        <HistoryView v-else-if="ui.activeScreen === 'history'" />
-        <SubjectDashView v-else-if="ui.activeScreen === 'subject-dash'" />
-      </main>
-    </div>
+    <!-- v3.36.1 登录门禁：未登录不渲染任何业务功能（不读不写匿名数据） -->
+    <template v-if="!user.isOnline">
+      <LoginGate />
+      <SettingsModal />
+      <ToastHost />
+      <ConfirmDialog />
+      <PromptDialog />
+    </template>
 
-    <!-- 全局弹层 -->
-    <AuthDialog />
-    <SettingsModal />
-    <AiTaskQueueDialog />
-    <QuizView />
-    <ImportDialog />
-    <ChatModal />
-    <ShareQuizDialog />
-    <UserCenterModal />
-    <FeedbackBubble />
-    <ToastHost />
-    <ConfirmDialog />
-    <PromptDialog />
+    <template v-else>
+      <AppTopbar />
+      <div id="app-body">
+        <AppSidebar />
+        <main id="main">
+          <StartView v-if="ui.activeScreen === 'start'" />
+          <HistoryView v-else-if="ui.activeScreen === 'history'" />
+          <SubjectDashView v-else-if="ui.activeScreen === 'subject-dash'" />
+        </main>
+      </div>
+
+      <!-- 全局弹层 -->
+      <SettingsModal />
+      <AiTaskQueueDialog />
+      <QuizView />
+      <ImportDialog />
+      <ChatModal />
+      <ShareQuizDialog />
+      <UserCenterModal />
+      <FeedbackBubble />
+      <ToastHost />
+      <ConfirmDialog />
+      <PromptDialog />
+    </template>
   </div>
 </template>
 
@@ -30,13 +40,14 @@
 import { onMounted } from 'vue'
 import { useUiStore } from './stores/ui'
 import { useAiStore } from './stores/ai'
+import { useUserStore } from './stores/user'
 import AppTopbar from './components/layout/AppTopbar.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import StartView from './views/StartView.vue'
 import HistoryView from './views/HistoryView.vue'
 import SubjectDashView from './views/SubjectDashView.vue'
 import QuizView from './views/QuizView.vue'
-import AuthDialog from './components/features/auth/AuthDialog.vue'
+import LoginGate from './components/features/auth/LoginGate.vue'
 import SettingsModal from './components/features/settings/SettingsModal.vue'
 import AiTaskQueueDialog from './components/features/ai/AiTaskQueueDialog.vue'
 import ImportDialog from './components/features/quiz/ImportDialog.vue'
@@ -50,6 +61,7 @@ import PromptDialog from './components/ui/PromptDialog.vue'
 
 const ui = useUiStore()
 const ai = useAiStore()
+const user = useUserStore()
 
 onMounted(() => {
   ai.ensureProviders()

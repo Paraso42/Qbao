@@ -1,11 +1,31 @@
-/* Responsive base breakpoints */
+/* ============================================================
+   Responsive base（v3.36 手机竖屏强化：防 iOS 聚焦缩放 / 防双击误触）
+   分档：>900 桌面 / 768–900 窄窗 / ≤768 手机 / ≤480 窄屏
+   ============================================================ */
 @media (max-width: 900px) {
   #main { padding: var(--space-lg) var(--space-md); }
 }
 @media (max-width: 768px) {
   #main { padding: var(--space-md) var(--space-md) calc(48px + env(safe-area-inset-bottom)); }
+  /* iOS Safari 聚焦自动缩放治理：输入控件一律 ≥16px（important 压过组件 scoped 字号） */
+  input, select, textarea,
+  .input, .select, .textarea {
+    font-size: 16px !important;
+  }
+  /* 防双击缩放/长按选词误触（交互元素统一 manipulation） */
+  button, a, [role="button"],
+  .btn, .tab, .dot, .quiz-option, .hs-session-head, .subj-header, .chapter-item,
+  .chat-tool-btn, .chat-icon-btn, .num-btn, .qb-item, .exam-item, .hs-more, .qb-more,
+  .pool-item, .ce-ch, .chat-member-select-item, .user-row, .ai-row, .wb-cta,
+  .fb-action-btn, .tag-chip-v2, .file-item, .am-file, .btn-copy {
+    touch-action: manipulation;
+  }
 }
-/* Coarse pointer: keep interactive targets >= 40px */
+/* 窄屏（≤480）：更紧凑留白；表单操作按钮全宽（主确认 ≥44px 见组件规则） */
+@media (max-width: 480px) {
+  #main { padding: var(--space-sm) var(--space-sm) calc(48px + env(safe-area-inset-bottom)); }
+}
+/* Coarse pointer：关键交互目标 >= 40px（组件内特例在各自 scoped 中覆盖） */
 @media (pointer: coarse) {
   .btn, .tb-item, .subj-btn, .ch-btn { min-height: 40px; }
   .toast .toast-close { width: 36px; height: 36px; }

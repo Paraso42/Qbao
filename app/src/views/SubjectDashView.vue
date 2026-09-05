@@ -731,6 +731,17 @@ watch(() => ui.activeScreen, (screen) => {
 .qd-exp h4 { margin: 0 0 4px; }
 @media (max-width: 768px) {
   .sd-grid { grid-template-columns: repeat(2, 1fr); }
+  /* v3.36：双滑杆与章节占比滑块拇指加大（28px 触控，对齐出题策略卡） */
+  .dual-range-wrap input[type="range"]::-webkit-slider-thumb,
+  .cum-track input[type="range"]::-webkit-slider-thumb { width: 28px; height: 28px; }
+  .cum-track input[type="range"] { touch-action: none; }
+  /* 题库工具栏：搜索独占一行 */
+  .qbank-toolbar { align-items: stretch; }
+  .qb-search { flex: 1 1 100%; max-width: none; order: -1; }
+  .qb-tool-actions { margin-left: 0; }
+  /* 科目总览标签页横滑 */
+  .sd-tabs { overflow-x: auto; }
+  .sd-tabs .tab { flex-shrink: 0; }
 }
 .qb-tool-actions { display: flex; gap: var(--space-sm); margin-left: auto; }
 .markdown-body { word-break: break-word; }

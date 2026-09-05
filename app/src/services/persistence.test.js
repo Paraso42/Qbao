@@ -24,6 +24,8 @@ describe('persistence.saveState (T12)', () => {
     hooks = []
     // 每次重新加载模块（模块级 _persistWarn 状态隔离）
     vi.resetModules()
+    // v3.36.1 登录门禁：持久化只在登录账号下生效（匿名拒绝），用例统一播种账号
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
     return import('./persistence').then((m) => {
       mod = m
       m.setPersistWarningHook((msg, fatal) => hooks.push({ msg, fatal }))
@@ -48,7 +50,7 @@ describe('persistence.saveState (T12)', () => {
     expect(state.aiTaskQueue[0].streamSetRef).toEqual({ x: 1 })
     expect(state.chapterMaterials.c1[0].data).toBe('BIGBLOB')
     // 落盘 = 骨架：不含题目/答案/quizSets/history/srsData，保留章节元数据
-    const saved = JSON.parse(storage.getItem(mod.STORAGE_KEY))
+    const saved = JSON.parse(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7'))
     expect(saved.chapters.c1.questions).toBeUndefined()
     expect(saved.chapters.c1.userAnswers).toBeUndefined()
     expect(saved.chapters.c1.quizSets).toBeUndefined()
@@ -59,7 +61,7 @@ describe('persistence.saveState (T12)', () => {
     expect(saved.chapterMaterials.c1[0].data).toBeUndefined()
     expect(saved.quizSession).toBeNull()
     // 未登录时只写主键
-    expect(storage.getItem(mod.STORAGE_KEY)).toBeTruthy()
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeTruthy()
   })
 
   it('活动会话同步持久化：答题进度刷新/关闭不丢（修复答题入口消失）', async () => {
@@ -83,7 +85,7 @@ describe('persistence.saveState (T12)', () => {
     }
     mod.saveState(state)
     // 活动会话键已写入
-    const raw = storage.getItem(mod.ACTIVE_SESSION_KEY)
+    const raw = storage.getItem('qbao_active_session_u_7')
     expect(raw).toBeTruthy()
     const session = JSON.parse(raw)
     expect(session.cid).toBe('c1')
@@ -100,7 +102,7 @@ describe('persistence.saveState (T12)', () => {
     expect(skeletonState.chapters.c1.currentQuizSetIdx).toBe(0)
     // 会话已存在时：活动会话覆盖答案/进度（IDB 数据可能旧）
     skeletonState.chapters.c1.quizSets[0].userAnswers = [undefined, undefined]
-    storage.setItem(mod.ACTIVE_SESSION_KEY, JSON.stringify({ cid: 'c1', qsIdx: 0, questions: [{ id: 1 }, { id: 2 }], userAnswers: [1, null], currentIdx: 1 }))
+    storage.setItem('qbao_active_session_u_7', JSON.stringify({ cid: 'c1', qsIdx: 0, questions: [{ id: 1 }, { id: 2 }], userAnswers: [1, null], currentIdx: 1 }))
     await mod.hydrateState(skeletonState)
     expect(skeletonState.chapters.c1.quizSets[0].userAnswers).toEqual([1, undefined])
     expect(skeletonState.chapters.c1.quizSets[0].currentIdx).toBe(1)
@@ -131,7 +133,7 @@ describe('persistence.saveState (T12)', () => {
     const res = mod.saveState(state)
     expect(res.ok).toBe(false)
     expect(hooks.some((h) => h.fatal && h.msg.includes('存储已满'))).toBe(true)
-    expect(storage.getItem(mod.STORAGE_KEY)).toBeNull()
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeNull()
   })
 
   it('账号隔离：已登录时只读写账号键，绝不回退公共键（防串号）', () => {
@@ -157,7 +159,43 @@ describe('persistence.saveState (T12)', () => {
     const res = mod.saveState(state)
     expect(res.ok).toBe(true)
     expect(hooks.some((h) => !h.fatal && h.msg.includes('接近上限'))).toBe(true)
-    expect(storage.getItem(mod.STORAGE_KEY)).toBeTruthy()
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeTruthy()
+  })
+})
+
+describe('登录门禁：未登录拒绝读写 (v3.36.1)', () => {
+  let storage
+  let hooks
+  let mod
+
+  beforeEach(async () => {
+    storage = makeLocalStorageStub()
+    globalThis.localStorage = storage
+    hooks = []
+    vi.resetModules()
+    mod = await import('./persistence')
+    mod.setPersistWarningHook((msg, fatal) => hooks.push({ msg, fatal }))
+  })
+  afterEach(() => { delete globalThis.localStorage })
+
+  it('未登录时 loadState 返回空态，绝不读取公共键（拒绝匿名数据参与业务）', () => {
+    // 预置“历史匿名数据”（旧版公共键残留）——必须被无视
+    storage.setItem(mod.STORAGE_KEY, JSON.stringify({ subjects: { s1: { id: 's1', name: '匿名数据' } }, chapters: {} }))
+    const st = mod.loadState()
+    expect(st.subjects.s1).toBeUndefined()
+    expect(st.chapters).toEqual({})
+    expect(mod.getStateOwnerUid()).toBeNull()
+  })
+
+  it('未登录时 saveState 拒绝落盘（公共键/账号键/镜像键一律不写）', () => {
+    const state = { subjects: { s1: { id: 's1', name: 'X' } }, chapters: {}, quizSession: { q: 1 } }
+    const res = mod.saveState(state)
+    expect(res.ok).toBe(false)
+    expect(storage.getItem(mod.STORAGE_KEY)).toBeNull()
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeNull()
+    expect(storage.getItem('qbao_active_session_u_7')).toBeNull()
+    expect(storage._map.size).toBe(0) // 全程无任何写入副作用
+    expect(state.quizSession).toEqual({ q: 1 }) // 瞬态字段仍恢复
   })
 })
 
@@ -168,9 +206,12 @@ describe('大考卷活动会话 (round4)', () => {
   beforeEach(async () => {
     storage = makeLocalStorageStub()
     globalThis.localStorage = storage
+    // v3.36.1 登录门禁：持久化只在登录账号下生效（匿名拒绝），用例统一播种账号
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
     vi.resetModules()
     mod = await import('./persistence')
   })
+  const AKEY = () => 'qbao_active_exam_u_7'
   afterEach(() => { delete globalThis.localStorage })
   it('大考卷活动会话同步持久化：答题中刷新考卷题目/答案/进度不丢', async () => {
     const state = {
@@ -186,7 +227,7 @@ describe('大考卷活动会话 (round4)', () => {
       subjects: {}, chapters: {},
     }
     mod.saveState(state)
-    const raw = storage.getItem(mod.ACTIVE_EXAM_KEY)
+    const raw = storage.getItem(AKEY())
     expect(raw).toBeTruthy()
     const exam = JSON.parse(raw)
     expect(exam.examId).toBe('exam_x1')
@@ -211,5 +252,206 @@ describe('大考卷活动会话 (round4)', () => {
     await mod.hydrateState(withExam)
     expect(withExam.generatedExams.exam_x1.userAnswers).toEqual([1, undefined])
     expect(withExam.generatedExams.exam_x1.currentIdx).toBe(2)
+  })
+})
+
+describe('存储配额治理 (v3.36)', () => {
+  let storage
+  let hooks
+  let mod
+
+  beforeEach(async () => {
+    storage = makeLocalStorageStub()
+    globalThis.localStorage = storage
+    hooks = []
+    // v3.36.1 登录门禁：持久化只在登录账号下生效（匿名拒绝），用例统一播种账号
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    vi.resetModules()
+    mod = await import('./persistence')
+    mod.setPersistWarningHook((msg, fatal) => hooks.push({ msg, fatal }))
+  })
+  afterEach(() => { delete globalThis.localStorage })
+
+  it('pickSessionBackend：预算内走 localStorage 影子，超预算走 IndexedDB', () => {
+    expect(mod.pickSessionBackend(0)).toBe('ls')
+    expect(mod.pickSessionBackend(mod.ACTIVE_SESSION_LS_BUDGET)).toBe('ls')
+    expect(mod.pickSessionBackend(mod.ACTIVE_SESSION_LS_BUDGET + 1)).toBe('idb')
+    expect(mod.pickSessionBackend(10 * 1024 * 1024)).toBe('idb')
+    // 非数/负数/NaN 一律保守走 IDB（绝不冒险撑爆 localStorage）
+    expect(mod.pickSessionBackend(Number.NaN)).toBe('idb')
+    expect(mod.pickSessionBackend(-1)).toBe('idb')
+    expect(mod.pickSessionBackend('big')).toBe('idb')
+  })
+
+  it('大会话（>1MB）镜像不落 localStorage（且清除历史残留键），骨架照常写盘', () => {
+    const bigQs = []
+    for (let i = 0; i < 40000; i++) bigQs.push({ id: i, question: '题目'.repeat(10) + i, options: ['A', 'B', 'C', 'D'], answer: 0 })
+    const state = {
+      currentChapterId: 'c1',
+      chapters: {
+        c1: {
+          id: 'c1', name: '章1', strategy: { errPct: 20 },
+          questions: bigQs, userAnswers: [], currentQuizSetIdx: 0,
+          quizSets: [{ questions: bigQs, userAnswers: [], currentIdx: 0, createdAt: 1 }],
+        },
+      },
+      subjects: {},
+    }
+    // 预置历史遗留大镜像键（旧版本遗留）
+    storage.setItem(mod.ACTIVE_SESSION_KEY, 'LEGACY_BIG_DATA')
+    const res = mod.saveState(state)
+    expect(res.ok).toBe(true)
+    // 大会话镜像不占用 localStorage，且历史残留被清理（数据走 IDB 通道）
+    expect(storage.getItem(mod.ACTIVE_SESSION_KEY)).toBeNull()
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeTruthy() // 骨架照常写
+  })
+
+  it('小会话（预算内）保留 localStorage 影子键（刷新/关闭必达语义不变）', () => {
+    const state = {
+      currentChapterId: 'c1',
+      chapters: {
+        c1: {
+          id: 'c1', name: '章1', strategy: { errPct: 20 },
+          questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentQuizSetIdx: 0,
+          quizSets: [{ questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentIdx: 0, createdAt: 1 }],
+        },
+      },
+      subjects: {},
+    }
+    const res = mod.saveState(state)
+    expect(res.ok).toBe(true)
+    const raw = storage.getItem('qbao_active_session_u_7')
+    expect(raw).toBeTruthy()
+    // 影子键保留（下一次保存前刷新仍可恢复）；hydrate 可正常回填答题会话
+    const skeleton = { currentChapterId: 'c1', chapters: { c1: { id: 'c1', name: '章1', strategy: { errPct: 20 } } }, subjects: {} }
+    return mod.hydrateState(skeleton).then(() => {
+      expect(skeleton.chapters.c1.quizSets).toHaveLength(1)
+      expect(storage.getItem('qbao_active_session_u_7')).toBeTruthy()
+    })
+  })
+
+  it('hydrate 读取历史遗留超预算大镜像键后清理（数据已常驻 IDB，防占空间）', async () => {
+    // 模拟旧版本遗留的 >1MB 镜像键
+    storage.setItem(mod.ACTIVE_SESSION_KEY, 'X'.repeat(mod.ACTIVE_SESSION_LS_BUDGET + 64))
+    const skeleton = { currentChapterId: null, chapters: {}, subjects: {} }
+    await mod.hydrateState(skeleton)
+    expect(storage.getItem(mod.ACTIVE_SESSION_KEY)).toBeNull()
+  })
+
+  it('QuotaExceeded 自愈：清理可恢复镜像键后重试成功，不再报致命', () => {
+    // 预置可恢复的遗留镜像键
+    storage.setItem(mod.ACTIVE_SESSION_KEY, 'legacy-huge-session')
+    const origSet = storage.setItem.bind(storage)
+    let calls = 0
+    storage.setItem = (k, v) => {
+      calls++
+      if (calls === 1) {
+        const e = new Error('quota')
+        e.name = 'QuotaExceededError'
+        throw e
+      }
+      origSet(k, v)
+    }
+    const state = { subjects: { s1: { id: 's1' } }, chapters: {}, quizSession: { q: 1 } }
+    const res = mod.saveState(state)
+    expect(res.ok).toBe(true)
+    // 遗留镜像键已被清理，写盘成功
+    expect(storage.getItem(mod.ACTIVE_SESSION_KEY)).toBeNull()
+    expect(storage.getItem(mod.CLOUD_STORAGE_PREFIX + '7')).toBeTruthy()
+    // 只有非致命 info 提示（不再弹“存储空间已满”）
+    expect(hooks.some((h) => h.fatal)).toBe(false)
+    expect(hooks.some((h) => !h.fatal && h.msg.includes('已自动清理'))).toBe(true)
+    // 瞬态字段仍恢复
+    expect(state.quizSession).toEqual({ q: 1 })
+  })
+
+  it('QuotaExceeded 无镜像键可清理 → 致命告警 30s 冷却（连续保存只弹一次）', () => {
+    storage.setItem = () => { const e = new Error('quota'); e.name = 'QuotaExceededError'; throw e }
+    const state = { subjects: { s1: { id: 's1' } } }
+    mod.saveState(state)
+    mod.saveState(state)
+    mod.saveState(state)
+    const fatalCount = hooks.filter((h) => h.fatal).length
+    expect(fatalCount).toBe(1)
+    expect(hooks[0].fatal).toBe(true)
+    expect(hooks[0].msg).toContain('存储空间已满')
+  })
+})
+
+
+describe('账户隔离加固 (v3.36.1)', () => {
+  let storage
+  beforeEach(async () => {
+    storage = makeLocalStorageStub()
+    globalThis.localStorage = storage
+    vi.resetModules()
+    globalThis.__qbaoTestMod = null
+  })
+  afterEach(() => { delete globalThis.localStorage; delete globalThis.__qbaoTestMod })
+
+  async function load() {
+    const m = await import('./persistence')
+    globalThis.__qbaoTestMod = m
+    return m
+  }
+
+  it('loadState 记录内存数据属主（绑定 IndexedDB 分区）', async () => {
+    const m = await load()
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    m.loadState()
+    expect(m.getStateOwnerUid()).toBe('7')
+    expect(m.getStateOwnerUid()).not.toBe(7) // 字符串归一
+  })
+
+  it('切换账号后 loadState 属主变化（触发整页重建的判定依据）', async () => {
+    const m = await load()
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    m.loadState()
+    expect(m.getStateOwnerUid()).toBe('7')
+    storage.setItem('qbao_user', JSON.stringify({ id: 42, username: 'b' }))
+    m.loadState()
+    expect(m.getStateOwnerUid()).toBe('42')
+    storage.removeItem('qbao_user')
+    m.loadState()
+    expect(m.getStateOwnerUid()).toBeNull()
+  })
+
+  it('活动会话镜像键按账号分区（登录态写专属键并清除旧全局键）', async () => {
+    const m = await load()
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    // 预置旧版全局镜像键（跨账号残留模拟）
+    storage.setItem(m.ACTIVE_SESSION_KEY, 'LEGACY')
+    const state = {
+      currentChapterId: 'c1',
+      chapters: {
+        c1: {
+          id: 'c1', name: '章1', strategy: { errPct: 20 },
+          questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentQuizSetIdx: 0,
+          quizSets: [{ questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentIdx: 0, createdAt: 1 }],
+        },
+      },
+      subjects: {},
+    }
+    const res = m.saveState(state)
+    expect(res.ok).toBe(true)
+    // 账号专属键写入；旧全局键被清除（防跨账号残留）
+    expect(storage.getItem('qbao_active_session_u_7')).toBeTruthy()
+    expect(storage.getItem(m.ACTIVE_SESSION_KEY)).toBeNull()
+  })
+
+  it('hydrate 恢复优先读账号专属镜像键，旧全局键仅作升级回退', async () => {
+    const m = await load()
+    storage.setItem('qbao_user', JSON.stringify({ id: 7, username: 'a' }))
+    // 旧全局键（模拟升级前遗留）：其 cid 存在于骨架 → 升级后首次恢复仍可回填
+    storage.setItem(m.ACTIVE_SESSION_KEY, JSON.stringify({ cid: 'c1', qsIdx: 0, questions: [{ id: 1, question: 'Q1' }], userAnswers: [0], currentIdx: 0 }))
+    const skeleton = { currentChapterId: 'c1', chapters: { c1: { id: 'c1', name: '章1', strategy: { errPct: 20 } } }, subjects: {} }
+    await m.hydrateState(skeleton)
+    expect(skeleton.chapters.c1.quizSets).toHaveLength(1)
+    // 账号专属键优先：存在 u_7 键时不再读全局键
+    storage.removeItem(m.ACTIVE_SESSION_KEY)
+    storage.setItem('qbao_active_session_u_7', JSON.stringify({ cid: 'c1', qsIdx: 0, questions: [{ id: 1, question: 'Q2' }], userAnswers: [1], currentIdx: 0 }))
+    const skeleton2 = { currentChapterId: 'c1', chapters: { c1: { id: 'c1', name: '章1', strategy: { errPct: 20 } } }, subjects: {} }
+    await m.hydrateState(skeleton2)
+    expect(skeleton2.chapters.c1.quizSets[0].questions[0].question).toBe('Q2')
   })
 })

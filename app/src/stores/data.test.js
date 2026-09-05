@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { useDataStore } from './data'
-import { STORAGE_KEY } from '../services/persistence'
+import { CLOUD_STORAGE_PREFIX } from '../services/persistence'
 
 function makeLocalStorageStub(seed = {}) {
   const map = new Map(Object.entries(seed))
@@ -55,7 +55,8 @@ describe('data store：K1 轮次守卫与可操作轮次 (round5)', () => {
   afterEach(() => { delete globalThis.localStorage })
 
   function setup(state) {
-    storage.setItem(STORAGE_KEY, JSON.stringify(state))
+    storage.setItem('qbao_user', JSON.stringify({ id: 'u1', username: 'a' }))
+  storage.setItem('quizEngineState_cloud_u1', JSON.stringify(state))
     return useDataStore()
   }
 

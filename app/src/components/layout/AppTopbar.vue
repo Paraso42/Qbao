@@ -10,8 +10,7 @@
       <span class="tb-pill-dot"></span><span class="tb-label">{{ syncShort }}</span>
     </span>
 
-    <button v-if="!user.isOnline" class="tb-item" @click="ui.openAuth"><Icon name="user" :size="15" /><span class="tb-label"> 登录/注册</span></button>
-    <button v-else class="tb-item" aria-label="用户中心" @click="ui.openUserCenter">
+    <button class="tb-item" aria-label="用户中心" @click="ui.openUserCenter">
       <span class="tb-avatar">
         <img v-if="avatarUrl" :src="avatarUrl" :alt="user.shortName" @error="avatarUrl = ''" />
         <span v-else>{{ user.shortName }}</span>
@@ -63,7 +62,6 @@ const syncShort = computed(() => {
 const syncClass = computed(() => ({ online: sync.online, syncing: sync.syncing }))
 
 function onChatClick() {
-  if (!user.isOnline) { ui.openAuth(); return }
   chat.openChatModal()
 }
 </script>

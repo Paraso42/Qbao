@@ -36,17 +36,21 @@
         <button class="ai-warn-link" @click="ui.openSettings('aiconfig')">前往配置</button>
       </div>
 
-      <!-- 章节工作台 -->
+      <!-- 章节工作台：单一主按钮槽位（开始出题 ↔ 开始答题，按状态机同位置切换） -->
       <div class="card quick-card">
         <div class="quick-head">
           <div>
             <h3 class="quick-title">{{ ch.name }}</h3>
             <p class="quick-info">{{ quickInfo }}</p>
           </div>
-          <button v-if="showQuickBtn" class="btn btn-primary btn-small" @click="onQuickAction">
-            <Icon :name="setFinished ? 'chart' : 'book'" :size="14" /> {{ quickLabel }}
-          </button>
         </div>
+        <div class="wb-cta-row">
+          <button class="btn btn-primary wb-cta" :disabled="!primaryAction.enabled" @click="onPrimaryAction">
+            <Icon :name="primaryAction.icon" :size="15" /> {{ primaryAction.label }}
+          </button>
+          <p v-if="primaryAction.reason" class="wb-cta-reason">{{ primaryAction.reason }}</p>
+        </div>
+        <p v-if="aiEnabled && aiQuotaHint" class="quota-hint">{{ aiQuotaHint }}</p>
       </div>
 
       <!-- 出题策略 -->
@@ -55,14 +59,8 @@
       <!-- 资料 + 生成 -->
       <div class="card">
         <template v-if="aiEnabled">
+          <!-- 开始出题已并入上方工作台主按钮槽位，此处仅保留资料管理 -->
           <AiMaterialsSection :chapter-id="ch.id" />
-          <div class="gen-area">
-            <span class="gen-status">{{ genStatus }}</span>
-            <button class="btn btn-primary" :disabled="!canGenerate" @click="generate">
-              <Icon name="sparkle" :size="15" /> 开始出题
-            </button>
-          </div>
-          <p v-if="aiQuotaHint" class="quota-hint">{{ aiQuotaHint }}</p>
         </template>
         <template v-else>
           <h4>把提示词复制给 AI</h4>
@@ -83,7 +81,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useDataStore } from '../stores/data'
 import { useSubjectStore } from '../stores/subjects'
 import { useUiStore } from '../stores/ui'
@@ -93,6 +91,7 @@ import { useUserStore } from '../stores/user'
 import { usePointsStore } from '../stores/points'
 import { generatePromptText } from '../services/strategy'
 import { chapterQuestionTotal } from '../services/chapterStats'
+import { derivePrimaryAction } from '../services/startActions'
 import ChapterStrategyCard from '../components/features/strategy/ChapterStrategyCard.vue'
 import AiMaterialsSection from '../components/features/ai/AiMaterialsSection.vue'
 import Icon from '../components/ui/Icon.vue'
@@ -143,25 +142,48 @@ const setTotal = computed(() => {
   if (!qs || !qs.questions || !Array.isArray(qs.questions)) return 0
   return qs.questions.length
 })
-const showQuickBtn = computed(() => setTotal.value > 0)
-const setFinished = computed(() => setAnswered.value >= setTotal.value)
-const quickLabel = computed(() => (setFinished.value ? '查看报告' : setAnswered.value > 0 ? '继续答题' : '开始刷题'))
+const setFinished = computed(() => setTotal.value > 0 && setAnswered.value >= setTotal.value)
 const quickInfo = computed(() => {
   if (setTotal.value > 0) return '共 ' + setTotal.value + ' 题，已答 ' + setAnswered.value + ' 题'
   return '暂无题目，请先导入或 AI 出题'
 })
 
-function onQuickAction() {
-  if (!ch.value || !actionableSet.value) return
-  // 先把当前轮次指针指到可操作轮，答题/报告都落在守卫说的那一轮
-  data.activateQuizSet(ch.value, actionableSet.value)
-  if (setFinished.value && setTotal.value > 0) {
-    // 查看已完成轮次的报告：顺带补发最终结算（离线作答/结算中断时服务端还停在
-    // in_progress，不补会锁死“开始出题”）；服务端增量结算，重复发送幂等
-    quiz.ensureActiveSetCompleted()
-    quiz.openQuiz('report')
-  } else quiz.startSession()
+// v3.36：单一主按钮槽位状态机（开始出题 ↔ 开始答题，同位置切换；无“查看报告”）
+const genBlockReason = computed(() => {
+  if (!ch.value) return '请先选择一个章节'
+  if (!aiEnabled.value) return 'AI 出题未开启，可在顶栏「设置」中开启'
+  if (materials.value.length === 0) return '请先上传复习资料（下方「复习资料管理」）'
+  if (!user.isOnline) return '请先登录'
+  if (hasUnfinishedSet.value) return '本章节还有未做完的题目，请先完成本轮答题'
+  const tc = (strategy.value && strategy.value.typeCounts) ? strategy.value.typeCounts : null
+  if (!tc || ((tc.single || 0) + (tc.judge || 0) + (tc.term || 0) + (tc.short || 0)) <= 0) return '请先在下方「出题策略」中设置各题型数量'
+  return ''
+})
+const primaryAction = computed(() => derivePrimaryAction({
+  setTotal: setTotal.value,
+  setAnswered: setAnswered.value,
+  hasTask: hasTask.value,
+  canGenerate: aiEnabled.value && canGenerate.value,
+  blockReason: genBlockReason.value,
+}))
+
+function onPrimaryAction() {
+  if (!ch.value) return
+  if (primaryAction.value.state === 'answer') {
+    if (!actionableSet.value) return
+    // 先把当前轮次指针指到可操作轮，答题入口与出题守卫同一口径
+    data.activateQuizSet(ch.value, actionableSet.value)
+    quiz.startSession()
+    return
+  }
+  generate()
 }
+
+// 查看报告入口移除后，答完轮次由本监视器后台补发最终结算（幂等）：
+// 原“查看报告”承担“服务端 in_progress 残留会锁死开始出题”的兜底，现自动触发
+watch(setFinished, (v) => {
+  if (v && ch.value) { try { quiz.ensureActiveSetCompleted() } catch (e) { /* noop */ } }
+}, { immediate: true })
 
 function createFirstSubject() {
   subjects.create('我的科目')
@@ -183,15 +205,6 @@ const canGenerate = computed(() => {
   if (!tc) return false
   return ((tc.single || 0) + (tc.judge || 0) + (tc.term || 0) + (tc.short || 0)) > 0
 })
-const genStatus = computed(() => {
-  if (!ch.value) return '请先选择一个章节'
-  if (materials.value.length === 0) return '请先上传复习资料'
-  if (!user.isOnline) return '请先登录'
-  if (hasTask.value) return '该章节已有任务在队列中'
-  if (hasUnfinishedSet.value) return '本章节还有未做完的题目，请先完成本轮答题'
-  return '已准备就绪，共 ' + materials.value.length + ' 份资料'
-})
-
 // AI 出题配额提示（points 接口数据；仅提示，服务端为准）
 let quotaLoaded = false
 const aiQuotaHint = computed(() => {
@@ -305,21 +318,36 @@ async function copyPrompt() {
 }
 .trad-actions { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 .quota-hint { font-size: var(--fs-xs); color: var(--text-secondary); margin-top: var(--space-sm); }
-.gen-area {
-  margin-top: var(--space-lg);
-  padding-top: var(--space-lg);
-  border-top: 1px solid var(--border-light);
+/* 主操作单槽位：全宽主按钮 + 原因行 */
+.wb-cta-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: var(--space-md);
 }
-.gen-status { font-size: var(--fs-sm); color: var(--text-muted); }
+.wb-cta {
+  min-height: 44px;
+  justify-content: center;
+  width: 100%;
+  font-size: var(--fs-md);
+}
+.wb-cta:disabled { cursor: not-allowed; }
+.wb-cta-reason {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
 @media (max-width: 768px) {
   .start-hero { padding-top: var(--space-2xl); }
   .stat-cards { grid-template-columns: 1fr; gap: var(--space-sm); }
-  .gen-area { flex-direction: column; align-items: stretch; }
-  .gen-area .btn { width: 100%; }
+}
+/* 窄屏（≤480）：hero 紧凑 + 统计双列小卡 */
+@media (max-width: 480px) {
+  .start-hero { padding: var(--space-xl) 8px var(--space-md); }
+  .hero-mark { width: 40px; height: 40px; font-size: 20px; margin-bottom: var(--space-sm); }
+  .hero-title { font-size: 22px; }
+  .hero-sub { font-size: var(--fs-xs); }
+  .stat-cards { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

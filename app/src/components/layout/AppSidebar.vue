@@ -52,7 +52,7 @@
         <span v-if="aiRunning > 0" class="ai-row-badge run">{{ aiRunning }}</span>
         <span class="ai-row-switch" @click.stop><Toggle :model-value="data.state.aiEnabled" @change="toggleAi" /></span>
       </div>
-      <div v-if="user.isOnline" class="user-row" @click="ui.openUserCenter">
+      <div class="user-row" @click="ui.openUserCenter">
         <span class="user-avatar">
           <img v-if="avatarUrl" :src="avatarUrl" :alt="user.shortName" @error="avatarUrl = ''" />
           <span v-else>{{ user.shortName }}</span>
@@ -60,10 +60,6 @@
         <span class="user-name">{{ user.user.displayName || user.user.username }}</span>
         <span class="user-sync" :class="{ online: sync.online, syncing: sync.syncing }"></span>
       </div>
-      <button v-else class="user-row login-cta" @click="ui.openAuth">
-        <span class="user-avatar ghost"><Icon name="user" :size="14" /></span>
-        <span class="user-name">登录 / 注册</span>
-      </button>
     </div>
   </aside>
   <div class="sidebar-overlay" :class="{ active: ui.sidebarOpen }" @click="ui.toggleSidebar"></div>

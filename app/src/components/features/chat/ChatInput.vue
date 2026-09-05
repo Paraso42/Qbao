@@ -149,7 +149,8 @@ function removeFile() {
 }
 
 function onKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  // v3.36：中文输入法组合期（选词）回车不发送
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
     e.preventDefault()
     doSend()
   }
@@ -401,4 +402,12 @@ function focusInput() {
 }
 .chat-send-btn:hover:not(:disabled) { background: var(--color-primary-hover); }
 .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* v3.36 手机竖屏：16px 输入防 iOS 聚焦缩放；44px 触控目标 */
+@media (max-width: 768px) {
+  .chat-input { font-size: 16px; height: auto; min-height: 44px; padding: 10px 14px; }
+  .chat-send-btn { height: 44px; padding: 0 22px; }
+  .chat-tool-btn { width: 40px; height: 40px; }
+  .chat-img-preview-remove, .chat-file-preview-remove { width: 26px; height: 26px; font-size: 12px; }
+}
 </style>
