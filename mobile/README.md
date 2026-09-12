@@ -1,6 +1,6 @@
 # Qbao 手机端壳工程（Capacitor 6）
 
-把现网 Qbao 主站（https://questionbox.cn：Cloudflare 边缘 → 香港 Caddy → 大陆源站）打包为原生壳应用，包名 `com.qbao.app`、应用名 **Qbao**：
+把现网 Qbao 主站（https://questionbox.cn：Cloudflare 边缘 → 香港单机 Caddy 直出）打包为原生壳应用，包名 `com.qbao.app`、应用名 **Qbao**：
 - **Android**：本机（或任意平台）可直接产出正式签名 APK，经 `scripts/publish-mobile.js` 发布到
   `downloads/android/`，由网页端「设置 → 下载中心」与落地页 /dl 自动分发（多版本 + SHA256 + 下载统计）。
 - **iOS**：`ios/` 为完整 Xcode 工程；.ipa 需 macOS + Apple Developer 账号签名后发布（见 docs/PUBLISHING.md §8.3）。
@@ -38,7 +38,7 @@ node scripts/publish-mobile.js ls
 3. 出包 `Qbao-iOS-X.Y.Z.ipa` → 按 PUBLISHING.md §8.3 入库。
 
 ## 访问链路（现状：已全 HTTPS）
-手机壳加载 `https://questionbox.cn`（Cloudflare 边缘 TLS → 香港 Caddy 回源 → 大陆源站）。
+手机壳加载 `https://questionbox.cn`（Cloudflare 边缘 TLS → 香港单机 Caddy 直出，2026-09-10 起大陆源站已退役）。
 Android 的 `usesCleartextTraffic` 已置 false、iOS 的 ATS 例外（NSAllowsArbitraryLoads）已移除，不再允许明文 http。
 
 ## 换域名（未来的唯一步骤）
