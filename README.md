@@ -134,9 +134,11 @@ Qbao/
 │   ├── deploy/   # systemd 单元 + 上传目录初始化脚本
 │   └── init.sql  # 建库脚本
 ├── docs/         # 架构 / 部署 / 发布 / 开发文档
-├── scripts/      # 发布工具（publish-installer：manifest 驱动入库）
+├── mobile/       # Capacitor 手机壳工程（Android / iOS，加载线上站点）
+├── party/        # 联机游戏后端源码（werewolf 狼人杀，systemd qbao-werewolf）
+├── scripts/      # 发布与部署工具（stage 双环境部署 / publish-installer manifest 入库）
 ├── tools/        # 一次性维护脚本（默认不上传）
-└── local/        # 【本地专用】密钥 / 日志 / 数据快照，永不上传（.gitignore）
+└── local/        # 【本地专用】密钥 / 日志 / 备份快照，永不上传（.gitignore）
 ```
 
 ## 技术架构
@@ -152,21 +154,23 @@ Vue 3 + Vite + Pinia 前端（singlefile 产物，网页 / Electron 双形态共
 
 ## 公网部署架构（HTTPS 链路 · 简述）
 
-在线服务按「CDN → 边缘网关 → 大陆源站」分层提供 HTTPS（域名为占位符；真实域名/IP/路径只保存在本机 gitignored 文档，占位符纪律见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)）：
+在线服务由**单台香港服务器**直接提供（域名为占位符；真实域名/IP/路径只保存在本机 gitignored 文档，占位符纪律见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)）：
 
 ```text
 用户（浏览器 / 手机壳 App / 桌面端）
-  │ https://{DOMAIN}（DNS → Cloudflare 代理）      https://{BETA_HOST}（内测 · DNS 直连）
+  │ https://{DOMAIN}（DNS → Cloudflare 代理）      https://{BETA_HOST}（内测 · DNS 仅解析直连）
   ▼                                                  ▼
-Cloudflare（边缘 TLS / CDN）            Caddy 网关（TLS 终结 · 自动证书 · 回源）
-  ▼                                                  ▼
-大陆源站 nginx（HTTP）◄──────────────────────────────┘ 回源 Host 规范化 + 路由标记
-  ├─ 生产实例：静态目录 + Node API :3000 → PostgreSQL 库 qbao（静态 7 天缓存）
-  └─ 内测实例：独立静态目录 + Node API :3100 → 库 qbao_beta（不缓存，注册即管理员）
+单台服务器 {HK_IP} · Caddy（TLS 终结 · Let's Encrypt 自动证书 · gzip）
+  ├─ 静态本地直出（file_server + SPA 兜底）：生产 {HOST_ROOT}/qbao/app（7 天缓存）
+  │                                          内测 {HOST_ROOT}/qbao-beta/app（不缓存）
+  ├─ /api /uploads /avatars /dl → 生产 Node :3000 → PostgreSQL 库 qbao
+  │                                内测 Node :3100 → 库 qbao_beta
+  └─ /games/werewolf/{api,werewolf-ws} → Node :3011（房间内存态，两环境共享）
 ```
 
-- **为什么有两层在线环境**：所有测试/内测先在 L1（独立库 / 端口 / 静态目录、可随时清库），验收通过后才部署 L2 生产；生产库禁止测试写入。
-- **为什么回源统一使用源站地址形态**：大陆机房按 ICP 备案拦截未单列备案域名的 Host 请求；生产与内测由「网关出口 IP 白名单 + 路由头 X-Qbao-Route」区分，白名单外一律按生产处理（入口不可伪造）。
+- **为什么有两层在线环境**：所有测试/内测先在 L1（独立库 / 端口 / 静态目录、可随时清库），验收通过后才部署 L2 生产；生产库禁止测试写入。生产与内测**同机不同目录/进程/数据库**，由 Caddy 的两个 site 块分流。
+- **为什么单机直出**：2026-09-10 起全量迁移至香港单机（此前为「CDN → 边缘网关 → 大陆源站」三层，源站已退役清理）。单机同时承担 TLS 终结、静态托管与 API 反向代理，链路短、无跨域回源，也**不再需要**为规避大陆机房备案拦截而设计的「回源 Host 改写 + 路由头分流」机制。
+- **为什么用 Cloudflare**：DNS 托管与边缘 TLS / 缓存加速；主域名走代理，内测域名仅解析直连。
 - 完整机制（证书模型 / 缓存纪律 / 隔离矩阵 / 防互害权限 / 变更检查单 / 技术债）见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；环境通俗版见 [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md)。
 
 ## 隐私与安全

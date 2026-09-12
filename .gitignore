@@ -19,6 +19,9 @@ server/node_modules/
 
 # ---- 本地专用目录：隐私数据/密钥/日志/版本快照，永不上传 GitHub ----
 local/
+# 备份/归档一律放 local/backups/（含 .env、私钥、数据库 dump 与历史快照）。
+# 根级 backups/ 曾因未忽略而濒临被 git add -A 提交，此处永久封堵该路径。
+backups/
 
 # ---- 运行时上传文件（含用户数据，生产环境实时生成）----
 uploads/

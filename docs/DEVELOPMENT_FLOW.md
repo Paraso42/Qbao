@@ -106,7 +106,7 @@ v1.1 及以前：本地测完直接部署生产，测试动作（测试账号、
 ### ⑧ 部署 L2（生产，仅验收后）+ 只读巡检
 - 备份：服务器保留 `.bak_时间戳` 快照（沿用历史惯例）。
 - 同步/迁移/重启同 ⑥（目标为生产目录与 qbao 库）；`/health` OK。
-- 只读巡检（金丝雀账号，零写操作）：health / 登录 / GET（游戏成绩、弹珠 profile 等）；`index.html` 字节数/sha256 与本地一致；nginx 如有新 location 需同步修改并备份。
+- 只读巡检（金丝雀账号，零写操作）：health / 登录 / GET（游戏成绩、弹珠 profile 等）；`index.html` 字节数/sha256 与本地一致；Caddy 如有新 route/location 需同步修改并备份。
 - 桌面分发类改动额外验证：`/api/v1/desktop/manifest`、`/download?file=`（含 404/410）、`/update/<channel>/latest.yml`、`/dl`、Range 206 与统计计数。
 - 需要界面回归时按需 CDP（Edge remote-debugging）：登录 + 改动点 + 2~3 条主流程，Runtime 异常计数 = 0。
 - 缓存提醒：生产静态 7 天缓存 —— 改 js/css 时同步更新页面引用版本参数 ?v=，并提醒用户强刷。

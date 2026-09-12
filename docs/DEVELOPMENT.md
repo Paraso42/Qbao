@@ -16,9 +16,16 @@
 | 部署参数（SSH 主机 / 密钥 / 远端目录 / 服务名） | `local/stage.env.ps1` | ❌ |
 
 **铁律**：真实服务器地址、密钥、用户数据、VPN 配置一律只放 `local/`（已被 `.gitignore` 整体排除）。部署文档只用占位符。
-公开文档统一占位符：{DOMAIN}/{BETA_HOST} 域名、{ORIGIN_IP}/{HK_IP} IP、{PROD_ROOT}/{BETA_ROOT} 部署根、{BACKUP_DIR} 备份目录、{SSH_USER} 服务器用户；
+公开文档统一占位符：{DOMAIN}/{BETA_HOST} 域名、{HK_IP} 服务器 IP、{HOST_ROOT} 部署父目录、{PROD_ROOT}/{BETA_ROOT} 部署根、{BACKUP_DIR} 备份目录、{SSH_USER} 服务器用户；
 提交前对改动文件做敏感词扫描（真实域名 / IP / 密钥模式不得出现在跟踪文件中）。
-CI 另有 privacy-guard job（`.github/workflows/ci.yml`）硬性拦截真实基础设施痕迹（源站 IP / 私钥文件名 / 部署根路径 / 真实微信 AppID），命中即构建失败。
+CI 另有 privacy-guard job（`.github/workflows/ci.yml`）硬性拦截真实基础设施痕迹（服务器 IP / 私钥文件名 / 部署根路径 / 真实微信 AppID），命中即构建失败。
+> 模式清单：`.github/privacy-banned.txt`——**只放模式、一行一条，文件内不得写注释或空行**
+> （`git grep -f` 会把注释行也当成模式，导致命中一切）。job 扫描时**排除该文件自身**，
+> 且 `ci.yml` 内不得出现任何真实值字面量（模式用字符类写法，如 `/home/[q]bao`），否则 job 会命中自己而恒失败。
+> 新增/修改模式后本地自测（期望：无输出、退出码 1）：
+> `git grep -n -E -f .github/privacy-banned.txt -- . ':(exclude).github/privacy-banned.txt'`
+> 备份归档约定：任何含 `.env`、私钥或数据库 dump 的备份一律放 `local/backups/`（`local/` 与 `backups/` 均已在 .gitignore）。
+> 根级 `backups/` 曾因未忽略而濒临被 `git add -A` 提交（内含私钥与生产库 dump），勿在该位置存放任何备份。
 
 ## 2. 目录结构
 
@@ -58,7 +65,7 @@ npm run build                        # 构建 singlefile 产物到 app/dist/
 cd desktop
 npm install
 npm run dev                          # 加载 Vite dev server；未启动时自动回退 app/dist/index.html
-# 生产静态服务（nginx 指向 app/dist/，配置见 docs/DEPLOY.md）
+# 生产静态服务（Caddy 指向 app/dist/，配置见 docs/DEPLOY.md §4）
 ```
 
 ## 4. 版本与发布流程

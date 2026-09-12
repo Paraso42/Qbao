@@ -7,7 +7,7 @@
 | 文档 | 说明 |
 |------|------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 系统架构事实源：公网 HTTPS 链路 / 双环境路由与隔离 / 权限安全边界 / 分发架构 / 技术债登记 |
-| [DEPLOY.md](DEPLOY.md) | 部署：nginx / systemd / PostgreSQL / 备份 / 升级 / 桌面端分发 |
+| [DEPLOY.md](DEPLOY.md) | 部署：Caddy / systemd / PostgreSQL / 备份 / 升级 / 桌面端分发 |
 | [PUBLISHING.md](PUBLISHING.md) | 桌面端发布手册：manifest 入库、双渠道、强制更新、撤回、回滚 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发工作流、隐私分离规则、诊断脚本 |
 | [DEVELOPMENT_FLOW.md](DEVELOPMENT_FLOW.md) | 发布流程唯一事实源 + 完成定义（DoD）检核表 |
@@ -15,6 +15,7 @@
 | [REVIEW-2026-09.md](REVIEW-2026-09.md) | 项目全貌与专业点评（2026-09，含短板与路线图） |
 | [ENVIRONMENTS.md](ENVIRONMENTS.md) | 环境与网络地图：L0/L1/L2 隔离、内测入口与 FAQ |
 | [GAMES.md](GAMES.md) | 游戏空间：门户形态、等待引导、数据契约、联机/积分预留 |
+| [LICENSING.md](LICENSING.md) | 许可与边界：自研代码非商业许可 / 第三方 MIT 组件 / 弹猪乐个人授权 |
 
 ## 归档
 

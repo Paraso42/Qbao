@@ -42,17 +42,17 @@
 派对桌游「狼人杀」经开源项目 [xiong35/werewolf](https://github.com/xiong35/werewolf)（MIT, commit 26a77c0）
 自托管接入，**不依赖任何外部服务**：
 
-- 入口：游戏大厅 `/games/` 卡片 → `/games/werewolf/`（与主站同源，nginx 子路径 `location ^~ /games/werewolf/`）。
-- 架构：前端静态由 nginx 直出；房间实时逻辑为独立 Node 服务（Koa + socket.io，systemd 单元
+- 入口：游戏大厅 `/games/` 卡片 → `/games/werewolf/`（与主站同源，Caddy 静态直出 + SPA 兜底）。
+- 架构：前端静态由 Caddy 直出；房间实时逻辑为独立 Node 服务（Koa + socket.io，systemd 单元
   `qbao-werewolf`，监听 127.0.0.1:3011）：
-  - HTTP API：`/games/werewolf/api/*` → nginx 剥前缀 → 3011（建房/加入/行动）；
-  - WebSocket：`/games/werewolf/werewolf-ws/*` → 3011 原样透传（含 Upgrade 头）。
+  - HTTP API：`/games/werewolf/api/*` → Caddy `uri strip_prefix` 剥前缀 → 3011（建房/加入/行动）；
+  - WebSocket：`/games/werewolf/werewolf-ws` → 3011 原样透传（**不剥前缀**，含 Upgrade 头）。
 - 数据：房间与对局状态只在服务端内存（房间号 6 位，12 小时自动清理，重启即清零），
   **不落库、不接账号体系**——游客亦可玩，不写 `user_games_stats`、不参与积分（桌游按局结算，后续再议）。
 - 本地化修改（MIT 允许，记录于 `party/werewolf/README.md`）：同源子路径接线、运行时资源前缀、
   「Day N」→「第N天」等全中文界面、构建链现代化（Vite 5 + Vue 3 官方插件、TS 4.9）。
-- 重建/部署手册：`party/werewolf/README.md`（构建、闭包依赖、systemd、nginx 片段均归档在
-  `party/werewolf/deploy/`）。
+- 重建/部署手册：`party/werewolf/README.md`（构建、闭包依赖、systemd 均归档在
+  `party/werewolf/deploy/`；Caddy 路由片段见 docs/ARCHITECTURE.md §2.4）。
 
 后续联机扩展（预留方向不变）——**房间制异步对战**（复用现有账号体系与 REST，不做 WebSocket，
 保持服务器低负载）：
@@ -92,10 +92,10 @@
 ## 六、测试与内测规范（环境分离 · 2026-09 起）
 
 > 配合 docs/ENVIRONMENTS.md（L0/L1/L2 概念）与 docs/DEVELOPMENT_FLOW.md（流程纪律）。
-> 占位符说明：{BETA_HOST}=内测域名、{DOMAIN}/{ORIGIN_IP}=生产入口；真实值见本机 local/ENV.md。
+> 占位符说明：{BETA_HOST}=内测域名、{DOMAIN}=生产入口；真实值见本机 local/ENV.md。
 
 1. **环境与数据**：游戏相关测试动作（云存档、兑换、对局、领奖、清库实验）一律发生在 L1 内测环境（独立库/API/静态目录）；生产环境只允许金丝雀账号**只读**巡检（health/登录/GET），生产库禁止任何游戏写操作验证。
-2. **QA 钩子宿主门禁**：游戏自动测试钩子（现弹猪乐 `?qa=1&token=`）仅在 {BETA_HOST} 与 localhost/127.0.0.1 主机名放行；生产主机名（{DOMAIN}、{ORIGIN_IP}）代码层忽略。门禁纯函数与单测：`app/src/games/qa-gate.js`（qaAllowedByHost）；移植新游戏时把同一逻辑内联进其适配层，注释互指（与 secureStore 两端同步模式一致）。
+2. **QA 钩子宿主门禁**：游戏自动测试钩子（现弹猪乐 `?qa=1&token=`）仅在 {BETA_HOST} 与 localhost/127.0.0.1 主机名放行；生产主机名（{DOMAIN}）代码层忽略。门禁纯函数与单测：`app/src/games/qa-gate.js`（qaAllowedByHost）；移植新游戏时把同一逻辑内联进其适配层，注释互指（与 secureStore 两端同步模式一致）。
 3. **新游戏接入 QA 检查单**：
    - 本机：`127.0.0.1:8124` 静态调试（访客本地模式 + localhost QA 钩子）；
    - L1：同步到内测目录 → 内测库注册测试号 → 云存档/兑换/对局 E2E（断言写进 qbao_beta）；

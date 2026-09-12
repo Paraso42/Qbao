@@ -7,13 +7,14 @@
 > 流程与红线 [DEVELOPMENT_FLOW.md](DEVELOPMENT_FLOW.md) · 发布分发 [PUBLISHING.md](PUBLISHING.md) · 游戏空间 [GAMES.md](GAMES.md) ·
 > 隐私与信息分离 [DEVELOPMENT.md](DEVELOPMENT.md)。
 >
-> **隐私铁律**：本文面向 GitHub 公开，一律使用占位符 —— {DOMAIN} 生产域名、{BETA_HOST} 内测域名、{ORIGIN_IP} 源站 IP、
-> {HK_IP} 边缘网关 IP、{PROD_ROOT} / {BETA_ROOT} 源站两侧部署根、{BACKUP_DIR} 备份目录。
+> **隐私铁律**：本文面向 GitHub 公开，一律使用占位符 —— {DOMAIN} 生产域名、{BETA_HOST} 内测域名、
+> {HK_IP} 服务器 IP、{HOST_ROOT} 服务器上的部署父目录、{PROD_ROOT} / {BETA_ROOT} 两套部署根、
+> {BACKUP_DIR} 备份目录。（{ORIGIN_IP} 随大陆源站退役已废弃，不应再出现。）
 > 真实值只存在于 gitignored 的 `local/ENV.md`（对照表）与 `local/stage.env.ps1`（部署参数），详见 docs/DEVELOPMENT.md §1。
 
 ## 1. 架构总览
 
-一句话：**一套代码、三种形态（网页 / 桌面 / 手机壳）、两层在线环境（L1 内测 / L2 生产）、一条 HTTPS 链路（CDN → 境外网关 → 大陆源站）；源站内两个相互隔离的实例共享一台服务器与同一个 PostgreSQL 集群。**
+一句话：**一套代码、三种形态（网页 / 桌面 / 手机壳）、两层在线环境（L1 内测 / L2 生产）、一台香港服务器直出（Caddy 终结 TLS + 静态托管 + 反向代理）；同机上两个相互隔离的实例共享同一个 PostgreSQL 集群。**
 
 ```
                           ┌──────────── 用户侧：三种形态共用同一份前端 ────────────┐
@@ -22,53 +23,56 @@
                       https://{DOMAIN}                  https://{BETA_HOST}
                                  │                            │
                         Cloudflare（DNS + 代理）         DNS 仅解析（直连）
-                                 │ HTTPS（Full strict）      │ HTTPS
+                                 │ HTTPS                      │ HTTPS
                                  ▼                            ▼
         ┌─────────────────────────────────────────────────────────────────────┐
-        │ 边缘网关 {HK_IP} · Caddy（TLS 终结 / 自动证书 / gzip / 反向代理）      │
-        │   生产块：回源 Host → {ORIGIN_IP}                                    │
-        │   内测块：回源 Host → {ORIGIN_IP} + 注入 X-Qbao-Route: beta           │
+        │ 单台服务器 {HK_IP} · Caddy（TLS 终结 / Let's Encrypt 自动证书 / gzip） │
+        │   {DOMAIN}      块：静态 → {PROD_ROOT}/app（7 天缓存）→ API :3000     │
+        │   {BETA_HOST}   块：静态 → {BETA_ROOT}/app（不缓存）  → API :3100     │
         └──────────────────────────────────────────┬──────────────────────────┘
-                                                   │ http://{ORIGIN_IP} 回源（Host=源站 IP）
+                                                   │ 本机 127.0.0.1
                                                    ▼
         ┌─────────────────────────────────────────────────────────────────────┐
-        │ 大陆源站 {ORIGIN_IP} · nginx（listen 80 + 9178）单一 server 块         │
-        │   conf.d map（$http_x_qbao_route|$remote_addr，网关出口白名单）        │
-        │   默认 / 生产 → root {PROD_ROOT}/app · 静态缓存 7 天                  │
-        │   “beta + 白名单网关 IP” → root {BETA_ROOT}/app · 不缓存              │
-        │   /api /uploads /avatars /dl → Node :3000（生产）或 :3100（内测）      │
-        │   /games/werewolf/* → Node :3011（房间服务，内存态，两环境共享）        │
+        │ {HK_IP} 同机运行                                                      │
+        │   静态直出：{PROD_ROOT}/app · {BETA_ROOT}/app（file_server + SPA 兜底）│
+        │   /api /uploads /avatars /dl → Node :3000（生产）/ :3100（内测）       │
+        │   /games/werewolf/{api,werewolf-ws} → Node :3011（房间服务，内存态）   │
         └──────────────┬───────────────────────────────────┬──────────────────┘
-                   静态直出（SPA / 游戏门户）         API 反向代理
-                                        ┌───────────┴────────────┐
-                                  qbao-api :3000         qbao-api-beta :3100
-                                        │                      │
-                              PostgreSQL（同一集群，127.0.0.1）
-                                        │                      │
-                                  库 qbao（生产账本）      库 qbao_beta（内测账本）
+                  qbao-api :3000                    qbao-api-beta :3100
+                        │                                    │
+              PostgreSQL（同一集群，127.0.0.1:5432）
+                        │                                    │
+                  库 qbao（生产账本）                库 qbao_beta（内测账本）
 ```
 
 改动流动方向固定为从左到右：**L0 本机 → L1 内测 → L2 生产**（概念与入口见 docs/ENVIRONMENTS.md；顺序纪律见 docs/DEVELOPMENT_FLOW.md §7）。
+
+> 2026-09-10 全量迁港：原「大陆源站 + 香港边缘网关」两层已合并为**香港单机**，源站已退役清理。
+> 因此此前为规避大陆机房 ICP Host 拦截而设计的「回源 Host 改写 + `X-Qbao-Route` 路由头 + 出口 IP 白名单 map」
+> **整套机制已废弃**；环境区分回归最朴素的方式——Caddy 两个 site 块 + 两个本机端口。
 
 ## 2. 公网链路与 HTTPS（部署架构）
 
 ### 2.1 为什么是这条链路（背景与约束）
 
 1. **公网产品需要域名 + HTTPS**：域名作为稳定入口（DNS 托管于 Cloudflare），TLS 是浏览器的硬性前提。
-2. **大陆机房的 ICP 拦截（2026-09-08 实测）**：大陆源站会拦截公网请求中「未单列备案」的 Host 头（返回 403 Non-compliance ICP Filing）。
-   因此源站**不能按域名区分服务**——内测子域名直接以域名回源会被拦。
-3. **结论（定版方案）**：生产与内测统一经境外边缘网关 {HK_IP} 进入。网关终结 TLS，并把**回源 Host 一律改写为源站 IP**（源站自见的形态，天然放行）；
-   内测与生产的区分从「域名」转移到自定义请求头 `X-Qbao-Route: beta`，由源站 nginx 配合**网关出口 IP 白名单**裁决。
-   白名单之外的来源即使携带该头也一律按生产处理 → 内测入口不可伪造。
-4. **两个兜底入口**：主域名另套 Cloudflare 代理（CDN + 边缘证书）；`http://{ORIGIN_IP}` IP 直连保留（同一账本，无域名兜底/旧版兼容）。
+2. **大陆机房不可用（2026-09-08 实测）**：大陆源站会拦截公网请求中「未单列备案」的 Host 头（返回 403 Non-compliance ICP Filing）。
+   为此曾搭出一套 workaround：香港边缘网关终结 TLS + 回源 Host 一律改写为源站 IP + 自定义头 `X-Qbao-Route: beta` +
+   源站 nginx map「路由头 + 网关出口 IP 白名单」分流内测。
+3. **结论（2026-09-10 定版）**：**放弃大陆源站，服务全量迁至香港单机**。这一步把上面整套 workaround 一并删除——
+   香港主机不受大陆 ICP Host 拦截约束，可以直接按域名区分服务，于是：
+   - 不再需要「回源」这一跳，Caddy 就地终结 TLS、就地托管静态、就近反代 API；
+   - 不再需要 `X-Qbao-Route` 请求头与出口 IP 白名单（**该机制已废弃**，本文不再描述其配置）；
+   - 环境区分回归 Caddy 的两个 site 块 + 两个本机端口。
+4. **入口与兜底**：主域名 {DOMAIN} 走 Cloudflare 代理（边缘 TLS + 缓存加速）；内测域名 {BETA_HOST} 仅 DNS 解析直连。
+   原 `http://{ORIGIN_IP}` IP 直连兜底随源站退役**已不存在**。
 
 ### 2.2 各层职责
 
 | 层 | 载体 | 职责 | 关键点 |
 |---|---|---|---|
 | DNS / CDN | Cloudflare | 域名解析；{DOMAIN} 走代理（缓存加速、边缘 TLS）；{BETA_HOST} 仅 DNS | 控制台操作需 VPN（见 local/ENV.md） |
-| 边缘网关 | {HK_IP} · Caddy | TLS 终结、自动证书、gzip、回源转发 | 回源 Host → {ORIGIN_IP}；beta 块注入 `X-Qbao-Route: beta` |
-| 源站入口 | {ORIGIN_IP} · nginx | 静态直出、API/上传/下载反代、双环境路由、缓存头 | 单一 server 块（server_name _）+ conf.d map（机制见 2.4） |
+| 入口 / TLS / 静态 / 反代 | {HK_IP} · Caddy | TLS 终结、Let's Encrypt 自动证书、gzip、静态直出、SPA 兜底、API 反代 | 两个 site 块；配置 `/etc/caddy/Caddyfile`（见 2.4） |
 | 业务 API | Node · :3000 / :3100 | REST API（Express） | systemd：`qbao-api` / `qbao-api-beta` |
 | 房间服务 | Node · :3011 | 狼人杀实时（Koa + socket.io，房间在内存） | systemd：`qbao-werewolf`；重启即清零、不落库 |
 | 数据库 | PostgreSQL（localhost） | 两本独立账本 qbao / qbao_beta | 见 §3.3 |
@@ -76,59 +80,78 @@
 
 ### 2.3 证书与加密模型
 
-- 用户 ↔ Cloudflare：CF 边缘证书（生产域名，Full strict 要求源站证书有效）；用户 ↔ 网关：Caddy 自动签发的证书（{BETA_HOST} 为 DNS 直连，走标准 ACME 校验）。
-- 网关 ↔ 源站：HTTP 回源。可信模型 = **nginx 只信任网关出口 IP（白名单）+ 源站 443 不对外暴露**；Node API 与 PostgreSQL 只监听 127.0.0.1。
-- `http://{ORIGIN_IP}` 直连入口无 TLS（兜底性质），同一源站同一账本。
+- 用户 ↔ Caddy：Caddy 自动签发的 Let's Encrypt 证书（`{DOMAIN}` 与 `{BETA_HOST}` 各一张，ACME HTTP-01）。
+  {DOMAIN} 经 Cloudflare 代理时，用户侧先经 CF 边缘证书，CF ↔ 香港回源使用 Caddy 的正式证书。
+- 应用面收敛：**Node API（:3000/:3100）、房间服务（:3011）与 PostgreSQL（:5432）只监听 127.0.0.1**；
+  ufw 显式 deny 外部访问 3000/3100/3011（仅放行 22/80/443 tcp + 443 udp），Caddy 同机反代不受影响。
+- 已无 HTTP 明文回源段（旧的「网关 → 源站 HTTP 回源」随源站退役消失）。
 
-### 2.4 环境识别与请求路由（nginx 实际机制）
+### 2.4 请求路由与环境识别（Caddy 实际机制）
 
-`/etc/nginx/conf.d/qbao-env.conf`（双环境分流 map；占位符示意的等价形式）：
+单文件 `/etc/caddy/Caddyfile`，两个 site 块各服务一个环境；块内用 **order-preserving 的 `route` 块 + 显式 matcher** 分流
+（不用无 matcher 的兜底块，避免内部指令排序导致 404 抢先命中；占位符示意的等价形式）：
 
-```nginx
-# 信任条件：请求头 X-Qbao-Route: beta 且来源为网关出口 IP（白名单）
-# 其余一切请求（IP 直连 / 无头 / 伪造头）都落生产
-map "$http_x_qbao_route|$remote_addr" $env_root {
-    default             {PROD_ROOT}/app;
-    "beta|{HK_IP}"      {BETA_ROOT}/app;
-}
-map "$http_x_qbao_route|$remote_addr" $env_cache {
-    default             "public, max-age=604800";
-    "beta|{HK_IP}"      "no-cache, no-store, must-revalidate";
-}
-map "$http_x_qbao_route|$remote_addr" $env_expires {
-    default             7d;
-    "beta|{HK_IP}"      -1;
+```caddyfile
+{DOMAIN} {
+        encode gzip
+
+        route /download { redir * /api/v1/desktop/download 302 }       # 桌面端安装包短链
+
+        route /games/werewolf/api/* {                                   # 狼人杀 API：剥前缀
+                uri strip_prefix /games/werewolf/api
+                reverse_proxy 127.0.0.1:3011 { header_up Host {host} }
+        }
+
+        @static { not path /api /api/* /uploads/* /avatars/* /dl /dl/* /download \
+                          /games/werewolf/werewolf-ws /games/werewolf/api/* }
+        route @static {                                                 # 静态直出 + SPA 兜底
+                root * {PROD_ROOT}/app
+                try_files {path} {path}/ /index.html
+                file_server
+        }
+
+        @ws path /games/werewolf/werewolf-ws                            # 狼人杀 WebSocket：不剥前缀
+        route @ws { reverse_proxy 127.0.0.1:3011 { header_up Host {host} } }
+
+        @dyn path /api/* /api /uploads/* /avatars/* /dl/* /dl          # 其余动态 → 本机 API
+        route @dyn { reverse_proxy 127.0.0.1:3000 { header_up Host {host} } }
+
+        @assets path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2
+        header @assets Cache-Control "public, max-age=604800"           # 生产静态 7 天
 }
 ```
 
-站点块要点（`/etc/nginx/sites-enabled/qbao`）：`listen 80` + `listen 9178 default_server`、`server_name _`、`root $env_root;`；
-`/api/`、`/uploads/`、`/avatars/`、`/dl` 以 `if ($env_root = {BETA_ROOT}/app) { proxy_pass 127.0.0.1:3100; }` 选路，默认回退 `127.0.0.1:3000`；
-狼人杀路径 `^~ /games/werewolf/`（含 ws Upgrade 透传）→ `127.0.0.1:3011`；
-静态资源正则 location 设置 `expires $env_expires; add_header Cache-Control $env_cache;`。
+`{BETA_HOST}` 块结构与上完全相同，仅三处不同：`root * {BETA_ROOT}/app`、`reverse_proxy 127.0.0.1:3100`、
+`Cache-Control "no-cache, no-store, must-revalidate"`。
 
-> 设计效果：**一个 server 块同时服务两条公网链路与 IP 直连**；生产请求不携带路由头（或来自非白名单 IP）→ 默认生产；
-> 只有「网关白名单来源 + beta 头」进入内测实例。新增环境时只需扩展 map 与白名单，无需复制 server 块。
-> 旧方案（按 Host 分多个 server 块）因 ICP 拦截不可行，已废弃；若从备份恢复旧分块配置会导致内测域名被拦，注意区分。
+> 设计效果：**一个 Caddy 进程服务两条公网域名、两个静态根与两个 API 实例**；
+> 环境由「访问哪个域名」唯一决定，不存在任何可伪造的请求头入口。
+> 改配置后先 `caddy validate --config /etc/caddy/Caddyfile`，再 `systemctl reload caddy`。
 
 ### 2.5 缓存纪律（与改版可见性强相关）
 
 | 环境 | 静态缓存 | 改版生效方式 |
 |---|---|---|
-| 生产 {DOMAIN} / {ORIGIN_IP} | `expires 7d` + `public, max-age=604800`；CF 边缘另有缓存 | 引用 js/css 必须带版本参数 `?v=`（否则老浏览器拿旧文件）；必要时 CF 控制台 Purge Cache |
-| 内测 {BETA_HOST} | `no-cache, no-store` | 部署刷新即见 |
+| 生产 {DOMAIN} | `public, max-age=604800`（7 天）；CF 边缘另有一层缓存 | 引用 js/css 必须带版本参数 `?v=`（否则老浏览器拿旧文件）；必要时 CF 控制台 Purge Cache |
+| 内测 {BETA_HOST} | `no-cache, no-store, must-revalidate` | 部署刷新即见 |
 | 动态接口 / 下载文件 | 不缓存（下载经 Node，支持 Range/206） | — |
 
-## 3. 运行实体拓扑（源站视角）
+## 3. 运行实体拓扑（服务器视角）
 
 ### 3.1 进程与端口
 
+全部常驻进程运行在**同一台香港服务器**上，应用端口只绑回环：
+
 | 服务 | 端口 | systemd 单元 | 工作目录（占位） | 说明 |
 |---|---|---|---|---|
-| nginx | 80（公网）、9178（内网保留） | nginx | — | 配置：sites-enabled/qbao + conf.d/qbao-env.conf |
+| Caddy | 80（ACME + 跳转）、443 tcp/udp | caddy | — | 配置：/etc/caddy/Caddyfile；TLS 终结 + 静态直出 + 反代 |
 | qbao-api（生产） | 127.0.0.1:3000 | qbao-api.service | {PROD_ROOT}/server | 读本目录 .env → 库 qbao |
 | qbao-api-beta（内测） | 127.0.0.1:3100 | qbao-api-beta.service | {BETA_ROOT}/server | .env 含 AUTO_ADMIN=1、AI Key 留空 → 库 qbao_beta |
-| qbao-werewolf | 127.0.0.1:3011 | qbao-werewolf.service | — | 房间内存态；前台静态各环境直出、房间服务共享 |
-| PostgreSQL | 127.0.0.1:5432 | postgresql | — | 不对外 |
+| qbao-werewolf | 127.0.0.1:3011 | qbao-werewolf.service | {PROD_ROOT}/party/werewolf | 房间内存态；两环境共用同一房间服务 |
+| PostgreSQL 14 | 127.0.0.1:5432 | postgresql | — | 不对外 |
+
+运行时：Node **v26.x**（服务器自装路径，systemd 单元内以绝对路径 `ExecStart` 指定）、swap 1G（小内存主机）。
+ufw 默认拒绝入站，仅放行 22/80/443 tcp 与 443 udp（QUIC），并显式 deny 3000/3100/3011。
 
 ### 3.2 目录布局
 
@@ -136,10 +159,11 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 
 ```
 {PROD_ROOT}/            # 生产（真实路径见 local/ENV.md）
-  app/                  # nginx 静态根：index.html + 资源 + games/（7 天缓存）
+  app/                  # Caddy 静态根：index.html + 资源 + games/（7 天缓存）
   server/               # API 代码 + .env + sql 迁移（systemd 工作目录）
   downloads/            # 分发储藏室：manifest.json(+.bak) stable/ beta/
   uploads/              # 上传统一目录：pool/ chat/ issues/ avatars/
+  party/werewolf/       # 狼人杀房间服务（systemd 工作目录）
   scripts/  docs/ …     # 工具与文档（同步）
 {BETA_ROOT}/            # 内测：同样布局（app 不缓存、server 端口/库/密钥独立）
 ```
@@ -152,12 +176,13 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 - Schema 演进：`server/sql/NNN_*.sql` 编号迁移（幂等），`schema_migrations` 表**每库独立记账**，`node scripts/run_migration.js` 按目录 .env 执行；顺序固定 **L1 先、L2 后**。
 - `qbao_beta` 的初始化方式是**对生产库做 schema-only 克隆**（pg_dump --schema-only + 拷贝 schema_migrations），
   而非执行仓库 `init.sql`——线上生产库经多年迁移后与 init.sql 基线存在漂移，克隆保证与生产 schema 逐字一致（重建步骤见 docs/DEPLOY.md §4B）。
-- 备份：每日 pg_dump → {BACKUP_DIR}，uploads 同步备份；恢复流程见 docs/DEPLOY.md §7/§8.5。
+- 备份：服务器 cron 每日 04:00 `pg_dump` 双库（生产 + 内测）gzip 至 {BACKUP_DIR}，保留 30 天；恢复流程见 docs/DEPLOY.md §7。
 
 ### 3.4 资源预算与降载预案
 
-- 源站为小内存单机：nginx + 2 个 API 实例 + 房间服务 + PostgreSQL 常驻。内测实例不开 AI 任务（AI Key 留空即不消费额度；服务端预留 `SKIP_AI_WORKER=1` 开关）。
+- 服务器为小内存单机：Caddy + 2 个 API 实例 + 房间服务 + PostgreSQL 常驻。内测实例不开 AI 任务（AI Key 留空即不消费额度；服务端预留 `SKIP_AI_WORKER=1` 开关）。
 - 最坏回退：内测仅保留静态目录（页面/UI 可测），API 暂共享生产实例——放弃「先于生产测新代码」能力，恢复即移除（docs/DEPLOY.md §4B.5）。
+- 单机风险提示：应用与数据库同机，主机故障即整站不可用；缓解手段是每日双库 dump + 迁港时点快照（本机 `local/backups/`，不进 Git）。
 
 ## 4. 环境隔离与安全边界
 
@@ -165,14 +190,16 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 
 | 维度 | L1 内测 | L2 生产 |
 |---|---|---|
-| 入口 | https://{BETA_HOST} | https://{DOMAIN}、http://{ORIGIN_IP}（同账本） |
+| 入口 | https://{BETA_HOST}（CF 仅 DNS 直连） | https://{DOMAIN}（CF 代理） |
+| Caddy site 块 | {BETA_HOST} 块 | {DOMAIN} 块 |
 | API 进程 / 端口 | qbao-api-beta :3100 | qbao-api :3000 |
 | 数据库 | qbao_beta（schema 与生产一致） | qbao（禁测试写入） |
 | 静态目录 | {BETA_ROOT}/app（不缓存） | {PROD_ROOT}/app（静态 7 天） |
-| 下载/上传 | 各自 downloads/ 与 uploads/（nginx 按 env 路由） | 同上（生产） |
+| 下载/上传 | 各自 downloads/ 与 uploads/（Caddy 按 site 块分流） | 同上（生产） |
 | 账号体系 | 开放注册；**AUTO_ADMIN=1 注册即管理员** | 管理员仅后台授予（bootstrap_admin / ADMIN_USERNAMES） |
 | 测试动作 | 注册/对局/兑换/领奖/清库全部允许 | 仅金丝雀账号只读巡检 |
 | 部署目标 | scripts/stage.ps1 -Env beta | scripts/stage.ps1 -Env prod |
+| 共享 | 同一台主机、同一个房间服务（:3011） | 同左 |
 
 ### 4.2 账号、角色与防互害模型（v2 权限体系）
 
@@ -207,7 +234,7 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 ### 5.1 形态与产物（同源同构）
 
 - 前端为 **Vue 3 + Vite + Pinia** 工程，`vite-plugin-singlefile` 构建 → `app/dist/index.html`（内嵌全部 JS/CSS，约 550KB）。
-- 同一份产物三种用法：nginx 托管（网页）；Electron 桌面以 file:// 内嵌（免部署，preload 注入 `window.__QBAO_RUNTIME__` 提供 apiBase/updateChannel）；
+- 同一份产物三种用法：Caddy 托管（网页）；Electron 桌面以 file:// 内嵌（免部署，preload 注入 `window.__QBAO_RUNTIME__` 提供 apiBase/updateChannel）；
   手机壳工程 mobile/（Capacitor）加载线上 URL（正式包 com.qbao.app / 内测包 com.qbao.beta，可共存安装）。
 - API 基址运行时解析（`core/env.js`）：网页形态同源 `/api/v1`；桌面形态用注入的 apiBase；壳应用打包时固定服务器 URL。
 - 附属静态站：`app/public/games/` 游戏门户、下载落地页 `/dl`（服务端动态渲染）；随构建拷入 dist 与各环境 app/。
@@ -276,7 +303,7 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 | 服务器实例 .env | 各环境 server/.env（每实例独立 PORT/PGDATABASE/JWT_SECRET/CORS/AUTO_ADMIN…） | ❌（仅服务器） |
 | 真实环境对照表 | local/ENV.md | ❌ |
 | 部署参数（SSH/密钥/远端目录/服务名） | local/stage.env.ps1 | ❌ |
-| 服务器配置（nginx/Caddy/systemd） | 各服务器 /etc/… | ❌ |
+| 服务器配置（Caddy/systemd/ufw） | 服务器 /etc/… 与 ufw 规则 | ❌ |
 
 ### 7.2 工具链
 
@@ -291,10 +318,13 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 
 ### 7.3 服务器配置档案（改网络/入口必读）
 
-- 源站 nginx：`/etc/nginx/conf.d/qbao-env.conf`（map）+ `/etc/nginx/sites-enabled/qbao`（合并 server 块）；校验 `nginx -t && systemctl reload nginx`；改动前备份。
-- 边缘网关：`/etc/caddy/Caddyfile`（{DOMAIN} 与 {BETA_HOST} 两个块）；`systemctl reload caddy`。
+- Caddy：`/etc/caddy/Caddyfile`（{DOMAIN} 与 {BETA_HOST} 两个 site 块，兼静态直出与反代）；
+  改后 `caddy validate --config /etc/caddy/Caddyfile` → `systemctl reload caddy`；改动前备份（`Caddyfile.bak_<日期>`）。
 - systemd：qbao-api / qbao-api-beta / qbao-werewolf（模板 server/deploy/qbao-api.service）。
-- 任何真实值变化（IP/域名/路径/服务名）必须同步更新 local/ENV.md；新增回源来源时同步扩展 nginx 白名单。
+- ufw：默认拒绝入站，放行 22/80/443 tcp + 443 udp，显式 deny 3000/3100/3011（规则脚本存档见 local/hk-full/ufw-rules.sh）。
+- 备份：cron `/etc/cron.d/qbao-backup` 每日 04:00 双库 dump → {BACKUP_DIR}（30 天）。
+- 任何真实值变化（IP/域名/路径/服务名）必须同步更新 local/ENV.md；改 Caddy site 块时注意
+  `@static` 的 `not path` 列表必须与 `@dyn` 列表严格互补，漏项会导致该路径被静态兜底吞掉（返回 index.html 而非 API 响应）。
 
 ## 8. 变更影响检查单（给未来开发）
 
@@ -305,7 +335,7 @@ map "$http_x_qbao_route|$remote_addr" $env_expires {
 | 数据库 | server/sql + 两库 | DEVELOPMENT.md §7 | 新增编号幂等迁移；**先 L1 后 L2**（各自记账） |
 | 新游戏接入 | public/games + 后端 + 门禁 | GAMES §六 | QA 门禁双端同步；先 L1 E2E；迁移先行 |
 | 分发新包/改渠道 | downloads + 两 manifest 校验 | PUBLISHING | channel 纪律；双端校验同步；公网逐字节验证 |
-| 网络/证书/域名 | CF 控制台 + Caddy + nginx | DEPLOY §1/4B、ENVIRONMENTS | 白名单 map 同步；配置先备份；CF 操作需 VPN；更新 local/ENV.md |
+| 网络/证书/域名 | CF 控制台 + Caddy（+ ufw） | DEPLOY §1/4、ENVIRONMENTS | Caddy 配置先备份再 validate/reload；@static 与 @dyn 互补性检查；CF 操作需 VPN；更新 local/ENV.md |
 | 权限/安全规则 | users 路由 + 客户端 + 用例 | DEVELOPMENT_FLOW §5 | 服务端与客户端双端改（界面收敛）；补守卫用例 |
 | 新增真实值 | 文档/脚本 | DEVELOPMENT.md §1 | 只进 local/*（占位符纪律，push 前敏感扫描） |
 
@@ -364,5 +394,8 @@ T10 beforeunload keepalive、T11 AI 任务自动续跑、T12 持久化配额治�
 - 2026-09-08 v1 重写：由「单机拓扑 + 模块清单」升级为多环境架构事实源——新增公网 HTTPS 链路（CDN/网关/源站）、
   ICP 分流机制（X-Qbao-Route + 白名单 map）、运行实体拓扑、隔离矩阵、防互害权限模型、分发架构、工具链与变更检查单；
   原模块清单与技术债登记并入 §5/§9。
-- 2026-09-12 v1.1：§10 补记第二次历史重写（移除 AI 工具署名尾注，公开贡献者列表去虚）。
-  网络链路本身无变化——本文 §2 的 CDN → Caddy 网关 → 源站 nginx 三段式自 2026-09-08 起即为现状。
+- 2026-09-12 v2 重写：**全量迁港后的架构校准**——服务由「大陆源站 + 香港边缘网关」合并为**香港单机**
+  （Caddy 同机 TLS 终结 + 静态直出 + API 反代），删除 nginx、`X-Qbao-Route` 路由头、出口 IP 白名单 map、
+  `http://{ORIGIN_IP}` 直连兜底等全部已废弃机制；新增 Caddy 实际路由配置（§2.4）、ufw 端口纪律（§3.1）、
+  单机风险与备份链路（§3.4/§7.3）；占位符 {ORIGIN_IP} 废弃、新增 {HOST_ROOT}。
+  同日并补记第二次历史重写（移除 AI 工具署名尾注，公开贡献者列表去虚，见 §10）。

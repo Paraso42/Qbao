@@ -23,10 +23,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 扫描真实基础设施痕迹（源站 IP / 私钥文件名 / 部署根 / 真实 AppID）
+      - name: 扫描真实基础设施痕迹（服务器 IP / 私钥文件名 / 部署根 / 真实 AppID）
         run: |
-          BANNED="114\.55\.210\.82|47\.82\.112\.36|ai_qbao_key01|/home/qbao|/srv/qbao|wxd68424b639fc98c3"
-          if git grep -n -E "$BANNED" -- .; then
+          # 模式清单：.github/privacy-banned.txt（**只放模式，一行一条**，
+          # 注释/空行会被 git grep -f 当成模式，故该文件内不得有注释）。
+          # 说明与新增流程见 docs/DEVELOPMENT.md §1。
+          #
+          # 两点必须同时满足，否则本 job 会因"命中自己"而恒失败（2026-09-12 修复）：
+          #   1) 排除 .github/privacy-banned.txt 自身（模式字面量就写在里面）；
+          #   2) 本 ci.yml 里不得出现任何真实值字面量（模式用字符类如 /home/[q]bao 写法）。
+          if git grep -n -E -f .github/privacy-banned.txt -- . ':(exclude).github/privacy-banned.txt'; then
             echo "::error::公开仓库不得出现真实基础设施痕迹（纪律见 docs/DEVELOPMENT.md §1：真实值只进 local/，公开文件一律占位符）"
             exit 1
           fi

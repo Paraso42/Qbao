@@ -1,36 +1,42 @@
 # 部署指南
 
-> 面向运维与自托管用户。**本文所有地址一律使用占位符**：{DOMAIN}/{BETA_HOST} 域名、{ORIGIN_IP}/{HK_IP} IP、
-> {PROD_ROOT}/{BETA_ROOT} 源站两套部署根、{BACKUP_DIR} 备份目录（真实值只在本机 gitignored 的 `local/ENV.md`），请勿将真实服务器信息写入本仓库。
+> 面向运维与自托管用户。**本文所有地址一律使用占位符**：{DOMAIN}/{BETA_HOST} 域名、{HK_IP} 服务器 IP、
+> {HOST_ROOT} 部署父目录、{PROD_ROOT}/{BETA_ROOT} 两套部署根、{BACKUP_DIR} 备份目录
+> （真实值只在本机 gitignored 的 `local/ENV.md`），请勿将真实服务器信息写入本仓库。
+> （{ORIGIN_IP} 随大陆源站退役已废弃，不应再出现。）
 
-## 1. 拓扑
+## 1. 拓扑（2026-09-10 全量迁港后 · 单机直出）
 
 ```text
-用户 ──HTTPS──> Cloudflare（{DOMAIN} 代理）或 DNS 直连（{BETA_HOST}）
+用户 ──HTTPS──> Cloudflare（{DOMAIN} 走代理）或 DNS 直连（{BETA_HOST} 仅解析）
         │
         ▼
-香港中转 {HK_IP} · Caddy（TLS 终结 / 自动证书）——回源 Host 统一改写为 {ORIGIN_IP}
-        │ 内测请求额外携带 X-Qbao-Route: beta
-        ▼ http://{ORIGIN_IP}
-源站 nginx（80 + 9178）单一 server 块（server_name _；root/缓存由 conf.d map 决定）
-        ├─ 默认（生产）：root {PROD_ROOT}/app（静态 7 天）→ /api 等 → :3000 → 库 qbao
-        ├─ 路由头=beta 且来源=网关白名单：root {BETA_ROOT}/app（不缓存）→ :3100 → 库 qbao_beta
-        ├─ /games/werewolf/* → :3011（两环境共享房间服务）
-        └─ http://{ORIGIN_IP} 直连（无域名兜底）= 生产
+单台服务器 {HK_IP} · Caddy（TLS 终结 / Let's Encrypt 自动证书 / gzip）
+        ├─ 静态本地直出 + SPA 兜底
+        │    {DOMAIN}    → root {PROD_ROOT}/app    静态 7 天
+        │    {BETA_HOST} → root {BETA_ROOT}/app    不缓存
+        ├─ /api /uploads /avatars /dl → 127.0.0.1:3000（生产）/ :3100（内测）
+        ├─ /games/werewolf/api/*（剥前缀）、/games/werewolf/werewolf-ws（不剥）→ 127.0.0.1:3011
+        ├─ /download → 302 → /api/v1/desktop/download
+        └─ PostgreSQL 14（127.0.0.1:5432）：库 qbao / qbao_beta（同一集群两本账）
 ```
 
-> 机制原理（ICP 拦截、map 分流、缓存头、证书拓扑）见 docs/ARCHITECTURE.md §2；§4B 为内测环境落地操作。
+> 原「大陆源站 + 香港边缘网关」两层结构已废弃：大陆机房会拦截未单列备案的 Host，
+> 迁港后香港主机直接就是源站，**不再需要 nginx、回源 Host 改写、`X-Qbao-Route` 路由头或出口 IP 白名单**。
+> 机制原理见 docs/ARCHITECTURE.md §2（含 Caddy 实际路由配置），内测环境概念见 docs/ENVIRONMENTS.md。
 
 ## 2. 环境要求
 
-- Node.js ≥ 18，PostgreSQL ≥ 13，nginx（生产），域名 + TLS 证书。
+- Node.js ≥ 18（线上实测 v26.x）、PostgreSQL ≥ 13（线上 14）、Caddy 2（自动 HTTPS；自托管可用任意反向代理）。
+- 域名 + 可公网校验的 DNS（Caddy 走 ACME HTTP-01 自动签发证书）。
 
 ## 3. 后端部署
 
-> 本项目线上实例**不使用 PM2**：以 systemd 单元运行（qbao-api / qbao-api-beta / qbao-werewolf，模板 server/deploy/qbao-api.service，见 §4B 与 docs/ARCHITECTURE.md §3.1）。以下为自托管最小部署写法。
+> 本项目线上实例**不使用 PM2**：以 systemd 单元运行（qbao-api / qbao-api-beta / qbao-werewolf，
+> 模板 server/deploy/qbao-api.service，见 §4B 与 docs/ARCHITECTURE.md §3.1）。以下为自托管最小部署写法。
 
 ```bash
-# 1) 获取代码（注意：2026-07 历史已重写，需全新克隆）
+# 1) 获取代码（注意：历史已重写，需全新克隆）
 git clone git@github.com:Paraso42/Qbao.git {PROD_ROOT}
 
 # 2) 初始化数据库
@@ -47,69 +53,56 @@ openssl rand -hex 32   # 生成 JWT_SECRET
 
 # 4) 安装并启动
 npm ci --omit=dev
-npm start              # 或 PM2 守护（见下）
+npm start              # 生产请改用 systemd 单元（见 §4B.2 第 5 步），不要挂在前台
 ```
 
-PM2（参考 `server/ecosystem.config.js`，**按实际路径修改 script**）：
-
-```bash
-pm2 start server/ecosystem.config.js
-pm2 save && pm2 startup
-```
-
-## 4. 前端部署（nginx）
+## 4. 前端部署（Caddy 静态直出）
 
 前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后发布 `app/dist/`
 （singlefile：index.html + vendor/，CI 亦会构建并冒烟校验 CSP）。
-> 线上实例把构建产物解包发布为独立静态目录 {PROD_ROOT}/app（nginx root 直接指向该目录，见 §1/§4B）；
-> 下列示例以仓库内 app/dist 为自托管最小写法。nginx 配置示例：
+> 线上实例把构建产物解包发布为独立静态目录 {PROD_ROOT}/app（Caddy `root` 直接指向该目录，见 §1/§4B）；
+> 下列示例以仓库内 app/dist 为自托管最小写法。Caddyfile 示例：
 
-```nginx
-server {
-    listen 80;
-    server_name your.domain.com;
-    root {PROD_ROOT}/app/dist;     # 线上实例 = {PROD_ROOT}/app（解包目录）；自托管最小写法 = 仓库内 app/dist
-    index index.html;
+```caddyfile
+{DOMAIN} {
+        encode gzip
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location ^~ /uploads/ {
-        proxy_pass http://127.0.0.1:3000;
-    }
-    location ^~ /avatars/ {
-        proxy_pass http://127.0.0.1:3000;
-    }
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
+        @static { not path /api /api/* /uploads/* /avatars/* /dl /dl/* /download }
+        route @static {
+                root * {PROD_ROOT}/app/dist   # 线上实例 = {PROD_ROOT}/app（解包目录）
+                try_files {path} {path}/ /index.html
+                file_server
+        }
 
-    # 注意：静态资源正则 location 优先级高于普通前缀 location。
-    # 上传/头像目录（/uploads/、/avatars/）必须写成 ^~ 前缀，否则会被此规则
-    # try_files 拦截（在静态根目录找不到图片 → 404）。
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
-        expires 7d;
-        add_header Cache-Control "public, max-age=604800";
-        try_files $uri =404;
-    }
+        @dyn path /api/* /api /uploads/* /avatars/* /dl/* /dl
+        route @dyn {
+                reverse_proxy 127.0.0.1:3000 {
+                        header_up Host {host}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+
+        @assets path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2
+        header @assets Cache-Control "public, max-age=604800"
 }
 ```
 
+> 要点：`@static` 的 `not path` 列表必须与 `@dyn` 的列表**严格互补**——漏掉某个动态前缀，
+> 该路径就会被静态兜底吞掉（返回 index.html 而不是 API 响应）。
+> 改配置后先 `caddy validate --config /etc/caddy/Caddyfile` 再 `systemctl reload caddy`。
+
 ## 4B. 内测环境（beta）部署 —— 双环境纪律
 
-> 内测环境与生产**同服务器、同代码、不同目录/进程/数据库**：静态 {BETA_ROOT}/app、API :3100、库 qbao_beta。
-> 所有测试动作只允许发生在内测环境；生产库禁止测试写入。流程纪律见 docs/DEVELOPMENT_FLOW.md（§3、§7），
-> 概念与内测入口见 docs/ENVIRONMENTS.md，链路机制见 docs/ARCHITECTURE.md §2。
+> 内测环境与生产**同服务器、同代码、不同目录/进程/数据库/域名**：静态 {BETA_ROOT}/app、API :3100、
+> 库 qbao_beta、域名 {BETA_HOST}。所有测试动作只允许发生在内测环境；生产库禁止测试写入。
+> 流程纪律见 docs/DEVELOPMENT_FLOW.md（§3、§7），概念与内测入口见 docs/ENVIRONMENTS.md，
+> 链路机制见 docs/ARCHITECTURE.md §2。
 
 ### 4B.1 目标布局（占位符，真实值见 local/ENV.md）
 
 | 层 | 入口 | 静态根 | API | 数据库 | 缓存 |
 |---|---|---|---|---|---|
-| L2 生产 | https://{DOMAIN} 与 http://{ORIGIN_IP} | {PROD_ROOT}/app | :3000（qbao-api） | qbao | 静态 7 天 |
+| L2 生产 | https://{DOMAIN} | {PROD_ROOT}/app | :3000（qbao-api） | qbao | 静态 7 天 |
 | L1 内测 | https://{BETA_HOST} | {BETA_ROOT}/app | :3100（qbao-api-beta） | qbao_beta | 不缓存 |
 
 ### 4B.2 一次性初始化
@@ -138,71 +131,38 @@ systemctl daemon-reload && systemctl enable --now qbao-api-beta
 curl -s http://127.0.0.1:3100/api/v1/health
 
 # 6) 静态首灌与后续同步：scripts/stage.ps1 -Env beta -Mode app（构建产物 → {BETA_ROOT}/app）
-#    nginx 双环境路由见 4B.3（已合并为单一 server 块，勿恢复旧"按 Host 分块"配置）
+#    Caddy 只需新增/确认 {BETA_HOST} site 块（见 4B.3），不需要改动生产块
 ```
 
-### 4B.3 nginx 双环境路由（合并 server 块 + conf.d map）
+### 4B.3 Caddy 双环境路由（两个 site 块）
 
-> 2026-09-08 起**不再按 Host 分两个 server 块**：大陆源站拦截未单列备案子域名的 Host（内测域名直接回源 → 403），
-> 且生产/内测都经香港 Caddy 回源（Host 统一改写为源站 IP）。环境区分改为**网关注入路由头 + 网关出口 IP 白名单**。
-> 以下为真实配置的结构化示意（conf 见 /etc/nginx/conf.d/qbao-env.conf 与 /etc/nginx/sites-enabled/qbao）：
+> 环境由**访问哪个域名**唯一决定：`{DOMAIN}` 块指向生产静态根与 :3000，`{BETA_HOST}` 块指向内测静态根与 :3100。
+> 两块的 route 结构完全相同，仅 `root`、`reverse_proxy` 端口与 `Cache-Control` 三处不同。
+> 完整示例（含狼人杀剥前缀、WebSocket、`/download` 短链）见 docs/ARCHITECTURE.md §2.4。
 
-```nginx
-# conf.d/qbao-env.conf —— 双环境分流 map（其余一切请求默认 = 生产）
-map "$http_x_qbao_route|$remote_addr" $env_root {
-    default             {PROD_ROOT}/app;
-    "beta|{HK_IP}"      {BETA_ROOT}/app;
-}
-map "$http_x_qbao_route|$remote_addr" $env_cache {
-    default             "public, max-age=604800";
-    "beta|{HK_IP}"      "no-cache, no-store, must-revalidate";
-}
-map "$http_x_qbao_route|$remote_addr" $env_expires {
-    default             7d;
-    "beta|{HK_IP}"      -1;
-}
-```
+```caddyfile
+{BETA_HOST} {
+        encode gzip
 
-```nginx
-# sites-enabled/qbao —— 单一 server 块（要点；其余 location 的转发头与 /api/ 示例一致）
-server {
-    listen 80;
-    listen 9178 default_server;      # 内网保留入口
-    server_name _;                   # 兼容 IP 直连 / 网关回源任意 Host
-    root $env_root;
-    index index.html;
+        @static { not path /api /api/* /uploads/* /avatars/* /dl /dl/* /download \
+                          /games/werewolf/werewolf-ws /games/werewolf/api/* }
+        route @static {
+                root * {BETA_ROOT}/app
+                try_files {path} {path}/ /index.html
+                file_server
+        }
 
-    # API / 上传 / 下载：按环境变量选路（内测 :3100，默认生产 :3000）
-    location /api/ {
-        if ($env_root = {BETA_ROOT}/app) { proxy_pass http://127.0.0.1:3100; }
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location ^~ /uploads/ { if ($env_root = {BETA_ROOT}/app) { proxy_pass http://127.0.0.1:3100; } proxy_pass http://127.0.0.1:3000; }
-    location ^~ /avatars/ { if ($env_root = {BETA_ROOT}/app) { proxy_pass http://127.0.0.1:3100; } proxy_pass http://127.0.0.1:3000; }
-    location ^~ /dl      { if ($env_root = {BETA_ROOT}/app) { proxy_pass http://127.0.0.1:3100; } proxy_pass http://127.0.0.1:3000; }
+        @dyn path /api/* /api /uploads/* /avatars/* /dl/* /dl
+        route @dyn { reverse_proxy 127.0.0.1:3100 { header_up Host {host} } }
 
-    # 狼人杀：两环境前台静态各自直出；房间/API 复用 :3011（内存房，无持久化，可接受）
-    location ^~ /games/werewolf/werewolf-ws { proxy_pass http://127.0.0.1:3011; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; }
-    location ^~ /games/werewolf/api/        { proxy_pass http://127.0.0.1:3011/; }
-    location ^~ /games/werewolf/            { try_files $uri $uri/ /games/werewolf/index.html; }
-
-    # 静态缓存：生产 7 天 / 内测不缓存（expires 与 Cache-Control 均由 map 决定）
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
-        expires $env_expires;
-        add_header Cache-Control $env_cache;
-        try_files $uri =404;
-    }
-    location / { try_files $uri $uri/ /index.html; }
+        @assets path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2
+        header @assets Cache-Control "no-cache, no-store, must-revalidate"
 }
 ```
 
-> HTTPS：{DOMAIN}/{BETA_HOST} 均由香港中转 Caddy 终结 TLS 并回源 http://{ORIGIN_IP}（生产与内测都改写 Host；内测另带 X-Qbao-Route: beta）。
-> 证书：{BETA_HOST} DNS 仅解析（不走 CDN 代理），Caddy 走标准 ACME 自动签发；{DOMAIN} 另经 Cloudflare 代理（Full strict）。
-> 改动后必须：先备份 sites-enabled/qbao 与 conf.d/*，再 `nginx -t && systemctl reload nginx`；**禁止从 .bak 恢复旧的"按 Host 分块"配置**。
+> DNS：{BETA_HOST} 在 Cloudflare 建 A 记录指向 {HK_IP} 并设为**仅 DNS（灰云）**，Caddy 才能走标准 ACME 校验；
+> {DOMAIN} 走 Cloudflare 代理（橙云）。改动后必须：先备份 `/etc/caddy/Caddyfile`
+> （`Caddyfile.bak_<日期>`），再 `caddy validate` + `systemctl reload caddy`。
 
 ### 4B.4 部署 / 冒烟 / 清理
 
@@ -220,7 +180,7 @@ sudo -u postgres createdb -O <db_user> qbao_beta
 #   再按 4B.2 第 4 步重新做 schema-only 克隆 + run_migration.js，然后 restart qbao-api-beta + 冒烟
 ```
 
-### 4B.5 内存预案（共用一台小内存源站时）
+### 4B.5 内存预案（单机小内存共用时）
 
 1. 内测实例不开 AI 任务（服务端预留 `SKIP_AI_WORKER=1` 环境变量支持）；AI Key 留空自然不消费额度。
 2. 观察 RSS：`systemctl status qbao-api-beta` / `ps -o rss,cmd -p <pid>`。
@@ -250,23 +210,28 @@ sudo bash server/deploy/prepare_dirs.sh {PROD_ROOT}
 
 ## 6. HTTPS
 
-本项目线上链路：TLS 由**边缘网关（Caddy）终结**并自动续期（{DOMAIN} 另经 Cloudflare 代理，Full strict）；
-源站 80 只服务回源与 IP 直连，443 不对外暴露（详见 docs/ARCHITECTURE.md §2.3）。改 Caddyfile 后 `systemctl reload caddy`。
+线上链路：TLS 由服务器上的 **Caddy 就地终结**并自动续期（Let's Encrypt / ACME HTTP-01，`{DOMAIN}` 与 `{BETA_HOST}` 各一张）；
+`{DOMAIN}` 另经 Cloudflare 代理（用户侧先经 CF 边缘证书，CF ↔ 服务器回源使用 Caddy 的正式证书）。
+80 端口仅用于 ACME 校验与跳转。改 Caddyfile 后 `caddy validate` + `systemctl reload caddy`。
 
-自托管用户（独立公网主机、无网关分层）按常规签发即可：
-
+自托管用户若要换用 nginx/certbot，按常规签发即可：
 ```bash
 sudo certbot --nginx -d your.domain.com
 ```
 
 ## 7. 备份
 
+服务器以 cron 每日 04:00 自动备份双库（保留 30 天）：
 ```bash
-# 数据库（每日）
-pg_dump -U qbao qbao | gzip > {BACKUP_DIR}/qbao_$(date +%F).sql.gz
-# 上传文件（每日）
+# /etc/cron.d/qbao-backup —— 生产 + 内测两本账一并 dump
+pg_dump -U qbao qbao      | gzip > {BACKUP_DIR}/qbao_$(date +\%F).sql.gz
+pg_dump -U qbao qbao_beta | gzip > {BACKUP_DIR}/qbao_beta_$(date +\%F).sql.gz
+# 上传文件（可另行每日）
 rsync -a {PROD_ROOT}/uploads/ {BACKUP_DIR}/uploads/
 ```
+
+> **恢复没有"回滚到源站"这条路**：大陆源站已于 2026-09-10 退役清理（Qbao 零残留），
+> 恢复只能走 HK 的每日 dump，或本机 gitignored 的 `local/backups/`（迁港时点快照 + 源站退役归档）。
 
 ## 8. 升级流程
 
@@ -274,17 +239,19 @@ rsync -a {PROD_ROOT}/uploads/ {BACKUP_DIR}/uploads/
 2. 执行迁移：`cd server && node scripts/run_migration.js`（schema_migrations 自动跳过已应用项；旧库手工迁移过可先 `--mark-applied`）。
 3. `cd server && npm ci --omit=dev`（依赖有变化时）。
 4. `sudo bash server/deploy/prepare_dirs.sh {PROD_ROOT}`（目录属主修正）后重启服务。
-5. 前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后，用 `app/dist/` 覆盖式发布到 nginx 静态目录，必要时刷新浏览器缓存。
+5. 前端为 Vue+Vite 构建产物：`cd app && npm ci && npm run build` 后，用 `app/dist/` 覆盖式发布到 Caddy 静态根（{PROD_ROOT}/app），必要时刷新浏览器缓存。
 
-## 8.5 服务器恢复（2026-07 归档下线后重建）
+## 8.5 服务器重建（灾难恢复）
 
-服务器曾于 2026-07-06 完整卸载运行环境（Node/PM2/PostgreSQL/Nginx 均 purge，社交类数据表已删除、uploads 已清空）。重新上线流程：
+香港主机若需重建（服务与数据库同机，这是唯一线上主机）：
 
-1. 重装基础环境：Node.js ≥ 18、PostgreSQL ≥ 13、Nginx、certbot（如需公网 HTTPS）、**WireGuard**（内网访问模式）。
-2. 按 §3-4 完成建库与部署（init.sql + migration_v*.sql 顺序执行）。
-3. **恢复数据库**：将本地存档 `local/Version/server_archive_20260706/qbao_full_20260706.sql` 导入（含用户账号与题库数据；聊天等已删除表不可恢复，以空库开始）。
-4. 执行新增迁移：`cd server && node scripts/run_migration.js`（历史已手工导入则先 `--mark-applied` 再跑，避免重复执行基线）。
-5. 验证四用户凭原账号密码登录、数据完整。
+1. 重装基础环境：Node.js ≥ 18、PostgreSQL ≥ 13、**Caddy 2**、swap（小内存主机建议 1G）。
+2. 按 §3–4 完成建库与部署（init.sql + `run_migration.js`）。
+3. **恢复数据库**：取最近一份 `{BACKUP_DIR}/qbao_*.sql.gz`（或本机 `local/backups/pre-hk-migration/`）导入；内测库同理。
+4. 还原上传文件与 `downloads/` 分发储藏室（manifest.json 是发布事实源，务必一并恢复）。
+5. 重建 Caddyfile（两个 site 块，见 §4/§4B.3）并 `systemctl enable --now caddy`。
+6. 拉起 systemd：`systemctl enable --now qbao-api qbao-api-beta qbao-werewolf`；ufw 规则重放（放行 22/80/443，deny 3000/3100/3011）。
+7. 验证：`https://{DOMAIN}/api/v1/health` 与 `https://{BETA_HOST}/api/v1/health` 均返回 ok，且 DB 连接正常。
 
 ### 桌面版分发（v3.35 · 自托管更新源 + 统一下载站）
 
@@ -309,38 +276,41 @@ downloads/
    - `/dl` — 公开下载落地页（中国大陆镜像站点，服务端动态渲染）
    - `/download` — 短链 302 → /api/v1/desktop/download
 
-3. **nginx 追加/确认**（反代 `/api` 已覆盖全部 API 端点）：
+3. **Caddy 侧**（`/api` 反代已覆盖全部 API 端点，只需短链）：
 
-```nginx
-location = /download { return 302 /api/v1/desktop/download; }
-location ^~ /dl { proxy_pass http://127.0.0.1:3000; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
-# 大文件下载需放宽读超时（https://<host>/download 完整直出 85MB+ 安装包）
-proxy_read_timeout 1800s;
+```caddyfile
+route /download { redir * /api/v1/desktop/download 302 }
 ```
+
+   > 大文件下载（85MB+ 安装包）在 Caddy 的 `reverse_proxy` 下按流式转发，无 nginx 那样的
+   > `proxy_read_timeout` 默认 60s 限制；若前面另加了 CDN/代理，注意放宽其读超时。
 
 4. **数据库迁移**：`013_desktop_download_stats.sql`（下载统计表；`run_migration.js` 自动应用）。
 5. **发布安装包**：见 `docs/PUBLISHING.md`（scripts/publish-installer.js：add/promote/retract/verify/ls）。
 
-### 防火墙端口矩阵（内网 VPN 模式，推荐）
+### 防火墙端口矩阵（线上实例现状）
 
 | 端口 | 协议 | 用途 | 开放范围 |
 |------|------|------|----------|
-| 22 | TCP | SSH 管理 | 仅管理员固定 IP |
-| 51820 | UDP | WireGuard 入口 | 公网 |
-| 9178 | TCP | nginx HTTP 生产入口 | 仅 VPN 网段（10.0.0.0/24） |
-| 8080 | TCP | nginx 测试入口（可选） | 仅 VPN 网段 |
-| 3000 | TCP | Node 后端（生产） | **永不对外**（仅 127.0.0.1） |
-| 3100 | TCP | Node 后端（内测） | **永不对外**（仅 127.0.0.1） |
+| 22 | TCP | SSH 管理 | 公网（密钥登录，密码登录已禁用） |
+| 80 | TCP | Caddy：ACME 校验 + HTTPS 跳转 | 公网 |
+| 443 | TCP | Caddy：HTTPS 主入口 | 公网 |
+| 443 | UDP | Caddy：HTTP/3（QUIC） | 公网 |
+| 3000 | TCP | Node 后端（生产） | **永不对外**（ufw 显式 deny，仅 127.0.0.1） |
+| 3100 | TCP | Node 后端（内测） | **永不对外**（ufw 显式 deny，仅 127.0.0.1） |
+| 3011 | TCP | 狼人杀房间服务 | **永不对外**（ufw 显式 deny，仅 127.0.0.1） |
 | 5432 | TCP | PostgreSQL | **永不对外**（仅 localhost） |
 
-> 公网开放模式（无 VPN）时另需 80/443，且强烈建议 HTTPS（certbot 免费签发）；后端与数据库端口规则不变。
+> 自托管若走「内网 VPN 模式」，可只对 VPN 网段开放 80/443，后端与数据库端口规则不变。
 
 ## 9. 安全清单
 
 - 修改数据库默认口令；`.env` 权限 600，JWT_SECRET 使用强随机值。
-- 防火墙仅开放 80/443；后端 3000 端口不对外。
+- 防火墙仅开放 22/80/443（含 443/udp），并显式 deny 3000/3100/3011；数据库仅 localhost。
+- SSH：禁用密码登录，仅密钥；如需更严可把 `PermitRootLogin` 从 `yes` 改为 `prohibit-password`。
 - AI API Key 由用户在前端自行配置，服务端不留存（`x-ai-api-key` 请求头透传）。
 - 管理员引导：首个注册用户且用户名在 `ADMIN_USERNAMES` 环境变量中时自动成为 admin（server/.env.example 有说明）。
 - 双环境权限模型：内测可开 `AUTO_ADMIN=1`（注册即管理员，仅内测）；生产严禁开启。管理员不可被其他管理员封禁/改密/改角色（服务端强制 403，客户端界面同步收敛），角色变更仅后台脚本（见 docs/ARCHITECTURE.md §4.2）。
 - 备份互导只含业务数据，不携带账号属性（封禁/角色），见 docs/ARCHITECTURE.md §4.2 与 docs/ENVIRONMENTS.md §5.
+- 已知技术债：API 进程以 root 运行，改进方向见 docs/ARCHITECTURE.md §9（降权为专用低权用户）。
 - 定期 `npm audit` 检查依赖漏洞；CI 已含 gitleaks 密钥扫描与产物冒烟。
