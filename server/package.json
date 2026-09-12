@@ -3,7 +3,7 @@
   "version": "3.37.0",
   "description": "Qbao 全能互动做题引擎 — 后端 API（Express + PostgreSQL）",
   "main": "server.js",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Paraso42/Qbao.git"

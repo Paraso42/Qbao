@@ -2,6 +2,7 @@
   "name": "qbao-workspace",
   "private": true,
   "description": "Qbao 工作区根（移动端构建工具依赖）",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "@capacitor/android": "^6.2.2",
     "@capacitor/cli": "^6.2.2",

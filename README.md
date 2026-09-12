@@ -1,9 +1,9 @@
 # Qbao — 全能互动学习做题引擎
 
-> AI 智能出题 · 间隔复习 · 考试模拟 · 数据复盘 —— 面向个人学习与小组协作的一体化学习平台。
+> AI 智能出题 · 考试模拟 · 章节强弱复练 · 数据复盘 —— 面向个人学习与小组协作的一体化学习平台。
 > 网页端在线使用，Windows 桌面端（Electron）双形态。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange.svg)](LICENSE)
 ![Frontend](https://img.shields.io/badge/Frontend-Vue%203%20%2F%20Vite-42b883)
 ![Backend](https://img.shields.io/badge/Backend-Node.js%2FExpress-339933)
 ![DB](https://img.shields.io/badge/DB-PostgreSQL-4169E1)
@@ -15,7 +15,7 @@
 Qbao 解决学习中最常见的问题：**资料很多、题源很少、练完没有反馈**。
 
 - 将任意学习资料（PDF / 文本 / 图片）交给 AI，自动生成选择、判断、名词解释、简答题；
-- 以「科目 → 章节 → 轮次」组织刷题，配合间隔复习（SRS）计划与错题本，让复习有节奏；
+- 以「科目 → 章节 → 轮次」组织刷题，按章节强弱策略复练，配合答题历史复盘，让复习有节奏；
 - 科目总览看板以统一口径呈现准确率、进度、连续学习与趋势——每个数字都可验算；
 - 好友 / 群聊协作学习，题目与题库一键分享，聊天内直接答题。
 
@@ -27,7 +27,7 @@ Qbao 解决学习中最常见的问题：**资料很多、题源很少、练完�
 
 - 科目 / 章节体系、章节折叠定位、答题历史与章节强弱策略分析
 - 练习轮次、限时考试、大考卷薄弱点组卷（键盘快捷键、两段式防误触确认）
-- 间隔复习（SRS）自动排期；错题本按章聚合，AI 逐题讲解
+- 答题历史按章节逐轮复盘（答对 / 答错 / 只看错题 / 搜索）；章节强弱策略与错题标签管理
 - 科目总览看板：核心指标卡、掌握度环形图、章节明细、薄弱标签、趋势洞察
 
 ### 🤖 AI 能力
@@ -72,7 +72,7 @@ Qbao 解决学习中最常见的问题：**资料很多、题源很少、练完�
 
 ### 自托管部署
 
-环境要求：Node.js ≥ 18、PostgreSQL ≥ 13、nginx。
+环境要求：Node.js ≥ 18、PostgreSQL ≥ 13、Caddy（线上静态托管与 TLS 终结；自托管可用任意反向代理）。
 
 ```bash
 # 1) 后端
@@ -86,10 +86,10 @@ npm start                       # 默认 3000 端口
 
 # 2) 前端（singlefile 构建产物）
 cd ../app && npm ci && npm run build
-# 将 app/dist/ 发布到 nginx 静态目录（桌面端内嵌加载同一产物，无需另行部署）
+# 将 app/dist/ 发布到服务器静态目录（线上由 Caddy file_server 直出；桌面端内嵌加载同一产物，无需另行部署）
 ```
 
-完整部署（nginx 配置、HTTPS、备份、升级）见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+完整部署（Caddy 配置、HTTPS、防火墙、备份、升级）见 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
 ### 本地开发
 
@@ -111,14 +111,15 @@ cd desktop && npm ci && npm run dev                # Electron 窗口
 | 文档 | 内容 |
 |------|------|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 系统架构事实源：HTTPS 链路 / 双环境路由 / 安全边界 / 技术债登记 |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | 部署：nginx / systemd / 数据库 / 备份 / 升级 |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 部署：Caddy / systemd / 数据库 / 备份 / 升级 |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | 桌面端发布：双渠道、强制更新、撤回、回滚 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发工作流、隐私分离规则、诊断脚本 |
 | [docs/DEVELOPMENT_FLOW.md](docs/DEVELOPMENT_FLOW.md) | 发布流程唯一事实源 + DoD 检核表 |
 | [docs/MOBILE_UX.md](docs/MOBILE_UX.md) | 移动端交互规范与真机验收清单 |
 | [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | 环境与网络地图：L0/L1/L2 隔离、内测入口与 FAQ |
 | [docs/REVIEW-2026-09.md](docs/REVIEW-2026-09.md) | 项目全貌与专业点评（2026-09） |
-| [CONTRIBUTING.md](CONTRIBUTING.md) / [SECURITY.md](SECURITY.md) | 贡献指南 / 安全政策 |
+| [docs/LICENSING.md](docs/LICENSING.md) | 许可与边界说明：自研代码 / 第三方 MIT 组件 / 弹猪乐个人授权 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) / [SECURITY.md](SECURITY.md) | 贡献指南（含贡献许可条款）/ 安全政策 |
 
 ## 目录结构
 
@@ -172,9 +173,24 @@ Cloudflare（边缘 TLS / CDN）            Caddy 网关（TLS 终结 · 自动�
 
 - 公开仓库不含任何真实服务器地址与密钥（占位符纪律）；2026-07 已重写历史清除敏感信息
 - 密码 bcrypt 哈希、JWT（强密钥启动校验）、登录与全局限流
-- 上传通道扩展名白名单 + 魔数嗅探 + 附件响应头；CSP 收紧；API / 数据库仅监听 127.0.0.1（公网只暴露 nginx 受控端口）
+- 上传通道扩展名白名单 + 魔数嗅探 + 附件响应头；CSP 收紧；API 与数据库只在回环可达（主机防火墙 ufw 仅放行 22/80/443，3000/3100/3011 显式拒绝，云安全组同口径）
 - AI API Key 用户自管、服务端不落库；桌面端凭据以 DPAPI（safeStorage）加密
 
 ## 许可证
 
-[MIT](LICENSE)
+本项目采用 **[PolyForm Noncommercial License 1.0.0](LICENSE)**（SPDX：`PolyForm-Noncommercial-1.0.0`）——**源码公开，但禁止商业使用**。
+
+**✅ 允许（免费、无需申请）**
+
+- 个人学习、研究、实验、私人娱乐与业余项目
+- 慈善机构、教育机构、公共研究机构、公共安全与卫生机构、环保组织、政府机构使用（不论资金来源）
+
+**❌ 禁止（须事先取得书面授权）**
+
+- 任何商业目的：付费产品/服务、SaaS 转售、企业内部经营性使用、以本项目为基础的收费培训或外包交付
+- 再许可（sublicense）或转让许可；去除版权与许可声明后分发
+
+**📩 商业授权**：如需商业使用，请通过 [GitHub Issues](https://github.com/Paraso42/Qbao/issues) 联系作者洽谈授权。
+
+> **第三方组件例外**：仓库内游戏空间（`app/public/games/`）的移植作品与 `party/werewolf/` 保持其**上游原始许可证**（多为 MIT），不受本项目非商业条款约束；
+> `app/public/games/marble/` 为作者个人授权引入。各组件许可与适用范围详见 [docs/LICENSING.md](docs/LICENSING.md)。

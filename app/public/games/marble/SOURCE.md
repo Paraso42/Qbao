@@ -3,7 +3,7 @@
 - 上游：https://github.com/anshang1766/marble-wx-game（微信小游戏「高尔顿灯阵 · 弹一弹」，Matter.js 单球高尔顿板弹珠机）
 - commit：71f43f9（2026-09-07）
 - 授权：上游仓库暂无 LICENSE 文件；由作者 anshang1766 授权 Qbao 集成使用（同学自研项目，非开源许可，仅限本项目托管）。
-- 上游只读镜像与移植手册：仓库 `party/marble-wx-game/`（含 web-port/ 补丁脚本，可复现）。
+- 上游只读镜像与移植手册（`party/marble-wx-game/`）已于 2026-09 移除（项目不做小程序，仅保留网页版）；移植补丁已全部落在本目录 `game.js`，改动清单见下。
 
 ## 本目录构成
 
@@ -31,4 +31,4 @@
 - `node --check game.js webwx.js` 通过；服务端 228 例 vitest（含 marble 25 例）通过。
 - 浏览器冒烟：`/games/marble/index.html?qa=1` 自动完成「投珠×5 → 确认倍率 → 蓄力发射 → 结算弹窗」全流程（游客模式）。
 
-> 更新上游：把新版本 game.js/matter.js 复制进来后按 `party/marble-wx-game/web-port/PORT.md` 重打补丁，并更新本文件 commit 与改动清单；禁止直接覆盖。
+> 更新上游：把新版本 game.js/matter.js 复制进来后，按本文「本地改动清单」重打补丁，并更新本文件 commit 与改动清单；禁止直接覆盖。

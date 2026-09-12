@@ -4,6 +4,7 @@
   "version": "3.37.0",
   "type": "module",
   "description": "Qbao 前端（Vue 3 + Vite，singlefile 构建供桌面 file:// 加载）",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

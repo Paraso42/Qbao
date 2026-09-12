@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Qbao 游戏空间移动端壳（Capacitor 6）：Android APK + iOS 工程",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "sync": "cap sync",
     "android:add": "cap add android",

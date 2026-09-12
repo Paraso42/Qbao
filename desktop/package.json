@@ -4,7 +4,7 @@
   "description": "Qbao 全能互动做题引擎 — Windows 桌面客户端",
   "main": "main.js",
   "author": "Paraso42",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "dev": "electron .",
     "dist": "electron-builder --win nsis"

@@ -73,7 +73,7 @@
 - 单向兑换（经济模型 2026-09 定版）：**积分 → 弹珠 1 积分 = 10 弹珠（不设上限）**；**钻石 → 积分 1 钻 = 2 分（每日最多 50 分，按当日台账 SUM 截断）**，reason `marble_in` / `marble_diamond_out`；弹珠不可兑积分、积分不可购钻石；`GET /points/rules` 与积分页自动展示新规则。
 - 防刷边界：弹珠/钻石**获取不设上限**（对局命中即发），故兑换进积分的唯一窗口为「钻石 → 积分」且**每日封顶 50 分**（= 25 钻），从源头上限定每日最大“变现”量；商城购买/装备全部走服务端校验价格与余额；每日免费领取 2 × 50 弹珠防无珠可玩。
 - 合规边界（延续 roulette 下架整改）：随机输赢只作用于弹珠/钻石（纯虚拟道具），**积分不参与任何押注/输赢**，只做固定汇率兑换；兑换全程台账留痕、可审计、随学期清零。
-- 实现文件：server `routes/marble.routes.js`、`services/marbleService.js`、`schemas/marble.schema.js`、`config/points.js`（MARBLE_* 常量）、迁移 `sql/017_v3.40_marble.sql`；客户端 `app/public/games/marble/`（webwx.js 适配层/云桥 + 上游 game.js 补丁，见 `marble/SOURCE.md` 与 `party/marble-wx-game/web-port/`）；测试 `server/test/marble.routes.test.js`（25 例，假池；全量 228 例）。
+- 实现文件：server `routes/marble.routes.js`、`services/marbleService.js`、`schemas/marble.schema.js`、`config/points.js`（MARBLE_* 常量）、迁移 `sql/017_v3.40_marble.sql`；客户端 `app/public/games/marble/`（webwx.js 适配层/云桥 + 上游 game.js 补丁，见 `marble/SOURCE.md`（移植补丁清单；上游只读镜像 `party/marble-wx-game/` 已于 2026-09 移除）；测试 `server/test/marble.routes.test.js`（25 例，假池；全量 228 例）。
 
 ### 通用游戏事件（v0 预留，未生效）
 
