@@ -91,7 +91,23 @@ function createOpenAICompatibleProvider(config) {
         throw new Error(res.status + ' ' + res.statusText + ': ' + text.substring(0, 200));
       }
 
-      return JSON.parse(text);
+      try {
+        return JSON.parse(text);
+      } catch {
+        // HTTP 200 但响应体不是 JSON 时**不要抛出**，否则调用方的"纠正性重试"永远拿不到机会：
+        // 两条生成链路（/ai/generate 与 /ai/tasks worker）都只在 chatCompletions 正常返回后
+        // 才判断"JSON 解析失败/0 题 → 附带原始输出重试 ≤2 次"，而在适配器里抛出会直接越过该分支
+        // 变成致命错误。真实场景常见：模型回一句"抱歉，我无法完成…"、被 WAF/网关返回的 HTML
+        // 拦截页、SSE 残留。改为返回空内容 + 原始文本，让 JSON.parse 在下游失败并触发纠正性重试。
+        console.log(`[${name}] response is not JSON (${text.length} bytes): ${text.substring(0, 200)}`);
+        return {
+          id: 'non-json-response',
+          object: 'chat.completion',
+          model,
+          choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+          usage: null,
+        };
+      }
     } catch (e) {
       clearTimeout(timeout);
       if (options && options.signal) options.signal.removeEventListener('abort', abortFromCaller);

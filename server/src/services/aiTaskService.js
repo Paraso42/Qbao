@@ -255,6 +255,14 @@ async function runTaskGeneration(task, secret, signal) {
     typeCounts: body.typeCounts,
   });
 
+  // 0 题不得记为"完成"：模型始终没吐出可用 JSON（纠正性重试也已用尽）时，
+  // finalizeAiQuestions 会返回空数组 + 题型缺口，旧行为把这种任务标成 completed，
+  // 客户端随后提示"服务端任务完成，已导入 0 题"——用户看到的是成功却拿不到任何题目。
+  // 直连路径客户端（aiTasks.js）对空结果本来就按失败处理，这里与之一致。
+  if (finalized.questions.length === 0) {
+    throw new Error('AI 未返回可用题目（已重试），请检查 API Key / 模型名称，或稍后重试');
+  }
+
   return {
     questions: finalized.questions,
     validation: finalized.baseValidation,

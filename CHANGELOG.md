@@ -1,3 +1,11 @@
+## v3.37.3（内测版 · beta.questionbox.cn）
+- **修复「AI 出题」链路：上游返回非 JSON 时不再直接判死，「纠正性重试」首次真正生效（内测验收中自查发现）**：
+  - 根因（用本地全链路装置复现）：Provider 适配器 `chatCompletions` 把「HTTP 请求 + `JSON.parse` 响应体」放在**同一个 try** 里，遇到 **HTTP 200 但响应体不是 JSON** 时直接抛错。而两条生成链路（`/api/v1/ai/generate` 与后台任务 worker）的「纠正性重试（≤2 次）」都写在 `chatCompletions` **正常返回之后**、判断的是**内容字符串**能否解析——异常在适配器内部就抛出了，重试分支**永远走不到**，用户直接拿到失败。真实触发场景：模型回一句「抱歉，我无法完成该请求。」、被 WAF/网关替换成 HTML 拦截页、SSE 残留文本。
+  - 修复：适配器在 `JSON.parse` 失败时**保留原始文本**并返回一个合成 completion（`choices[0].message.content` = 原始响应体），不再抛出；下游解析失败 → 原始输出被带进纠正提示词重试（提示词里会明确写「你上次返回了无效JSON，错误是：…」）。`selfCheck`/补题等下游逻辑对未知键本就容错，路径不变。
+  - **同一处修复的第二处缺陷（更隐蔽）**：模型始终没吐出可用 JSON（重试已用尽）时，`finalizeAiQuestions` 返回**空题目数组 + 题型缺口**，旧代码把这种任务标记为 **`completed`**，客户端随即提示「服务端任务完成，已导入 **0** 题」——用户看到成功却拿不到任何题目。现在 0 题一律 `failed`，错误文案「AI 未返回可用题目（已重试），请检查 API Key / 模型名称，或稍后重试」，与直连路径客户端对空结果的既有判定一致。
+  - 自动化装置（新增 `server/test/aiGenerateFlow.e2e.test.js`，4 例）：可控假池 + 假 fetch 打通「创建任务 → worker 领取 → 调上游 → 校验/整理 → 落库」全链，断言**发往 ECNU 的真实请求形态**（URL / `Authorization: Bearer` / `model` / `stream=false` / system+user 两条消息 / 资料文本已并入 / `max_tokens` / 传入 AbortSignal）、题目题型与配额、客观题答案必须是合法下标、判断题选项与答案、`usage` 透传；并覆盖「首次非 JSON → 第二次纯 JSON → 仍 `completed`」「上游 401 → `failed` 且带上游信息」「连续非 JSON → 重试后 0 题 → 必须 `failed`」。
+  - 量表：server **44 文件 270/270**（原 43 文件 266）、app 27 文件 264/264（客户端代码未改）；eslint 0 error；本轮只改服务端，客户端包体不变。
+  - 线上范围：仅 `beta.questionbox.cn` 的服务端代码（`-Mode server`，不替换客户端包体）；**未 push、未打 tag、未动生产**。
 ## v3.37.2（内测版 · beta.questionbox.cn）
 - **修复 v3.37.1 引入的聊天图片/工单截图 401 裂图（用户实测：发出去自己和对方都看不到、点开也看不到；上传后输入框里的预览正常）**：
   - 根因（本地按线上真实响应复现并定位）：服务端**已经在出站时**把 `/api/v1/chat/files/<name>` 签成带票 URL（上传响应、消息列表、工单详情三处都签），而前端 `resolveMediaSrc(u)` 又被以「一个参数」的形式调用（`ChatMessages.imageSrcs`、`IssueDetailModal`）——helper 于是把服务端下发的**同一个地址**同时当作「干净路径」和「带票版本」，把 ticket **追加了第二次**：`…png?t=<exp>.<sig>&t=<exp>.<sig>`。Express 解析 `req.query.t` 得到逗号串 `"<exp>.<sig>,<exp>.<sig>"`，HMAC 比对必然失败 → `requireAuthOrMediaToken` 抛 401。上传预览之所以正常，是因为预览用的是上传响应里的单票地址（未经过第二次追加）。
