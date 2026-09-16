@@ -404,6 +404,7 @@ QA 钩子仅内测域名与 localhost；真实地址/凭据永不进跟踪文件
 | R11 | `PATCH /issues/:id/status` 先读快照后开事务（TOCTOU），并发可写出互相矛盾的系统消息 | 改为 `BEGIN` + `SELECT … FOR UPDATE` 串行化，附图清理移到 `COMMIT` 之后（尽力而为，不牵连状态变更） |
 | R12 | 全部 multer 错误一律映射 422 且直接回显英文枚举（`File too large`／`LIMIT_FILE_COUNT`）：单文件超 20MB 被报成「参数错误」，用户看不懂也无法自查 | 按 `err.code` 分流：体积类 → **413**（中文文案），其余 → 422；业务侧 `ApiError` 文案原样透出 |
 | R13 | Provider 适配器把 `fetch` 与 `JSON.parse` 放在同一 try：**HTTP 200 + 非 JSON** 响应体（模型拒答文案／WAF 拦截页）直接抛出，两条生成链路写在 `chatCompletions` 之后的「纠正性重试（≤2 次）」**永远不可达**；且重试用尽后 0 题仍被标成 `completed`，客户端提示「已导入 0 题」 | 适配器解析失败改为返回**合成 completion**（保留原始文本），使重试分支可达；worker 出口新增「0 题 → `failed`」守卫。新增 `aiGenerateFlow.e2e.test.js`（4 例）锁定请求形态与三种终态 |
+| R14 | 「AI 自动判定（自检）」提示词缺反向约束，模型对**正确**题目直接返回 `[]`（实测 `completion_tokens=2`、约 300ms，等于未执行审核），自检调用被白白消耗 | 提示词补「没有问题的题目必须原样保留」；`runAiSelfCheck` 识别「0 题且 tokens < 20」的空转结果并补显式指令重试一次，返回体新增 `retried`/`unengaged`。新增 `aiSelfCheck.retry.test.js`（5 例） |
 
 本次新增/加强的自动化守卫：`schema.drift.test.js`（双向 DDL 漂移 + **同一 method+path 不得重复注册**）、
 `mediaToken.test.js`（票据签名/过期/越权）、`clientErrors.routes.test.js`（限流与体量）、
@@ -441,5 +442,6 @@ T10 beforeunload keepalive、T11 AI 任务自动续跑、T12 持久化配额治�
   纪律、AI 上传白名单/体积上限、providers 鉴权、优雅停机、Issue 状态机 TOCTOU、multer 错误分流（R12）。
   DoD 基线同步刷新（server 266 用例 / 43 文件，app 261 用例 / 27 文件，见 DEVELOPMENT_FLOW §5）。
 - 2026-09-16 v3.37.1–v3.37.3（内测）：L1 验收期缺陷修复——媒体票据二次追加导致聊天图片/工单截图 401 裂图（v3.37.2）、
-  AI 出题「HTTP 200 + 非 JSON」越过纠正性重试并 0 题判完成（v3.37.3，登记为 R13）。DoD 基线刷新为
-  server 270 用例 / 44 文件、app 264 用例 / 27 文件。
+  AI 出题「HTTP 200 + 非 JSON」越过纠正性重试并 0 题判完成（v3.37.3，登记为 R13）、
+  「AI 自动判定」被模型空转导致自检失效（v3.37.4，登记为 R14）。DoD 基线刷新为
+  server 275 例 / 45 文件、app 264 例 / 27 文件。
