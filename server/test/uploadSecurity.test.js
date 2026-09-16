@@ -23,7 +23,8 @@ describe('上传通道安全（T2）', () => {
   const createdFiles = [];
 
   function track(filePath) {
-    if (filePath) createdFiles.push(filePath);
+    // 签名 URL 形如 /api/v1/chat/files/x.png?t=...，落盘路径要剥掉查询串
+    if (filePath) createdFiles.push(String(filePath).split('?')[0]);
   }
 
   beforeEach(() => {
@@ -79,7 +80,9 @@ describe('上传通道安全（T2）', () => {
       .attach('file', png, 'ok.png');
     expect(res.status).toBe(200);
     expect(res.body.url).toMatch(/^\/api\/v1\/chat\/files\/chat_/);
-    track(path.join(CHAT_UPLOAD_DIR, path.basename(res.body.url)));
+    // P0-1：上传响应必须带短时效签名 ticket（图片以 <img src> 渲染，带不了 Authorization 头）
+    expect(res.body.url).toMatch(/\?t=\d+\.[A-Za-z0-9_-]+$/);
+    track(path.join(CHAT_UPLOAD_DIR, path.basename(res.body.url.split('?')[0])));
   });
 
   it('issue 上传 .svg → 422 拒绝', async () => {
@@ -112,7 +115,8 @@ describe('上传通道安全（T2）', () => {
       .attach('image', png, 'ok.png');
     expect(res.status).toBe(200);
     expect(res.body.url).toMatch(/^\/api\/v1\/issues\/images\/issue_/);
-    track(path.join(ISSUE_UPLOAD_DIR, path.basename(res.body.url)));
+    expect(res.body.url).toMatch(/\?t=\d+\.[A-Za-z0-9_-]+$/);
+    track(path.join(ISSUE_UPLOAD_DIR, path.basename(res.body.url.split('?')[0])));
   });
 
   it('chat 下载 .txt 文件 → Content-Disposition: attachment + octet-stream', async () => {
@@ -120,7 +124,13 @@ describe('上传通道安全（T2）', () => {
     const abs = path.join(CHAT_UPLOAD_DIR, fname);
     fs.writeFileSync(abs, 'hello');
     track(abs);
-    const res = await request(app).get('/api/v1/chat/files/' + fname);
+    // P0-1：匿名请求必须被拒（此前该端点无 requireAuth）
+    const anon = await request(app).get('/api/v1/chat/files/' + fname);
+    expect(anon.status).toBe(401);
+
+    const res = await request(app)
+      .get('/api/v1/chat/files/' + fname)
+      .set('Authorization', 'Bearer ' + token);
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition']).toContain('attachment');
     expect(res.headers['content-type']).toContain('octet-stream');
@@ -138,7 +148,9 @@ describe('上传通道安全（T2）', () => {
     const abs = path.join(CHAT_UPLOAD_DIR, fname);
     fs.writeFileSync(abs, png);
     track(abs);
-    const res = await request(app).get('/api/v1/chat/files/' + fname);
+    const res = await request(app)
+      .get('/api/v1/chat/files/' + fname)
+      .set('Authorization', 'Bearer ' + token);
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition'] || '').not.toContain('attachment');
   });

@@ -87,6 +87,10 @@ node scripts/publish-installer.js promote --channel stable --version 3.35.0 --re
 node scripts/publish-installer.js retract --channel stable --version 3.35.0 --reason "启动闪退，请安装 3.34.2 或等待修复版"
 ```
 - 自动行为：manifest 标 retracted + 下载端点 410 + /dl 显示撤回横幅 + latest 回退上一可用版本 + 清除该版本 required + 已装用户桌面端弹「当前版本已被撤回」引导打开下载页。
+- **判定语义（R 系列修正，务必理解）**：桌面端的撤回弹窗**只认明确写在 manifest 里的 `retracted` 字段**。
+  早前实现是「在清单里找不到当前版本 → 视为被撤回」，而发布工具按留存策略只保留最近若干版本
+  （`--prune`/`add` 默认 `keep=3`），于是**落后 3 个版本以上的老用户会被误报「已被撤回」并看到强制阻断弹窗**。
+  现已改为：只有该版本确实存在且带 `retracted` 标记才算撤回；版本不在清单里（被剪枝 / 非公开内测包）一律**不弹窗、不阻断**。
 - 用户自救不依赖 retract：任何用户在桌面端「历史版本」/网页版本历史/ /dl 均可自行下载旧版覆盖安装（不丢数据）。
 - 修复流程：修复版先走 beta 验证 → 用户验收 → 新稳定版 Release → add --channel stable。
 
@@ -109,6 +113,7 @@ node scripts/publish-installer.js retract --channel stable --version 3.35.0 --re
 | 下载返回 410 | 版本被 retract | 下载页已引导回退版本 |
 | 桌面端弹「当前版本已被撤回」 | 用户装了被撤回版本 | 打开下载页/历史版本重装其他版本 |
 | /update/stable/latest.yml 404 | 渠道目录缺 latest.yml | add 会保证写入；检查目录权限 |
+| 老用户桌面端弹「已被撤回」（该版本并未 retract） | 版本已被留存策略剪枝，旧逻辑把「不在清单」当成「被撤回」（R 系列已修） | 升级到修复后的客户端；服务端无需改动，剪枝是正常行为 |
 
 ## 7. 测试版（beta）构建
 

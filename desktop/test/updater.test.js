@@ -22,13 +22,26 @@ test('shouldForceUpdate：仅当低于 required 时才强制', () => {
   assert.strictEqual(util.shouldForceUpdate('3.35.0-beta.1', '3.35.0'), true);
 });
 
-test('isInstalledVersionRetracted：列表不含当前版本才算被撤回', () => {
+test('isInstalledVersionRetracted：只有显式 retracted 标记才算被撤回（P0-7）', () => {
   const releases = [
-    { version: '3.36.0' }, { version: '3.35.0' },
+    { version: '3.37.0', retracted: null },
+    { version: '3.36.0' },
+    { version: '3.35.0', retracted: null },
   ];
+  // 在列表内且未标记 → 未撤回
   assert.strictEqual(util.isInstalledVersionRetracted('3.35.0', releases), false);
-  assert.strictEqual(util.isInstalledVersionRetracted('3.35.1', releases), true);
-  assert.strictEqual(util.isInstalledVersionRetracted('3.34.2', releases), true);
+  assert.strictEqual(util.isInstalledVersionRetracted('3.36.0', releases), false);
+  assert.strictEqual(util.isInstalledVersionRetracted('3.37.0', releases), false);
+  // 在列表内且显式撤回 → 撤回
+  const r2 = [{ version: '3.36.0', retracted: { reason: 'x', at: 'y' } }];
+  assert.strictEqual(util.isInstalledVersionRetracted('3.36.0', r2), true);
+  // 非 null 的 retracted 一律视为撤回标记（与 desktopManifest.js 的 list.filter 语义一致）
+  assert.strictEqual(util.isInstalledVersionRetracted('3.36.0', [{ version: '3.36.0', retracted: {} }]), true);
+  assert.strictEqual(util.isInstalledVersionRetracted('3.36.0', [{ version: '3.36.0' }]), false);
+  // 不在列表内（被剪枝的老版本 / 私有构建）→ 未撤回，绝不阻断
+  // 这是本用例的核心回归：旧实现在此返回 true，导致 ≥3 版之前的老用户一开机被弹「已被撤回」
+  assert.strictEqual(util.isInstalledVersionRetracted('3.34.2', releases), false);
+  assert.strictEqual(util.isInstalledVersionRetracted('1.0.0', releases), false);
   assert.strictEqual(util.isInstalledVersionRetracted('3.35.0', []), false);
   assert.strictEqual(util.isInstalledVersionRetracted('3.35.0', null), false);
 });

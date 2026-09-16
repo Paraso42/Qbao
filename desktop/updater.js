@@ -113,6 +113,7 @@ async function checkAndPrompt() {
   if (runtime.updateChannel !== 'beta') {
     const mani = await fetchJson(String(runtime.apiBase).replace(/\/+$/, '') + '/desktop/manifest?channel=stable');
     if (mani && Array.isArray(mani.releases) && mani.releases.length > 0) {
+      // 仅当清单显式标记 retracted 时才提示（旧实现把「已剪枝」误判为「已撤回」）
       if (util.isInstalledVersionRetracted(current, mani.releases)) {
         notify('Qbao 当前版本已被撤回', '该版本存在已知问题，请重新安装其他版本');
         const w = getWindowFn && getWindowFn();

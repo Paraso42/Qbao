@@ -32,7 +32,7 @@
                 <div v-if="imgList(msg).length" class="issue-images issue-images-mine">
                   <template v-for="(url, i) in imgList(msg)" :key="i">
                     <div v-if="!url" class="issue-img-deleted">图片已删除</div>
-                    <img v-else :src="url" class="issue-img-msg" loading="lazy" @click="previewImage(url)" />
+                    <img v-else :src="resolveMediaSrc(url)" class="issue-img-msg" loading="lazy" @click="previewImage(url)" />
                   </template>
                 </div>
                 <div v-if="msg.content && msg.content.trim()" class="issue-message-bubble">{{ msg.content }}</div>
@@ -45,7 +45,7 @@
                 <div v-if="imgList(msg).length" class="issue-images">
                   <template v-for="(url, i) in imgList(msg)" :key="i">
                     <div v-if="!url" class="issue-img-deleted">图片已删除</div>
-                    <img v-else :src="url" class="issue-img-msg" loading="lazy" @click="previewImage(url)" />
+                    <img v-else :src="resolveMediaSrc(url)" class="issue-img-msg" loading="lazy" @click="previewImage(url)" />
                   </template>
                 </div>
                 <div v-if="msg.content && msg.content.trim()" class="issue-message-bubble">{{ msg.content }}</div>
@@ -80,7 +80,7 @@
               <div v-for="t in pendingThumbs" :key="t.key" class="issue-img-thumb">
                 <div v-if="t.uploading" class="thumb-uploading">上传中...</div>
                 <div v-else class="thumb-wrap">
-                  <img :src="t.url" alt="" @click="previewImage(t.url)" />
+                  <img :src="resolveMediaSrc(t.url)" alt="" @click="previewImage(t.url)" />
                   <span class="thumb-remove" @click.stop="removePending(t)">✕</span>
                 </div>
               </div>
@@ -113,6 +113,9 @@ import { useIssuesStore } from '../../../stores/issues'
 import { useUserStore } from '../../../stores/user'
 import { useUiStore } from '../../../stores/ui'
 import { statusLabel, statusHint, statusPillClass, formatIssueTime } from './helpers'
+// P0-1：工单图片下载端点已加鉴权，<img> 无法带 Authorization 头 →
+// 服务端在出站时签了短时效 ticket，这里把 ticket 透传到 src。
+import { resolveMediaSrc } from '../../../services/utils'
 
 const store = useIssuesStore()
 const user = useUserStore()
@@ -225,7 +228,7 @@ async function send() {
   }
 }
 
-function previewImage(url) { previewUrl.value = url }
+function previewImage(url) { previewUrl.value = resolveMediaSrc(url) }
 </script>
 
 <style scoped>

@@ -72,6 +72,8 @@ function createApp() {
   require('./src/routes/apps.routes')(app);
   require('./src/routes/games.routes')(app);
   require('./src/routes/marble.routes')(app);
+  // P1-3：客户端错误上报（Vue 渲染错误 / 未捕获 Promise 拒绝）落服务端日志
+  require('./src/routes/clientErrors.routes.v2')(app);
 
   // 统一兜底：404 + 全局错误处理（必须最后注册）
   app.use(notFoundHandler);

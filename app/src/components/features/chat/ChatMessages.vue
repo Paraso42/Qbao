@@ -131,7 +131,7 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } 
 import { useChatStore } from '../../../stores/chat'
 import { useUserStore } from '../../../stores/user'
 import Icon from '../../ui/Icon.vue'
-import { renderMarkdown, formatFileSize, resolveMediaUrl } from '../../../services/utils'
+import { renderMarkdown, formatFileSize, resolveMediaUrl, resolveMediaSrc } from '../../../services/utils'
 import { msgEstimateHeight, computeChatWindow } from '../../../services/chatVirtual'
 
 const store = useChatStore()
@@ -211,8 +211,8 @@ const prepared = computed(() => {
       typeName: q ? (typeMap[q.type] || q.type || '') : '',
       initial: isMine ? (user.shortName || '我') : (m.sender_name || '?').charAt(0).toUpperCase(),
       avatarUrl: avatarUrlOf(m),
-      imageSrcs: (m.images || []).map((u) => resolveMediaUrl(u)),
-      fileUrl: resolveMediaUrl((m.file_info || {}).url),
+      imageSrcs: (m.images || []).map((u) => resolveMediaSrc(u)),
+      fileUrl: resolveMediaSrc((m.file_info || {}).url),
       time: store.formatTime(m.created_at),
       revocable: isMine && !m.is_revoked && canRevoke(m)
     }

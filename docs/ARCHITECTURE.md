@@ -227,6 +227,13 @@ ufw 默认拒绝入站，仅放行 22/80/443 tcp 与 443 udp（QUIC），并显�
 - 上传：类型白名单 + 魔数嗅探 + 附件下载头；/uploads、/avatars 一律反代到 API（不经静态直出）。
 - `.env` 权限 600；JWT_SECRET 强随机且 ≥32 字符（启动强校验）；PG 仅 localhost。
 - AI Key 由用户自管，经请求头 `x-ai-api-key` 透传，服务端不落库；桌面端凭据以 DPAPI（safeStorage）加密。
+- **媒体票据（R1）**：聊天图片（`GET /api/v1/chat/files/:filename`）与工单截图（`GET /api/v1/issues/images/:filename`）
+  是正文里以 `<img src>` 引用的资源，而 `<img>` 无法携带 `Authorization` 头——只加 `requireAuth` 会让全部历史图片裂图。
+  采用的方案是**签名短票据**：服务端在响应出网时把 `?t=<exp>.<hmacBase64url>` 追加到媒体 URL 上，
+  票据由 `HMAC(JWT_SECRET, 'qbao:media-token:v1')` 派生的键对「文件名 + 过期时间」签名（TTL 1 小时），
+  因此不可移用到另一个文件；端点接受「Bearer 头 **或** 有效票据」二者之一，其余一律 401。
+  DB 只存干净路径（写入前剥离 `?t=`，读取时重新签发），既避免票据过期后历史行失效，也顺带修复了历史脏行。
+  `quiz_data.images` 走的是另一条链路（同源静态），不在本机制内。
 - 已知安全债：API 进程以 root 运行（历史单机惯例），改进方向见 §9（降权为专用低权用户）。
 
 ## 5. 应用架构（代码分层）
@@ -362,16 +369,45 @@ QA 钩子仅内测域名与 localhost；真实地址/凭据永不进跟踪文件
 ### P2 — 工程化与正式软件化
 
 13. 渐进 TypeScript（后端先行，JSDoc 过渡）；14. 容器化（Docker Compose）；15. CI/CD（CI 已有 lint/test/build，自动部署待做）；
-16. 可观测性（结构化日志/错误上报/指标端点）；17. ~~迁移手写 SQL~~ **（schema_migrations + run_migration.js）**；
+16. 可观测性（结构化日志/指标端点）——**错误上报已落地**（客户端全局错误 → `POST /api/v1/client-errors` → journald 告警行，
+    见 §9「收口记录（v3.37 复核整改，2026-09）」R6）；结构化日志与指标端点仍待做；17. ~~迁移手写 SQL~~ **（schema_migrations + run_migration.js）**；
 18. 发布流程（CHANGELOG + tag + Release 已运作；自动化收尾待做）。
 
 ### 多环境架构专项（2026-09 新增登记）
 
 19. **API 进程以 root 运行**（qbao-api / qbao-api-beta，历史单机惯例）→ 目标：专用低权用户 + capability 收敛；
 20. **仓库 init.sql 与线上生产 schema 漂移**（qbao_beta 已用 schema-only 克隆规避）→ 目标：迁移 018+ 对齐基线或归档 init.sql 为「新装最小集」；
+    **已完成一部分**：迁移 018 补齐 `users` 身份列与 `notices` 表（新装库不再 42703），并新增 `--verify` 编号诊断
+    与 schema 漂移守卫单测；把 init.sql 收敛为「新装最小集」仍未做（见本 §9 R3）；
 21. **清单校验双份实现**（installer-lib.js / desktopManifest.js）→ 已互为镜像，改动须双端同步；长期收敛为共享模块；
 22. **CF 边缘缓存治理**：生产静态经 CF 缓存 7 天，紧急改版需控制台 Purge（手动）；长期：接入 CF API 或缩短边缘缓存 TTL；
 23. **单行 JSONB 同步放大**（全量 PUT，见 P0-3 遗留）与 **user_games_stats 单行增长**（警戒 64KB，见 GAMES.md）。
+
+### 收口记录（v3.37 复核整改，2026-09 · 全库复查 R 系列）
+
+> 触发：2026-09 对 HEAD 全量只读复查（不依赖历史结论，逐条以代码/数据库/公网端点取证）。
+> 编号 R1–R11 为本次整改项，与上方 T 体系、P 体系独立编号，避免与历史条目混淆。
+> 全部改动仅本地提交，**未经用户验收不 push/tag/Release**（纪律见 DEVELOPMENT_FLOW §7）。
+
+| # | 问题（复查发现） | 处置 |
+|---|---|---|
+| R1 | 聊天图片/工单截图下载端点仅 `requireAuth`，但前端用 `<img src>` 取图**无法带 Authorization 头** | 端点改为「Bearer 或**签名短票据**」双通道：出网时服务端签发 `?t=<exp>.<hmac>`（HMAC(JWT_SECRET) 派生键，TTL 1h），入库前剥离、读取时重签，兼容历史脏行。见 §4.3 媒体票据 |
+| R2 | 全新建库（`init.sql` + 迁移）缺 `users.role/is_banned/avatar_url/last_login_at/last_active_at`，且代码引用的 `notices` 表**全仓无 DDL** | 迁移 `018_v3.41_identity_notices.sql` 补齐；新增 `schema.drift.test.js` 双向守卫（列存在 + 代码引用的表必须有 DDL） |
+| R3 | `run_migration.js` 不报编号缺口，线上 `schema_migrations` 有幽灵版本时无告警 | 新增 `--verify`：列仓库编号缺口（允许）+ 告警「已应用但仓库无文件」的版本 |
+| R4 | `files.routes.v2.js` 四个端点被注册两次（Express 只命中后者），前者为旧实现 | 删除旧副本，保留含章节关联与 `in_pool` 复位的完整实现 |
+| R5 | AI 请求在参数校验前就写审计行，401 失败请求产生 2 条噪音日志 | 审计移到校验之后；补回归用例断言失败请求零写入 |
+| R6 | 前后端均无全局错误兜底：Vue 渲染异常/未捕获 Promise/hydration 失败静默吞掉 | 前端 `app.config.errorHandler` + `unhandledrejection` + hydration/boot 失败 toast；新增 `POST /api/v1/client-errors`（免鉴权、限流 20/min、8KB 上限、仅落日志不落库） |
+| R7 | `fetchWithRetry` 对 4xx 也重试；`aiTasks/api` 用固定 token 不校验有效性，401 报错文案误导 | 仅对 5xx/429 重试；统一 `effectiveToken()`，401 区分「登录过期」与「无权限」 |
+| R8 | AI 上传通道无扩展名白名单、无总体积上限（可一次塞满磁盘） | 与文件池共用白名单常量；单次总量 >60MB → 413 并清理已落盘分片 |
+| R9 | `GET /api/v1/ai/providers` 未鉴权，匿名可探测后端配置的供应商清单 | 加 `requireAuth` |
+| R10 | 进程无 `SIGTERM/SIGINT` 处理：重启硬切在途 AI 任务与同步，`ai_tasks` 滞留 `running` | 新增 `src/lib/gracefulShutdown.js`：停定时器 → 停收新连接 → 等待在途（默认 15s，`QBAO_SHUTDOWN_GRACE_MS` 可调）→ 关连接池 → exit 0；二次信号立即退出 |
+| R11 | `PATCH /issues/:id/status` 先读快照后开事务（TOCTOU），并发可写出互相矛盾的系统消息 | 改为 `BEGIN` + `SELECT … FOR UPDATE` 串行化，附图清理移到 `COMMIT` 之后（尽力而为，不牵连状态变更） |
+| R12 | 全部 multer 错误一律映射 422 且直接回显英文枚举（`File too large`／`LIMIT_FILE_COUNT`）：单文件超 20MB 被报成「参数错误」，用户看不懂也无法自查 | 按 `err.code` 分流：体积类 → **413**（中文文案），其余 → 422；业务侧 `ApiError` 文案原样透出 |
+
+本次新增/加强的自动化守卫：`schema.drift.test.js`（双向 DDL 漂移 + **同一 method+path 不得重复注册**）、
+`mediaToken.test.js`（票据签名/过期/越权）、`clientErrors.routes.test.js`（限流与体量）、
+`gracefulShutdown.test.js`（停机顺序/超时/二次信号）、`errorHandler.unit.test.js`（multer 错误分流，R12）、
+`ai.routes.validation.test.js`（白名单零落盘、总量 413、审计零噪音、providers 鉴权）。
 
 ### 收口记录（v3.30–v3.37 复核，2026-09）
 
@@ -399,3 +435,7 @@ T10 beforeunload keepalive、T11 AI 任务自动续跑、T12 持久化配额治�
   `http://{ORIGIN_IP}` 直连兜底等全部已废弃机制；新增 Caddy 实际路由配置（§2.4）、ufw 端口纪律（§3.1）、
   单机风险与备份链路（§3.4/§7.3）；占位符 {ORIGIN_IP} 废弃、新增 {HOST_ROOT}。
   同日并补记第二次历史重写（移除 AI 工具署名尾注，公开贡献者列表去虚，见 §10）。
+- 2026-09-13 v3：**全库复查整改登记 R1–R11**（见 §9）：媒体下载端点签名票据、身份列与 notices 迁移补齐 +
+  漂移守卫、迁移编号诊断、重复路由清理、AI 审计噪音、前后端全局错误兜底与客户端错误上报端点、重试与 token
+  纪律、AI 上传白名单/体积上限、providers 鉴权、优雅停机、Issue 状态机 TOCTOU、multer 错误分流（R12）。
+  DoD 基线同步刷新（server 266 用例 / 43 文件，app 261 用例 / 27 文件，见 DEVELOPMENT_FLOW §5）。

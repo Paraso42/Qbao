@@ -35,8 +35,24 @@ function errorHandler(err, req, res, next) {
     return res.status(413).json({ error: '请求体过大' });
   }
     // 2.5) multer 上传错误（类型白名单/大小限制等）
+    // R12：原实现把所有 multer 错误一律映射 422，且直接回显 err.message。
+    // multer 的 message 是英文枚举（'File too large' / 'LIMIT_FILE_COUNT' …），
+    // 对用户不可读；更糟的是「单文件超过 20MB」这类体积问题被报成 422 参数错误。
+    // 现在按 code 分流：体积类 → 413，其余（类型/数量/字段名）→ 422，并给中文文案。
     if (err.name === 'MulterError' || err.status === 422) {
-      return res.status(422).json({ error: err.message || '上传失败' });
+      const MULTER_MESSAGES = {
+        LIMIT_FILE_SIZE: '单个文件超过 20MB 上限',
+        LIMIT_FILE_COUNT: '单次上传文件数量超出上限',
+        LIMIT_UNEXPECTED_FILE: '上传字段名不正确',
+        LIMIT_PART_COUNT: '上传分片数量超出上限',
+        LIMIT_FIELD_COUNT: '上传表单字段数量超出上限',
+        LIMIT_FIELD_KEY: '上传表单字段名过长',
+        LIMIT_FIELD_VALUE: '上传表单字段值过长',
+      };
+      const known = err.name === 'MulterError' ? MULTER_MESSAGES[err.code] : null;
+      const status = err.name === 'MulterError' && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_PART_COUNT') ? 413 : 422;
+      // err.status 分支（业务侧显式 422）保留原 message，因为它已经是产品文案
+      return res.status(status).json({ error: known || err.message || '上传失败' });
     }
 
   // 3) PostgreSQL 错误（code 为 5 位字符，如 23505 唯一约束冲突）

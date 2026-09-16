@@ -158,3 +158,126 @@ describe('renderMarkdown', () => {
     expect(out).toContain('&lt;script&gt;')
   })
 })
+// —— 受保护媒体 ticket（P0-1 回归）——
+// 服务端给聊天附件/工单图片签名 ?t=exp.sig；前端只做「路径判断 + 原样带票」。
+describe('媒体 ticket 透传', () => {
+  const realLocation = globalThis.location
+  const realRuntime = globalThis.window
+  beforeEach(() => {
+    // 网页版同源：resolveMediaUrl/isMediaPath 的 origin 由 location.origin 给出
+    globalThis.window = { __QBAO_RUNTIME__: null }
+    globalThis.location = { origin: 'https://qbao.example' }
+    vi.resetModules()
+  })
+  afterEach(() => {
+    globalThis.window = realRuntime
+    globalThis.location = realLocation
+    vi.resetModules()
+  })
+
+  it('isMediaPath：只认两个受保护前缀，且忽略 query/hash', async () => {
+    const { isMediaPath } = await import('./utils')
+    expect(isMediaPath('/api/v1/chat/files/a.png')).toBe(true)
+    expect(isMediaPath('/api/v1/issues/images/b.jpg?t=1.2')).toBe(true)
+    expect(isMediaPath('/api/v1/issues/images/b.jpg#frag')).toBe(true)
+    // 非受保护：静态头像、外部图床、空值
+    expect(isMediaPath('/avatars/2.jpg')).toBe(false)
+    expect(isMediaPath('/uploads/chat/a.png')).toBe(false)
+    expect(isMediaPath('https://cdn.example/a.jpg')).toBe(false)
+    expect(isMediaPath('')).toBe(false)
+    expect(isMediaPath(null)).toBe(false)
+    expect(isMediaPath(undefined)).toBe(false)
+  })
+
+  it('isMediaPath：自身 origin 的绝对 URL 也算受保护媒体', async () => {
+    const { isMediaPath } = await import('./utils')
+    expect(isMediaPath('https://qbao.example/api/v1/chat/files/a.png')).toBe(true)
+    expect(isMediaPath('https://qbao.example/api/v1/issues/images/b.jpg?t=1.2')).toBe(true)
+    // 关键安全边界：**外部主机**上的同形路径不算 —— 否则会把本服务的 ticket 送给第三方
+    expect(isMediaPath('https://evil.example/api/v1/chat/files/a.png')).toBe(false)
+    expect(isMediaPath('https://evil.example/api/v1/issues/images/b.jpg?t=1.2')).toBe(false)
+  })
+
+  it('withMediaTicket：非受保护路径原样返回（不注入任何参数）', async () => {
+    const { withMediaTicket } = await import('./utils')
+    expect(withMediaTicket('/avatars/2.jpg', '/avatars/2.jpg?t=9.9')).toBe('/avatars/2.jpg')
+    expect(withMediaTicket('https://cdn.example/a.jpg', 'https://cdn.example/a.jpg?t=9.9'))
+      .toBe('https://cdn.example/a.jpg')
+  })
+
+  it('withMediaTicket：受保护路径原样搬运服务端下发的 ticket', async () => {
+    const { withMediaTicket } = await import('./utils')
+    expect(withMediaTicket('/api/v1/chat/files/a.png', '/api/v1/chat/files/a.png?t=123.abc-_'))
+      .toBe('/api/v1/chat/files/a.png?t=123.abc-_')
+  })
+
+  it('withMediaTicket：已带 query 时用 & 追加，不破坏原参数', async () => {
+    const { withMediaTicket } = await import('./utils')
+    expect(withMediaTicket('/api/v1/chat/files/a.png?dl=1', '/api/v1/chat/files/a.png?t=5.sig'))
+      .toBe('/api/v1/chat/files/a.png?dl=1&t=5.sig')
+  })
+
+  it('withMediaTicket：服务端没给 ticket（未签发/登录态过期）时保持原 URL', async () => {
+    const { withMediaTicket } = await import('./utils')
+    expect(withMediaTicket('/api/v1/chat/files/a.png', '/api/v1/chat/files/a.png'))
+      .toBe('/api/v1/chat/files/a.png')
+    expect(withMediaTicket('/api/v1/chat/files/a.png', undefined)).toBe('/api/v1/chat/files/a.png')
+  })
+
+  it('withMediaTicket：服务端下发的 URL 完全不含 t 时不注入', async () => {
+    const { withMediaTicket } = await import('./utils')
+    expect(withMediaTicket('/api/v1/issues/images/b.jpg', 'https://qbao.example/api/v1/issues/images/b.jpg?x=1'))
+      .toBe('/api/v1/issues/images/b.jpg')
+  })
+
+  it('resolveMediaSrc：相对路径 → 绝对 URL + ticket（组件真实调用形态）', async () => {
+    const { resolveMediaSrc } = await import('./utils')
+    expect(resolveMediaSrc('/api/v1/chat/files/a.png', '/api/v1/chat/files/a.png?t=77.sig'))
+      .toBe('https://qbao.example/api/v1/chat/files/a.png?t=77.sig')
+    // 只传干净路径（服务端未签发）→ 绝对化但不带票，由端点返回 401 触发登录引导
+    expect(resolveMediaSrc('/api/v1/chat/files/a.png'))
+      .toBe('https://qbao.example/api/v1/chat/files/a.png')
+    // 普通头像不受影响
+    expect(resolveMediaSrc('avatars/2.jpg', 'avatars/2.jpg'))
+      .toBe('https://qbao.example/avatars/2.jpg')
+  })
+})
+
+// —— fetchWithRetry 重试策略（P1-2 回归）——
+describe('fetchWithRetry 重试策略', () => {
+  const realFetch = globalThis.fetch
+  afterEach(() => { globalThis.fetch = realFetch })
+
+  it('4xx 不重试：一次请求后原样返回，交调用方识别错误体', async () => {
+    const { fetchWithRetry } = await import('./utils')
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => {
+      calls++
+      return { ok: false, status: 401, json: async () => ({ error: '登录已过期' }) }
+    })
+    const res = await fetchWithRetry('/x', {}, 3, 1)
+    expect(calls).toBe(1)
+    expect(res.status).toBe(401)
+  })
+
+  it('5xx 会重试，最多 maxAttempts 次，最终把响应交给调用方', async () => {
+    const { fetchWithRetry } = await import('./utils')
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => { calls++; return { ok: false, status: 503 } })
+    const res = await fetchWithRetry('/x', {}, 3, 1)
+    expect(calls).toBe(3)
+    expect(res.status).toBe(503)
+  })
+
+  it('429 也重试；重试后成功则返回 2xx', async () => {
+    const { fetchWithRetry } = await import('./utils')
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => {
+      calls++
+      return calls === 1 ? { ok: false, status: 429 } : { ok: true, status: 200 }
+    })
+    const res = await fetchWithRetry('/x', {}, 3, 1)
+    expect(calls).toBe(2)
+    expect(res.status).toBe(200)
+  })
+})

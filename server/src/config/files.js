@@ -19,4 +19,16 @@ const CHAT_ALLOWED_EXTS = [].concat(
   ['.xlsx', '.zip']
 );
 
-module.exports = { POOL_ALLOWED_EXTS, IMAGE_ALLOWED_EXTS, CHAT_ALLOWED_EXTS };
+// 单次 AI 出题资料上传的文件数 / 总体积上限（P1-4）。
+// 路由侧 upload.array('files', 10) 已限制个数；这里把「总体积」显式化，
+// 免得以后有人单方面放宽 fileSize 就悄悄允许单请求 200MB。
+const AI_UPLOAD_MAX_EXTS = 10;
+const AI_UPLOAD_MAX_TOTAL_BYTES = 60 * 1024 * 1024;
+
+module.exports = {
+  POOL_ALLOWED_EXTS,
+  IMAGE_ALLOWED_EXTS,
+  CHAT_ALLOWED_EXTS,
+  AI_UPLOAD_MAX_EXTS,
+  AI_UPLOAD_MAX_TOTAL_BYTES,
+};

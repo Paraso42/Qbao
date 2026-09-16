@@ -434,12 +434,23 @@ async function markStaleTasksFailed() {
   }
 }
 
+// P1-7：优雅停机时需要知道「此刻有没有任务正在跑」。
+// 有则在停止轮询后等待其自然结束（等待窗口由 server.js 控制），
+// 避免重启把一条正在生成的 ai_task 留在 running 态直到下次启动才被判失败。
+let inFlight = Promise.resolve();
+let inFlightCount = 0;
+
+function pendingTaskCount() { return inFlightCount; }
+
 function startAiTaskWorker() {
   if (workerTimer) return;
   workerTimer = setInterval(() => {
-    processNextAiTask().catch((e) => {
-      console.error('[ai-task] worker loop error:', e.message);
-    });
+    inFlightCount++;
+    inFlight = processNextAiTask()
+      .catch((e) => {
+        console.error('[ai-task] worker loop error:', e.message);
+      })
+      .finally(() => { inFlightCount--; });
   }, WORKER_INTERVAL_MS);
   // 不阻止进程退出；HTTP server 本身会维持事件循环。
   if (typeof workerTimer.unref === 'function') workerTimer.unref();
@@ -448,6 +459,19 @@ function startAiTaskWorker() {
 function stopAiTaskWorker() {
   if (workerTimer) clearInterval(workerTimer);
   workerTimer = null;
+}
+
+// P1-7：等待在途任务收尾（最多 timeoutMs），返回是否已全部结束
+async function drainAiTaskWorker(timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 0);
+  while (inFlightCount > 0 && Date.now() < deadline) {
+    const remaining = deadline - Date.now();
+    await Promise.race([
+      inFlight.catch(() => {}),
+      new Promise((r) => setTimeout(r, Math.min(200, Math.max(1, remaining)))),
+    ]);
+  }
+  return inFlightCount === 0;
 }
 
 module.exports = {
@@ -460,4 +484,6 @@ module.exports = {
   processNextAiTask,
   startAiTaskWorker,
   stopAiTaskWorker,
+  drainAiTaskWorker,
+  pendingTaskCount,
 };

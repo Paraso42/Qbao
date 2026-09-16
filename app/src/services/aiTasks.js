@@ -4,7 +4,9 @@
 // 非流式生成（含 JSON 纠错重试）、池文件诊断。store 只保留编排。
 // ============================================================
 import { API_BASE } from '../core/env'
-import { getToken } from './api'
+// P1-2：必须用钉扎令牌（effectiveToken），不能用 getToken() 活读 localStorage —
+// 多标签登录不同账号时会带上别的账号的令牌。
+import { effectiveToken } from './api'
 import { sleep, fetchWithRetry } from './utils'
 import { idbGetMaterial } from './materialsDb'
 import { aiUploadFiles, aiStreamGenerate } from './aiApi'
@@ -58,7 +60,7 @@ export async function nonStreamGenerate(task, opts, retryPromptBase, deps = {}) 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + getToken(),
+        'Authorization': 'Bearer ' + effectiveToken(),
         'x-ai-api-key': opts.apiKey,
         'x-ai-model': opts.model,
         'x-ai-provider': opts.provider
@@ -73,6 +75,15 @@ export async function nonStreamGenerate(task, opts, retryPromptBase, deps = {}) 
         chapterId: opts.chapterId
       })
     }, 3, 5000)
+    // P1-2：此前不检查 genRes.ok，401/403/422 的 { error } 会被当作「没有题目」，
+    // 重试 3 次后报「AI未返回有效题目」，把一个鉴权问题伪装成业务问题（约 45s 才反馈）。
+    if (!genRes || genRes.status === 401) throw new Error('登录已过期，请重新登录后再试')
+    if (genRes.status === 403) throw new Error('没有权限使用 AI 生成，请检查账号状态')
+    if (!genRes.ok) {
+      let msg = ''
+      try { msg = (await genRes.clone().json()).error || '' } catch (e) { msg = '' }
+      throw new Error(msg || ('AI 服务返回错误（HTTP ' + genRes.status + '）'))
+    }
     const genData = await genRes.json()
     if (genData.poolFilesStatus) task._poolFilesStatus = genData.poolFilesStatus
     let raw = genData.questions

@@ -16,11 +16,14 @@ const {
 const { cleanupExpiredFiles } = require('../services/filePoolService');
 const pointsService = require('../services/pointsService');
 const P = require('../config/points');
+const { POOL_ALLOWED_EXTS } = require('../config/files');
 
 const UPLOAD_BASE = path.join(__dirname, '../../../uploads/pool');
 if (!fs.existsSync(UPLOAD_BASE)) fs.mkdirSync(UPLOAD_BASE, { recursive: true });
 
-const ALLOWED_FILE_EXTS = ['.pdf', '.doc', '.docx', '.pptx', '.txt', '.md'];
+// P1-4：白名单收敛到 config/files.js（此前本文件内联一份，AI 上传通道另一份，
+// 容易漂移；chat/issues 已在用共享常量）。
+const ALLOWED_FILE_EXTS = POOL_ALLOWED_EXTS;
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -238,74 +241,4 @@ module.exports = function (app) {
     }
   }));
 
-  app.delete('/api/v1/files/:id', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
-    const result = await pool.query(
-      'DELETE FROM user_files WHERE id = $1 AND user_id = $2 RETURNING file_path',
-      [req.params.id, req.userId]
-    );
-    if (result.rows.length === 0) throw new ApiError(404, '文件不存在');
-
-    const absPath = path.join(UPLOAD_BASE, '..', result.rows[0].file_path);
-    try { if (fs.existsSync(absPath)) fs.unlinkSync(absPath); } catch (_) {}
-
-    res.json({ ok: true });
-  }));
-
-  app.post('/api/v1/files/:id/assign', validate({ params: idParamsSchema, body: assignFileBodySchema }), requireAuth, asyncHandler(async (req, res) => {
-    const result = await pool.query(
-      'UPDATE user_files SET chapter_id = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
-      [req.body.chapterId, req.params.id, req.userId]
-    );
-    if (result.rows.length === 0) throw new ApiError(404, '文件不存在或不属于你');
-
-    res.json({ file: formatFileRow(result.rows[0]) });
-  }));
-
-  app.post('/api/v1/files/:id/unassign', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
-    const result = await pool.query(
-      'UPDATE user_files SET chapter_id = NULL, in_pool = true WHERE id = $1 AND user_id = $2 RETURNING *',
-      [req.params.id, req.userId]
-    );
-    if (result.rows.length === 0) throw new ApiError(404, '文件不存在或不属于你');
-
-    res.json({ file: formatFileRow(result.rows[0]) });
-  }));
-
-  // POST /api/v1/files/:id/extend — 文件池续期（消耗积分 10/7天）
-  app.post('/api/v1/files/:id/extend', validate({ params: idParamsSchema }), requireAuth, asyncHandler(async (req, res) => {
-    const fid = req.params.id;
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const fr = await client.query(
-        'SELECT * FROM user_files WHERE id = $1 AND user_id = $2 AND in_pool = true',
-        [fid, req.userId]
-      );
-      if (fr.rows.length === 0) throw new ApiError(404, '文件不在文件池中或不属于你');
-
-      const file = fr.rows[0];
-      // 扣积分（余额不足 → 400，事务回滚）
-      const spend = await pointsService.spendPoints(client, req.userId, P.FILE_EXTEND_COST, {
-        reason: 'file_extend',
-        note: '文件池续期：' + file.original_name,
-      });
-
-      const baseDate = file.pool_expires_at && new Date(file.pool_expires_at) > new Date()
-        ? new Date(file.pool_expires_at)
-        : new Date();
-      const newExpiry = new Date(baseDate.getTime() + P.FILE_EXTEND_DAYS * 24 * 3600 * 1000).toISOString();
-
-      const result = await client.query(
-        'UPDATE user_files SET pool_expires_at = $1, points_extended = true WHERE id = $2 AND user_id = $3 RETURNING *',
-        [newExpiry, fid, req.userId]
-      );
-      await client.query('COMMIT');
-      res.json({ file: formatFileRow(result.rows[0]), balance: spend.balance, pointsSpent: P.FILE_EXTEND_COST });
-    } catch (e) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw e;
-    } finally {
-      client.release();
-    }
-  }));
 };

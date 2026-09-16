@@ -55,10 +55,21 @@ function shouldForceUpdate(currentVersion, required) {
   return compareVersions(currentVersion, required) < 0;
 }
 
-// 当前已安装版本是否已被撤回：列表非空且不含当前版本
+// 当前已安装版本是否已被撤回。
+//
+// 本轮复查 P0-7：原实现是「列表非空且不含当前版本 ⇒ 已撤回」，把两件完全不同的事
+// 混为一谈 —— 发布工具只保留最近 N 个版本（installer-lib.js 默认 keep=3），因此
+// 「老版本被剪枝掉」也被判成「被撤回」，落在 3 个版本之外的用户一开机就被弹
+// 「当前版本已被撤回 / 该版本存在已知问题」的阻断式提示（线上 manifest 目前只含
+// 3.37.0/3.36.0/3.35.0，且全部 retracted=null）。撤回是维护者的显式动作，
+// 唯一权威标记是 release.retracted（由 scripts/publish-installer.js 写入）。
+// 不在列表内 = 无法判断（可能是剪枝/私有构建/自编译），按未撤回处理。
 function isInstalledVersionRetracted(currentVersion, releases) {
   if (!releases || !Array.isArray(releases) || releases.length === 0) return false;
-  return !releases.some((r) => r && r.version === currentVersion);
+  const hit = releases.find((r) => r && r.version === currentVersion);
+  if (!hit) return false;
+  // 清单约定 retracted: null | { reason, at } —— 非 null 即视为已撤回标记。
+  return hit.retracted !== null && hit.retracted !== undefined;
 }
 
 // 下载指定版本参数校验（renderer 仅能传 manifest 给出的 fileName/version/sha256）

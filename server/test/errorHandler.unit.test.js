@@ -39,4 +39,36 @@ describe('errorHandler 单元测试', () => {
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe('数据库错误，请稍后重试');
   });
+
+  // —— R12：multer 错误分流（原实现一律 422 + 回显英文枚举）——
+  function multerError(code) {
+    const e = new Error('File too large');
+    e.name = 'MulterError';
+    e.code = code;
+    return e;
+  }
+
+  it('multer 单文件超限 → 413 且给中文文案（不再报成 422 参数错误）', () => {
+    const res = mockRes();
+    errorHandler(multerError('LIMIT_FILE_SIZE'), {}, res, vi.fn());
+    expect(res.statusCode).toBe(413);
+    expect(res.body.error).toContain('20MB');
+    expect(res.body.error).not.toContain('File too large');
+  });
+
+  it('multer 数量/字段名类错误 → 422 且不泄露英文枚举', () => {
+    for (const code of ['LIMIT_FILE_COUNT', 'LIMIT_UNEXPECTED_FILE']) {
+      const res = mockRes();
+      errorHandler(multerError(code), {}, res, vi.fn());
+      expect(res.statusCode).toBe(422);
+      expect(res.body.error).not.toContain('LIMIT_');
+    }
+  });
+
+  it('业务侧显式 422（ApiError）文案原样透出，不被 multer 文案覆盖', () => {
+    const res = mockRes();
+    errorHandler(new ApiError(422, '不支持的文件类型：.exe'), {}, res, vi.fn());
+    expect(res.statusCode).toBe(422);
+    expect(res.body.error).toBe('不支持的文件类型：.exe');
+  });
 });

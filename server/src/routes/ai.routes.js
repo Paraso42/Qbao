@@ -15,6 +15,8 @@ const { finalizeAiQuestions } = require('../services/aiQuestionFinalizer');
 const { assertChapterCanGenerate } = require('../services/chapterSessionGuard');
 const { acquireChapterGenerationLock } = require('../services/chapterGenerationLock');
 const { cleanupExpiredFiles } = require('../services/filePoolService');
+// P1-4：上传白名单统一走 config/files.js（此前 AI 上传通道完全没有白名单）
+const { POOL_ALLOWED_EXTS, AI_UPLOAD_MAX_TOTAL_BYTES } = require('../config/files');
 const { loadPoolTextForChapter } = require('../lib/poolText');
 const pointsService = require('../services/pointsService');
 const { aiQuestionSchema } = require('../lib/aiQuestionSchema');
@@ -79,7 +81,23 @@ async function logAiRequest(userId, model, status) {
 const uploadDir = path.join(__dirname, '../../../uploads');
 const POOL_BASE = path.join(__dirname, '../../../uploads'); // shared file pool root
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-const upload = multer({ dest: uploadDir, limits: { fileSize: 20 * 1024 * 1024 } });
+// P1-4：AI 出题资料上传此前只有体积上限、没有类型白名单 ——
+// 任意扩展名（含 .exe/.svg/.html）都会被 multer 落盘到 uploads/，
+// 再由 extractText() 的 default 分支回一句「不支持的文件类型」，文件却已落盘。
+// 与 files/chat/issues 三条通道对齐：扩展名白名单在 multer 阶段就拦掉，
+// 非法请求连一个字节都不写盘。
+const upload = multer({
+  dest: uploadDir,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!POOL_ALLOWED_EXTS.includes(ext)) {
+      const err = new ApiError(422, '不支持的文件类型：' + (ext || '未知') + '；仅支持 ' + POOL_ALLOWED_EXTS.join('/').slice(1));
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
 
 // Pre-check document parsing dependencies
 var mammothAvailable = false;
@@ -173,7 +191,10 @@ async function extractText(filePath, ext) {
 module.exports = function (app) {
   // List available providers and models
   // T15: 统一错误层（原裸 try/catch 回显 e.message，泄露内部细节）
-  app.get('/api/v1/ai/providers', asyncHandler(async (req, res) => {
+  // P1-5：本端点回显「服务端配置了哪些 provider / 模型」，属于部署信息；
+  // 匿名可读等于把上游选型暴露给任意扫描者（且无任何匿名调用场景：
+  // 前端只在登录后的设置页使用）。与其它业务端点一致加 requireAuth。
+  app.get('/api/v1/ai/providers', requireAuth, asyncHandler(async (req, res) => {
     const providers = getAllProviders();
     // Also add backward-compatible model listing
     const allModels = [];
@@ -206,6 +227,17 @@ module.exports = function (app) {
     }
 
     if (!req.files || req.files.length === 0) return res.status(422).json({ error: '未上传文件' });
+
+    // P1-4：总体积上限。multer 的 fileSize 只约束「单文件」，10 × 20MB = 200MB
+    // 仍可被单次请求吃满内存/磁盘。超限时清理本请求已落盘文件后 413。
+    const totalBytes = req.files.reduce((n, f) => n + (f.size || 0), 0);
+    if (totalBytes > AI_UPLOAD_MAX_TOTAL_BYTES) {
+      for (const f of req.files) {
+        try { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); } catch (_) { /* 忽略单个清理失败 */ }
+      }
+      throw new ApiError(413, '单次上传总体积过大（上限 ' + Math.round(AI_UPLOAD_MAX_TOTAL_BYTES / 1024 / 1024) + 'MB）');
+    }
+
     const results = [];
     for (const file of req.files) {
       try {
@@ -238,16 +270,20 @@ module.exports = function (app) {
       await assertChapterCanGenerate(req.userId, chapterId || null);
 
       const provider = target.provider;
-        await logAiRequest(req.userId, model, 'started');
       console.log('AI generate: provider=' + providerName + ', model=' + model +
-        '' +
         ', textContentLen=' + (textContent ? textContent.length : 0) +
         ', stream=' + useStream +
         ', typeCounts=', JSON.stringify(typeCounts) + ', chapterId=' + (chapterId || 'none'));
 
+      // P0-6：审计行必须在「参数校验通过之后」才写。
+      // 旧顺序先 logAiRequest('started') 再校验 apiKey，导致每个未配置 Key 的
+      // 401/422 请求都留下一条 started 记录，且 catch 分支因 req.aiModel 已赋值
+      // 再补一条 error —— 单次失败请求产生两条审计噪音，污染 ai_request_log
+      // 的统计口径。这里统一移到校验之后（校验失败只剩 catch 的一条 error）。
       if (!apiKey || apiKey.length < 10) {
         return res.status(401).json({ error: '缺少 AI API Key，请在设置中配置' });
       }
+      await logAiRequest(req.userId, model, 'started');
 
       // round6 同章节互斥：直连路径也在 ai_generation_locks 登记（任务路径
       // createAiTask 抢到同一把锁直至任务终态）。旧版/多端实例并发直连生成

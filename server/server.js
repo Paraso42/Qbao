@@ -10,12 +10,14 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || process.env
   console.error('[startup] JWT_SECRET 未配置或仍为示例值，请运行: openssl rand -hex 32 并写入 server/.env');
   process.exit(1);
 }
-const { startAiTaskWorker, markStaleTasksFailed } = require('./src/services/aiTaskService');
-const { startExpiryJob } = require('./src/services/pointsService');
+const { startAiTaskWorker, stopAiTaskWorker, drainAiTaskWorker, markStaleTasksFailed } = require('./src/services/aiTaskService');
+const { startExpiryJob, stopExpiryJob } = require('./src/services/pointsService');
 const { createApp } = require('./app');
+const { pool } = require('./src/db');
+const { createShutdownHandler, registerShutdownHandlers } = require('./src/lib/gracefulShutdown');
 
 const PORT = process.env.PORT || 3000;
-createApp().listen(PORT, () => {
+const server = createApp().listen(PORT, () => {
   console.log('Qbao API running on port ' + PORT);
   // 清理上次进程遗留的 queued/running 任务（API Key 在内存中已丢失）
   markStaleTasksFailed().finally(() => {
@@ -25,3 +27,19 @@ createApp().listen(PORT, () => {
   // 积分：学期清零（每年 2/1、8/1）× 每日低峰对账定时任务
   startExpiryJob();
 });
+
+// P1-7：优雅停机。此前进程被 SIGTERM 直接杀掉 —— 在途 AI 任务/同步被硬切断，
+// ai_tasks 留在 running 态，直到下次启动才被判失败。宽限期可用
+// QBAO_SHUTDOWN_GRACE_MS 覆盖（默认 15s）。
+const graceMs = Number(process.env.QBAO_SHUTDOWN_GRACE_MS) || undefined;
+const shutdown = createShutdownHandler({
+  server,
+  pool,
+  stopAiTaskWorker,
+  stopExpiryJob,
+  drainAiTaskWorker,
+  logger: console,
+  graceMs,
+  exit: (code) => process.exit(code),
+});
+registerShutdownHandlers(shutdown);

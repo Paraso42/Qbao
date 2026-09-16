@@ -26,6 +26,53 @@ export function resolveMediaUrl(url) {
   return url
 }
 
+// —— 受保护媒体（本轮复查 P0-1）——
+// 聊天附件 / 工单图片的下载端点已加鉴权（requireAuthOrMediaToken）。这些资源用
+// <img src> 渲染，浏览器不会为 <img> 附带 Authorization 头，因此由服务端在出站
+// 时（上传响应、消息列表）签一个短时效 ticket（?t=exp.sig）。这里只判断路径、
+// 不生成任何凭证：ticket 由服务端下发，前端原样保留。
+const MEDIA_PATHS = ['/api/v1/chat/files/', '/api/v1/issues/images/']
+export const MEDIA_TICKET_PARAM = 't'
+
+// 自身 API 的 origin（网页版=同源；桌面版=注入的 apiBase origin）。
+function apiOrigin() {
+  if (/^https?:/i.test(API_BASE)) {
+    try { return new URL(API_BASE).origin } catch (e) { return '' }
+  }
+  return typeof location !== 'undefined' ? location.origin : ''
+}
+
+// 判断是否为「本服务」的受保护媒体路径。
+// 兼容两种形态：数据库里存的相对路径（/api/v1/…），以及 resolveMediaUrl 解析后的绝对
+// URL（网页版同源、桌面版 apiBase origin）。**必须是自身 origin**：否则一旦消息里混入
+// 指向外部主机的同形路径，就会把本服务的 ticket 泄露给第三方主机。
+export function isMediaPath(url) {
+  if (!url || typeof url !== 'string') return false
+  const clean = url.split('?')[0].split('#')[0]
+  for (const p of MEDIA_PATHS) {
+    if (clean.indexOf(p) === 0) return true
+    // 绝对 URL：与自身 origin 拼接后再比对
+    const origin = apiOrigin()
+    if (origin && clean.indexOf(origin + p) === 0) return true
+  }
+  return false
+}
+
+// 给签名 URL 补 ticket。幂等：已带 ticket 或非受保护路径原样返回。
+// mediaUrl 为服务端下发的带 ticket 版本（同一次会话内生成，故直接复用）。
+export function withMediaTicket(url, mediaUrl) {
+  if (!isMediaPath(url)) return url
+  const m = /[?&]t=([^&#]+)/.exec(mediaUrl || '')
+  if (!m) return url
+  const sep = url.indexOf('?') === -1 ? '?' : '&'
+  return url + sep + MEDIA_TICKET_PARAM + '=' + m[1]
+}
+
+// 供组件直接使用：解析相对路径为绝对可访问 URL，并带上媒体 ticket。
+export function resolveMediaSrc(clean, mediaUrl) {
+  return withMediaTicket(resolveMediaUrl(clean), mediaUrl || clean)
+}
+
 export function getCi(q, answer) {
   if (!q) return false
   if (answer === -1) return false // 未作答判为错误
@@ -118,8 +165,12 @@ export async function fetchWithRetry(url, options, maxAttempts = 3, retryDelayMs
     try {
       const res = await fetch(url, options)
       if (!res.ok) {
+        // 本轮复查 P1-2：4xx 是确定性失败（401 过期、403、422 参数错），重试无意义，
+        // 且此前会把 { error: '登录已过期' } 当作正常响应返回给调用方，导致
+        // 「登录过期」被上游报成「AI未返回有效题目」。这里只对 5xx/429 重试。
+        const retryable = res.status >= 500 || res.status === 429
         lastErr = new Error('HTTP ' + res.status)
-        if (attempt < maxAttempts) { await sleep(retryDelayMs * attempt); continue }
+        if (retryable && attempt < maxAttempts) { await sleep(retryDelayMs * attempt); continue }
         return res
       }
       return res

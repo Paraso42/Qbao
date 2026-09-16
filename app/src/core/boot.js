@@ -55,15 +55,29 @@ export function initApp(pinia) {
 
   // v3.30：启动门闩 — 本地 IDB 回填 + 云端恢复完成前禁止同步推送
   // （防止骨架态（无题目）被 flushSync 推上服务器覆盖云端数据）
-  hydrateState(data.state).catch(() => {}).then(() => {
-    const bootRestore = user.isOnline ? restoreFromCloud() : Promise.resolve()
-    bootRestore.finally(() => {
-      engine.setSyncingReady(true)
-      if (user.isOnline) engine.resumePendingSync()
-      // 刷新后直接处于章节页而非切章进入 → 也恢复该章服务端进行中的答题会话
-      if (user.isOnline) quiz.restoreQuizFromServer(false)
+  //
+  // P1-3：原实现是 hydrateState(...).catch(() => {}) —— 本地 IDB 回填失败被完全吞掉。
+  // IDB 打不开（隐私模式/配额耗尽/库损坏）恰恰是最需要告知用户的场景：此时界面会呈现
+  // 空数据，用户会误以为「资料全丢了」甚至去重新导入覆盖。失败必须可见。
+  hydrateState(data.state)
+    .catch((e) => {
+      console.error('[boot] 本地数据回填失败:', e)
+      ui.toast('本地数据读取失败，本次以云端数据为准（请勿重复导入）', 'err', 10000)
     })
-  })
+    .then(() => {
+      const bootRestore = user.isOnline ? restoreFromCloud() : Promise.resolve()
+      // P1-3：云端恢复失败同样不能静默 —— 否则同步引擎照常放行、后续推送会用
+      // 本地（可能较旧）状态覆盖云端。失败时给出提示由用户决定是否重试。
+      bootRestore.catch((e) => {
+        console.error('[boot] 云端恢复失败:', e)
+        ui.toast('云端数据恢复失败，已暂停同步以避免覆盖，请刷新重试', 'err', 10000)
+      }).finally(() => {
+        engine.setSyncingReady(true)
+        if (user.isOnline) engine.resumePendingSync()
+        // 刷新后直接处于章节页而非切章进入 → 也恢复该章服务端进行中的答题会话
+        if (user.isOnline) quiz.restoreQuizFromServer(false)
+      })
+    })
 
   watch(() => user.isOnline, (online) => {
     syncStore.setOnline(online)

@@ -23,6 +23,13 @@ const {
 
 const { CHAT_ALLOWED_EXTS, IMAGE_ALLOWED_EXTS } = require('../config/files');
 const { isTrustedUpload } = require('../lib/fileSniff');
+// 本轮复查 P0-1：附件下载必须鉴权。图片消息用 <img src> 渲染、带不了
+// Authorization 头，故守卫接受「Bearer 头」或「出站签名 ticket」两种凭证。
+const {
+  signUrl,
+  sanitizeMessageRows,
+  requireAuthOrMediaToken,
+} = require('../lib/mediaToken');
 
 const chatUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'chat');
 if (!fs.existsSync(chatUploadDir)) fs.mkdirSync(chatUploadDir, { recursive: true });
@@ -76,7 +83,8 @@ async function validateUploadedFile(file) {
 
 module.exports = function (app) {
   // 文件下载/预览。路径做 basename 校验，防止穿越。
-  app.get('/api/v1/chat/files/:filename', asyncHandler(async (req, res) => {
+  // 鉴权：Bearer 头 或 短时效签名 ticket（图片场景，见 lib/mediaToken.js）。
+  app.get('/api/v1/chat/files/:filename', requireAuthOrMediaToken, asyncHandler(async (req, res) => {
     const requested = req.params.filename;
     const filename = path.basename(requested);
     if (filename !== requested || filename.includes('..')) throw new ApiError(404, '文件不存在或已删除');
@@ -448,7 +456,7 @@ module.exports = function (app) {
     params.push(limit);
 
     const result = await pool.query(query, params);
-    res.json({ messages: result.rows.reverse() });
+    res.json({ messages: sanitizeMessageRows(result.rows.reverse()) });
   }));
 
   app.post('/api/v1/chat/rooms/:roomId/messages', validate({ params: chatIdParamsSchema, body: sendMessageSchema }), requireAuth, asyncHandler(async (req, res) => {
@@ -456,7 +464,13 @@ module.exports = function (app) {
     if (memberCheck.rows.length === 0) throw new ApiError(403, '无权在此会话发送消息');
 
     const finalContent = (req.body.content || '').trim();
-    const finalImages = Array.isArray(req.body.images) ? req.body.images : [];
+    // 入库前去查询串：前端持有带 ticket 的签名 URL（P0-1 签名方案），
+    // 若原样落库，删除附件时 basename 会带上 ?t=… 导致删不掉（残留孤儿文件）。
+    const stripQuery = (u) => (typeof u === 'string' && u ? u.split('?')[0] : u);
+    const finalImages = (Array.isArray(req.body.images) ? req.body.images : []).map(stripQuery).filter(Boolean);
+    const finalFileInfo = req.body.file_info
+      ? Object.assign({}, req.body.file_info, { url: stripQuery(req.body.file_info.url) })
+      : null;
     const finalType = req.body.msg_type || 'text';
 
     if (finalType === 'text' && !finalContent && finalImages.length === 0 && !req.body.file_info) {
@@ -478,7 +492,7 @@ module.exports = function (app) {
         finalContent,
         finalType,
         JSON.stringify(finalImages),
-        req.body.file_info ? JSON.stringify(req.body.file_info) : null,
+        finalFileInfo ? JSON.stringify(finalFileInfo) : null,
         req.body.quiz_data ? JSON.stringify(req.body.quiz_data) : null,
         req.body.reply_to ? JSON.stringify(req.body.reply_to) : null,
       ]
@@ -490,6 +504,7 @@ module.exports = function (app) {
     const msg = result.rows[0];
     msg.sender_name = userResult.rows[0] ? userResult.rows[0].display_name : '';
     msg.sender_username = userResult.rows[0] ? userResult.rows[0].username : '';
+    sanitizeMessageRows([msg]);
 
     res.status(201).json({ message: msg });
   }));
@@ -504,7 +519,7 @@ module.exports = function (app) {
     // T2：magic bytes 二次校验（fileFilter 只拦扩展名，此处验真实内容）
     await validateUploadedFile(req.file);
     res.json({
-      url: '/api/v1/chat/files/' + req.file.filename,
+      url: signUrl('/api/v1/chat/files/' + req.file.filename),
       name: req.file.originalname,
       size: req.file.size,
       mimeType: req.file.mimetype,

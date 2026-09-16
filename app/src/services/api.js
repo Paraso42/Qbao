@@ -191,7 +191,10 @@ export async function apiFetch(path, opts = {}) {
   if (payload !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   if (opts.headers) Object.assign(headers, opts.headers)
   if (opts.auth !== false) {
-    const t = getToken()
+    // 本轮复查 P1-1：与 fetchWithAuth 一致，取钉扎令牌（effectiveToken）而非
+    // 活读 localStorage。此前 apiFetch 用 getToken()，多标签登录不同账号时
+    // 会把 AI 文件/服务端任务的写操作打到另一个账号上。
+    const t = effectiveToken()
     if (t) headers['Authorization'] = 'Bearer ' + t
   }
   let body = payload
@@ -206,7 +209,14 @@ export async function apiFetch(path, opts = {}) {
   } catch (e) {
     throw new Error(netErrorMessage())
   }
-  if (res.status === 401 && opts.auth !== false) { clearStoredAuth(); return null }
+  if (res.status === 401 && opts.auth !== false) {
+    // 与 fetchWithAuth 相同语义：只有「本页即登录上下文」（钉扎令牌 == 档案活读令牌）
+    // 才清登出；否则触发整页重建，绝不清掉其它标签页的登录态。
+    const t = effectiveToken()
+    if (!t || t === getToken()) clearStoredAuth()
+    else fireAuthStale()
+    return null
+  }
   return res
 }
 

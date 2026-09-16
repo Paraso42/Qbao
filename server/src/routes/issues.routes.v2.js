@@ -17,6 +17,8 @@ const {
 
 const { IMAGE_ALLOWED_EXTS } = require('../config/files');
 const { isTrustedUpload } = require('../lib/fileSniff');
+// 本轮复查 P0-1：工单图片下载必须鉴权（图片以 <img src> 渲染，故用签名 ticket）。
+const { signUrl, sanitizeMessageRows, requireAuthOrMediaToken } = require('../lib/mediaToken');
 
 const issueUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'issues');
 if (!fs.existsSync(issueUploadDir)) fs.mkdirSync(issueUploadDir, { recursive: true });
@@ -63,7 +65,8 @@ function removeIssueImages(rows) {
     const images = Array.isArray(row.images) ? row.images : [];
     for (const imageUrl of images) {
       if (typeof imageUrl !== 'string') continue;
-      const filename = path.basename(imageUrl);
+      // 防御：路径可能带 ?t=<ticket> 查询串，basename 前先去掉查询部分。
+      const filename = path.basename(imageUrl.split('?')[0]);
       const filePath = path.join(issueUploadDir, filename);
       try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
     }
@@ -194,10 +197,11 @@ module.exports = function (app) {
     if (!req.file) throw new ApiError(422, '请选择图片文件');
     // T2：magic bytes 二次校验（fileFilter 只拦扩展名，此处验真实内容）
     await validateIssueImage(req.file);
-    res.json({ url: '/api/v1/issues/images/' + req.file.filename, name: req.file.originalname, size: req.file.size });
+    res.json({ url: signUrl('/api/v1/issues/images/' + req.file.filename), name: req.file.originalname, size: req.file.size });
   }));
 
-  app.get('/api/v1/issues/images/:filename', asyncHandler(async (req, res) => {
+  // 鉴权：Bearer 头 或 短时效签名 ticket（工单图片场景）。
+  app.get('/api/v1/issues/images/:filename', requireAuthOrMediaToken, asyncHandler(async (req, res) => {
     const requested = req.params.filename;
     const filename = path.basename(requested);
     if (filename !== requested || filename.includes('..')) throw new ApiError(404, '图片不存在或已删除');
@@ -246,7 +250,7 @@ module.exports = function (app) {
        ORDER BY im.created_at ASC`,
       [id]
     );
-    issue.messages = msgResult.rows;
+    issue.messages = sanitizeMessageRows(msgResult.rows);
 
     if (req.userRole === 'admin') {
       await pool.query('UPDATE issues SET has_new_for_admin = false WHERE id = $1', [id]);
@@ -260,7 +264,11 @@ module.exports = function (app) {
   app.post('/api/v1/issues/:id/messages', validate({ params: issueIdParamsSchema, body: issueMessageSchema }), requireAuth, asyncHandler(async (req, res) => {
     const id = req.params.id;
     const content = (req.body.content || '').trim();
-    const images = Array.isArray(req.body.images) ? req.body.images : [];
+    // 入库前去查询串：前端 pendingImages 持有的是带 ticket 的签名 URL，
+    // 若原样落库，删除附件时 basename 会带上 ?t=… 导致删不掉（残留孤儿文件）。
+    const images = (Array.isArray(req.body.images) ? req.body.images : [])
+      .filter((u) => typeof u === 'string' && u)
+      .map((u) => u.split('?')[0]);
     if (!content && images.length === 0) throw new ApiError(422, '内容不能为空');
 
     const issueResult = await pool.query('SELECT * FROM issues WHERE id = $1', [id]);
@@ -281,7 +289,7 @@ module.exports = function (app) {
       await pool.query('UPDATE issues SET has_new_for_admin = true, updated_at = now() WHERE id = $1', [id]);
     }
 
-    res.status(201).json(msgResult.rows[0]);
+    res.status(201).json(sanitizeMessageRows(msgResult.rows)[0]);
   }));
 
   app.patch('/api/v1/issues/:id/status', validate({ params: issueIdParamsSchema, body: issueStatusSchema }), requireAuth, asyncHandler(async (req, res) => {
@@ -291,7 +299,14 @@ module.exports = function (app) {
 
     const client = await pool.connect();
     try {
-      const issueResult = await client.query('SELECT * FROM issues WHERE id = $1', [id]);
+      // 状态机必须在事务内、且对目标行加锁后再判断：
+      // 原实现先 SELECT（快照）→ 校验状态 → 才 BEGIN，两个并发的
+      // PATCH /issues/:id/status 会同时读到 'read'，于是「read→resolved」与
+      // 「read→unread」双双通过校验，产生两条互相矛盾的系统消息、
+      // 且 issues.status 以后写入者为准（TOCTOU）。FOR UPDATE 串行化后，
+      // 后到者读到已变更的状态并得到 422，与代码注释的语义一致。
+      await client.query('BEGIN');
+      const issueResult = await client.query('SELECT * FROM issues WHERE id = $1 FOR UPDATE', [id]);
       if (issueResult.rows.length === 0) throw new ApiError(404, 'Issue 不存在');
 
       const issue = issueResult.rows[0];
@@ -317,7 +332,6 @@ module.exports = function (app) {
 
       if (issue.status === 'closed') throw new ApiError(422, '已关闭的 Issue 不可再修改状态');
 
-      await client.query('BEGIN');
       await client.query('UPDATE issues SET status = $1, updated_at = now() WHERE id = $2', [status, id]);
       await client.query(
         'INSERT INTO issue_messages (issue_id, user_id, content, is_system) VALUES ($1, $2, $3, true)',
@@ -328,9 +342,15 @@ module.exports = function (app) {
       } else {
         await client.query('UPDATE issues SET has_new_for_admin = true WHERE id = $1', [id]);
       }
+
+      // 同事务内读回，避免用另一个连接读到未提交前的旧行
+      const updated = await client.query('SELECT * FROM issues WHERE id = $1', [id]);
       await client.query('COMMIT');
 
       if (status === 'closed') {
+        // 关单后清理附图（磁盘文件 + DB 引用）。
+        // 刻意放在 COMMIT 之后、且用独立连接：清理属于尽力而为的副作用，
+        // 失败只记日志，绝不能把已经生效的状态变更一起回滚。
         try {
           const imgs = await pool.query('SELECT images FROM issue_messages WHERE issue_id = $1', [id]);
           removeIssueImages(imgs.rows);
@@ -340,7 +360,6 @@ module.exports = function (app) {
         }
       }
 
-      const updated = await pool.query('SELECT * FROM issues WHERE id = $1', [id]);
       res.json(updated.rows[0]);
     } catch (e) {
       try { await client.query('ROLLBACK'); } catch (_) {}

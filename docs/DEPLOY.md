@@ -44,6 +44,9 @@ sudo -u postgres psql -c "CREATE DATABASE qbao"
 sudo -u postgres psql -d qbao -f {PROD_ROOT}/server/init.sql
 # 历史/新增迁移（T17 版本化：schema_migrations 追踪，只执行未应用项）
 cd {PROD_ROOT}/server && npm ci --omit=dev && node scripts/run_migration.js
+# 升级后自检（建议每次部署都跑）：编号缺口提示 +「已应用但仓库无文件」的幽灵版本告警
+node scripts/run_migration.js --verify
+#   --list 只列状态（--verify 亦会打印该清单）；两者都只读，不改库
 
 # 3) 配置环境变量
 cd {PROD_ROOT}/server
@@ -186,7 +189,19 @@ sudo -u postgres createdb -O <db_user> qbao_beta
 2. 观察 RSS：`systemctl status qbao-api-beta` / `ps -o rss,cmd -p <pid>`。
 3. 最坏回退：内测仅保留静态目录（页面/UI 可测），API 暂共享生产 :3000 —— 放弃「先于生产测新代码」能力，恢复即移除。
 
-### 4B.6 纪律要点（与 DEVELOPMENT_FLOW §7 红线一致）
+### 4B.6 重启与优雅停机
+
+进程对 `SIGTERM`/`SIGINT` 有处理（`server/src/lib/gracefulShutdown.js`，R10）：停止领取新任务 → 停止接收新连接
+→ 等待在途 AI 任务与请求收尾 → 关闭连接池 → 退出。
+因此 `systemctl restart`（默认发 SIGTERM）不会硬切正在进行的 AI 出题任务。
+
+- 宽限期默认 **15s**，与单元模板的 `TimeoutStopSec=15` 对齐；任务普遍较长时可调大环境变量
+  `QBAO_SHUTDOWN_GRACE_MS`（毫秒），并同时把 `TimeoutStopSec` 调到不小于该值（否则 systemd 会 SIGKILL）。
+- 停机日志形如 `[shutdown] 收到 SIGTERM，开始优雅停机（宽限 15000ms）` → `[shutdown] 已停止`；
+  若出现「宽限期已到，仍有未完成的工作」，说明有任务超过宽限期，考虑调大该值。
+- 第二次信号（再按一次 Ctrl-C / `systemctl kill -s TERM`）会**立即退出**，用于卡住时的逃生。
+
+### 4B.7 纪律要点（与 DEVELOPMENT_FLOW §7 红线一致）
 
 - 迁移与发布顺序固定：**L1 先、L2 后**；两库 schema_migrations 各自记账，任意一边失败可单独重试（迁移幂等）。
 - 测试账号只建在 qbao_beta；生产保持金丝雀账号只读巡检。
