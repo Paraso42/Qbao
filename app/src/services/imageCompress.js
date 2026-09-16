@@ -8,7 +8,8 @@
 // 策略（保守，宁可不压也不压坏）：
 //   - 只处理位图（image/*），GIF 一律跳过（压了会丢动画），未知类型跳过；
 //   - 小于阈值（默认 400KB）跳过，避免无意义的重编码损失；
-//   - 最长边超过上限（默认 1600px）才等比缩放；
+//   - 最长边超过上限（默认 1600px）才等比缩放；极端长宽比（长截图）改保短边，
+//     避免 1080x12000 被压成 144px 宽而看不清字；
 //   - 优先输出 image/webp（同画质体积约为 jpeg 的 60~70%），
 //     浏览器不支持时回退 image/jpeg；
 //   - 含透明通道的图先铺白底（jpeg 无 alpha，否则透明区会变黑）；
@@ -25,6 +26,10 @@ export const SKIP_BELOW_BYTES = 400 * 1024
 export const GAIN_THRESHOLD = 0.9
 // 不需要解码就能确定「压了会坏事」的类型
 export const NEVER_COMPRESS_TYPES = ['image/gif']
+// 短边下限：只按「最长边 ≤1600」缩放，会把长截图压成 144px 宽（实测 1080x12000
+// 的聊天记录长截图会变成 144x1600）——那样的字根本看不清，等于把图压坏了。
+// 极端长宽比时改为保短边，宁可体积大一些也不能让人看不清内容。
+export const MIN_SHORT_EDGE = 400
 
 // 缩放到最长边不超过 maxEdge 的目标尺寸；不放大（放大只会更糊更占体积）。
 export function scaledSize(width, height, maxEdge, maxPixels) {
@@ -32,8 +37,15 @@ export function scaledSize(width, height, maxEdge, maxPixels) {
   const h = Number(height) || 0
   if (w <= 0 || h <= 0) return { width: 0, height: 0, scale: 1 }
   const edge = Number(maxEdge) > 0 ? Number(maxEdge) : DEFAULT_MAX_EDGE
+  const shortEdge = Math.min(w, h)
   let scale = Math.min(1, edge / Math.max(w, h))
-  // 超高像素图（如全景/长截图）再按总像素兜一层，防止 canvas 内存爆炸
+  // 极端长宽比（长截图/全景）兜底：保短边可读，允许长边超出 maxEdge。
+  // 正常照片/截图不会触发（它们的短边本身就远大于下限）。
+  const floor = Number(MIN_SHORT_EDGE) > 0 ? Number(MIN_SHORT_EDGE) : 0
+  if (floor > 0 && shortEdge * scale < floor) {
+    scale = Math.min(1, floor / shortEdge)
+  }
+  // 超高像素图再按总像素兜一层，防止 canvas 内存爆炸（显式传入时优先）
   const cap = Number(maxPixels) > 0 ? Number(maxPixels) : 0
   if (cap > 0 && w * h * scale * scale > cap) {
     scale = Math.sqrt(cap / (w * h))

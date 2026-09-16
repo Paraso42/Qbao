@@ -21,6 +21,12 @@ const BROWSER_GLOBALS = {
   indexedDB: 'readonly', requestIdleCallback: 'readonly',
   // v3.37.5：图片压缩（createImageBitmap/canvas.toBlob）与带进度的上传（XHR）
   XMLHttpRequest: 'readonly', createImageBitmap: 'readonly', ImageBitmap: 'readonly',
+  globalThis: 'readonly',
+  // 单测在 node 环境跑（vite.config.js: environment 'node'），需 node 侧全局
+  global: 'readonly', process: 'readonly', Buffer: 'readonly',
+  // vitest globals（vite.config.js 以 globals:true 注入，无需 import）
+  describe: 'readonly', it: 'readonly', test: 'readonly', expect: 'readonly', vi: 'readonly',
+  beforeEach: 'readonly', afterEach: 'readonly', beforeAll: 'readonly', afterAll: 'readonly',
   getComputedStyle: 'readonly', matchMedia: 'readonly', queueMicrotask: 'readonly',
 };
 

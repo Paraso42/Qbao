@@ -32,6 +32,23 @@ describe('scaledSize', () => {
     expect(scaledSize(0, 0, 1600)).toEqual({ width: 0, height: 0, scale: 1 })
     expect(scaledSize(NaN, 100, 1600)).toEqual({ width: 0, height: 0, scale: 1 })
   })
+  // 真实数据抓出来的坑：1080x12000 的聊天记录长截图，只按「长边≤1600」会压成
+  // 144px 宽 —— 字完全看不清，等于把图压坏了。极端长宽比改为保短边。
+  it('极端长截图保短边可读，不压成一条细线', () => {
+    const r = scaledSize(1080, 12000, 1600)
+    expect(Math.min(r.width, r.height)).toBeGreaterThanOrEqual(400)
+    expect(r.width).toBe(400)
+    expect(r.height).toBe(4444)
+  })
+  it('长边超限的长截图仍然缩小（不是干脆不压）', () => {
+    const r = scaledSize(1080, 12000, 1600)
+    expect(r.scale).toBeLessThan(1)
+    expect(r.width * r.height).toBeLessThan(1080 * 12000)
+  })
+  it('短边已经在可读范围时，仍按长边上限走（长截图规则不误伤普通图）', () => {
+    expect(scaledSize(3024, 4032, 1600)).toEqual({ width: 1200, height: 1600, scale: 1600 / 4032 })
+    expect(scaledSize(4032, 3024, 1600)).toEqual({ width: 1600, height: 1200, scale: 1600 / 4032 })
+  })
 })
 
 describe('shouldCompress', () => {

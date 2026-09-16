@@ -116,7 +116,10 @@
         @dyn path /api/* /api /uploads/* /avatars/* /dl/* /dl          # 其余动态 → 本机 API
         route @dyn { reverse_proxy 127.0.0.1:3000 { header_up Host {host} } }
 
-        @assets path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2
+        @assets {                                                       # 静态按扩展名；必须排除 /api/*
+                path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2
+                not path /api/*
+        }
         header @assets Cache-Control "public, max-age=604800"           # 生产静态 7 天
 }
 ```
@@ -128,6 +131,14 @@
 > 环境由「访问哪个域名」唯一决定，不存在任何可伪造的请求头入口。
 > 改配置后先 `caddy validate --config /etc/caddy/Caddyfile`，再 `systemctl reload caddy`。
 
+> **`not path /api/*` 不能省，也不能用续行写**（v3.37.5 踩坑）：受保护媒体端点
+> （`/api/v1/chat/files/*.png`、`/api/v1/issues/images/*`）的扩展名与静态资源相同，纯扩展名匹配会把
+> 下载响应改写成静态缓存策略 —— 生产上等于**把 401/404 缓存 7 天**（图片一旦裂开就再也好不了）。
+> 而写成 `@assets path *.png … \` 换行 `not path /api/*` **不是「且」**：适配器把 `"not"`、`"path"`、
+> `"/api/*"` 当成三个**扩展名模式**塞进同一个 `path` 列表，条件恒假，且 `caddy validate` 照样通过。
+> 必须用块式匹配器，或 `path *.png !/api/*`；改完查 `http://127.0.0.1:2019/config/` 确认
+> `"not"` 是**键**而非数组元素。
+
 ### 2.5 缓存纪律（与改版可见性强相关）
 
 | 环境 | 静态缓存 | 改版生效方式 |
@@ -135,6 +146,7 @@
 | 生产 {DOMAIN} | `public, max-age=604800`（7 天）；CF 边缘另有一层缓存 | 引用 js/css 必须带版本参数 `?v=`（否则老浏览器拿旧文件）；必要时 CF 控制台 Purge Cache |
 | 内测 {BETA_HOST} | `no-cache, no-store, must-revalidate` | 部署刷新即见 |
 | 动态接口 / 下载文件 | 不缓存（下载经 Node，支持 Range/206） | — |
+| 受保护媒体（聊天附件 / 工单截图） | 服务端显式下发 `private, max-age=31536000, immutable`（v3.37.5） | 文件名随机且内容不可变，故长缓存安全；用 `private` 是因为属用户私有数据。反向代理的静态规则**必须排除 `/api/*`**，否则会覆盖此头（并把 401/404 也缓存下来） |
 
 ## 3. 运行实体拓扑（服务器视角）
 
