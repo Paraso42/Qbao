@@ -211,6 +211,7 @@ const prepared = computed(() => {
       typeName: q ? (typeMap[q.type] || q.type || '') : '',
       initial: isMine ? (user.shortName || '我') : (m.sender_name || '?').charAt(0).toUpperCase(),
       avatarUrl: avatarUrlOf(m),
+      // 服务端已在下发时为受保护媒体签好 ticket，这里只需补全为绝对地址
       imageSrcs: (m.images || []).map((u) => resolveMediaSrc(u)),
       fileUrl: resolveMediaSrc((m.file_info || {}).url),
       time: store.formatTime(m.created_at),
@@ -224,7 +225,8 @@ function imgError(url) {
 }
 
 function previewImage(url) {
-  if (url) previewUrl.value = resolveMediaUrl(url)
+  // url 是 imageSrcs 里已解析好的地址（可能带服务端 ticket），原样打开即可
+  if (url) previewUrl.value = url
 }
 
 function openFile(url) {

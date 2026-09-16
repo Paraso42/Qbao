@@ -58,17 +58,27 @@ export function isMediaPath(url) {
   return false
 }
 
-// 给签名 URL 补 ticket。幂等：已带 ticket 或非受保护路径原样返回。
+// 给签名 URL 补 ticket。**幂等**：已带 ticket、非受保护路径、服务端未签发时原样返回。
 // mediaUrl 为服务端下发的带 ticket 版本（同一次会话内生成，故直接复用）。
+//
+// v3.37.2 事故修复：本函数曾被「入参本身就是服务端下发的带票 URL」的调用形态命中，
+// 于是 ticket 被追加第二次（?t=X&t=X）。服务端拿到的 req.query.t 变成 "X,X"，验签必然
+// 失败 → 聊天图片与工单截图全部 401 裂图（上传预览正常、发出后看不见）。因此这里保证：
+//   ① 入参已带 ticket → 不再追加，原样返回；
+//   ② 追加前先剥掉入参里可能存在的旧 ticket，最终地址里只会有一个 t 参数。
 export function withMediaTicket(url, mediaUrl) {
   if (!isMediaPath(url)) return url
-  const m = /[?&]t=([^&#]+)/.exec(mediaUrl || '')
+  const ticketRe = new RegExp('[?&]' + MEDIA_TICKET_PARAM + '=[^&#]*')
+  if (ticketRe.test(url)) return url
+  const m = new RegExp('[?&]' + MEDIA_TICKET_PARAM + '=([^&#]+)').exec(mediaUrl || '')
   if (!m) return url
   const sep = url.indexOf('?') === -1 ? '?' : '&'
   return url + sep + MEDIA_TICKET_PARAM + '=' + m[1]
 }
 
 // 供组件直接使用：解析相对路径为绝对可访问 URL，并带上媒体 ticket。
+// clean 允许两种形态：① 服务端下发的带票 URL（消息列表/上传响应，ticket 原样保留）；
+// ② 干净路径 + 服务端带票版本（本地数据中心化场景）。两种形态都只会得到一个 t 参数。
 export function resolveMediaSrc(clean, mediaUrl) {
   return withMediaTicket(resolveMediaUrl(clean), mediaUrl || clean)
 }

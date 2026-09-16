@@ -241,6 +241,34 @@ describe('媒体 ticket 透传', () => {
     expect(resolveMediaSrc('avatars/2.jpg', 'avatars/2.jpg'))
       .toBe('https://qbao.example/avatars/2.jpg')
   })
+
+  // —— v3.37.2 事故回归：ticket 被追加两次 → 服务端 req.query.t 变逗号串 → 401 裂图 ——
+  // 线上真实形态：服务端 GET /chat/rooms/:id/messages 与 /chat/upload 直接下发带票 URL，
+  // 组件把**这一个**地址同时当作 clean 与 mediaUrl 传入（ChatMessages.imageSrcs）。
+  it('withMediaTicket：入参已带 ticket 时不再追加（事故形态，必须恒等于入参）', async () => {
+    const { withMediaTicket } = await import('./utils')
+    const signed = '/api/v1/chat/files/a.png?t=1789563551422.8NIyUaEmdEnyZgRemdIoNCjdKizMoOGhZsoH0R7xFJM'
+    expect(withMediaTicket(signed, signed)).toBe(signed)
+    // 服务端下发的绝对地址同理
+    const abs = 'https://qbao.example/api/v1/issues/images/b.jpg?t=5.sig'
+    expect(withMediaTicket(abs, abs)).toBe(abs)
+  })
+
+  it('resolveMediaSrc：服务端下发的带票 URL 原样保留（只有一个 t 参数）', async () => {
+    const { resolveMediaSrc } = await import('./utils')
+    const signed = '/api/v1/chat/files/a.png?t=77.sig'
+    const out = resolveMediaSrc(signed, signed)
+    expect(out).toBe('https://qbao.example/api/v1/chat/files/a.png?t=77.sig')
+    expect(out.match(/[?&]t=/g).length).toBe(1)
+  })
+
+  it('withMediaTicket：URL 里已有旧 ticket 时不会被替换成第二个（防 &t= 叠加）', async () => {
+    const { withMediaTicket } = await import('./utils')
+    // 理论上不该出现（第一道幂等已挡住），这里锁定「结果里 t 参数最多一个」
+    const out = withMediaTicket('/api/v1/chat/files/a.png?t=1.old', '/api/v1/chat/files/a.png?t=2.new')
+    expect(out.match(/[?&]t=/g).length).toBe(1)
+    expect(out).toContain('t=1.old')
+  })
 })
 
 // —— fetchWithRetry 重试策略（P1-2 回归）——
