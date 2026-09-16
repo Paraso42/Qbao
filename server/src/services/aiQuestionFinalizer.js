@@ -180,7 +180,16 @@ async function finalizeAiQuestions({
         baseWarnings.push(...result.warnings);
       } else {
         selfCheckResult.status = 'empty';
-        selfCheckResult.error = 'AI 自动判定后没有可用题目，保留原始结果';
+        selfCheckResult.retried = result.retried === true;
+        // 区分两种「空」：模型压根没参与审核（空转，实测 completion_tokens=2）vs 审核后把题全删了。
+        // 两者对用户的含义完全不同，文案必须说清楚，否则用户会以为自己的题目有问题。
+        if (result.unengaged) {
+          selfCheckResult.unengaged = true;
+          selfCheckResult.error = 'AI 自动判定未真正执行（模型连续返回空结果），已保留原始题目；本次自检未生效，可稍后重试';
+          baseWarnings.push('AI 自动判定未生效：模型连续返回空结果，已保留未经二次审核的原始题目');
+        } else {
+          selfCheckResult.error = 'AI 自动判定后没有可用题目，保留原始结果';
+        }
       }
     } catch (e) {
       selfCheckResult.status = 'failed';

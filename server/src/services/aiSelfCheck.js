@@ -14,8 +14,10 @@ const MAX_QUESTIONS_CHARS = 60000;
 // 「没有问题的题目必须原样保留」。实测（ECNU ecnu-plus，2026-09-16）模型会直接返回空数组
 // [] —— completion_tokens=2、耗时 300ms，等于完全没有执行审核；此时 finalizeAiQuestions
 // 判定「AI 自动判定后没有可用题目，保留原始结果」，用户开启自检花掉的这次调用完全白费。
-// 处置：识别「未真正参与」的空结果（0 题 + 消耗 tokens 低于阈值），补一句显式指令重试一次。
-const SELF_CHECK_RETRY_MAX = 1;
+// 处置：识别「未真正参与」的空结果（0 题 + 消耗 tokens 低于阈值），补显式指令重试，最多 3 次尝试。
+// 3 次是实测标定的：线上 6 次真实自检里模型空转出现 4 次，单次重试仍有约 1/3 概率两次都空转；
+// 空转调用只消耗 2 个 token、约 1 秒，多试两次的代价远小于「用户开了自检却完全没被审核」。
+const SELF_CHECK_MAX_ATTEMPTS = 3;
 const SELF_CHECK_MIN_ENGAGED_TOKENS = 20;
 const KEEP_ALL_RULE = '没有问题的题目必须原样保留，不得因为「无需修改」而省略、合并或删除；只有确实存在错误、且无法修复的题目才允许删除。';
 
@@ -59,7 +61,7 @@ async function runAiSelfCheck({ provider, apiKey, model, modelConfig, sourceText
 
   let lastEmptySignal = null;
 
-  for (let attempt = 0; attempt <= SELF_CHECK_RETRY_MAX; attempt++) {
+  for (let attempt = 0; attempt < SELF_CHECK_MAX_ATTEMPTS; attempt++) {
     const messages = buildSelfCheckMessages(sourceText, questions, { strictKeepAll: attempt > 0 });
     const completion = await provider.chatCompletions(apiKey, model, messages, {
       temperature: 0,
@@ -83,14 +85,14 @@ async function runAiSelfCheck({ provider, apiKey, model, modelConfig, sourceText
     const validation = validateQuestionSet(normalized);
 
     // 空数组 + 几乎没消耗 tokens = 模型没有真正执行审核（而非「审完把题全删了」），
-    // 这类结果对用户毫无价值，补一条显式指令重试一次。
+    // 这类结果对用户毫无价值，补显式指令重试（最多 SELF_CHECK_MAX_ATTEMPTS 次尝试）。
     const usedTokens = (completion && completion.usage && Number(completion.usage.completion_tokens)) || 0;
     const looksUnengaged = validation.questions.length === 0
       && (questions || []).length > 0
       && usedTokens < SELF_CHECK_MIN_ENGAGED_TOKENS;
-    if (looksUnengaged && attempt < SELF_CHECK_RETRY_MAX) {
+    if (looksUnengaged && attempt < SELF_CHECK_MAX_ATTEMPTS - 1) {
       lastEmptySignal = { rawCount: normalized.length, completionTokens: usedTokens };
-      console.log('[self-check] 模型空转（0 题 / ' + usedTokens + ' tokens），补显式指令重试一次');
+      console.log('[self-check] 模型空转（0 题 / ' + usedTokens + ' tokens），补显式指令重试（第 ' + (attempt + 2) + ' 次尝试）');
       continue;
     }
 
@@ -103,7 +105,7 @@ async function runAiSelfCheck({ provider, apiKey, model, modelConfig, sourceText
     };
   }
 
-  // 理论不可达：循环内必然 return
+  // 全部尝试均空转（循环内必然 return，此处为防御性兜底）
   return { questions: [], warnings: [], rawCount: 0, retried: true, unengaged: lastEmptySignal };
 }
 

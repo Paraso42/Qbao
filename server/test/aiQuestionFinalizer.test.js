@@ -31,6 +31,7 @@ function mkProvider(scripted) {
       const payload = scripted[Math.min(call, scripted.length - 1)];
       call++;
       if (payload === 'GARBAGE') return { choices: [{ message: { content: '这不是JSON' } }] };
+      if (payload === 'EMPTY') return { choices: [{ message: { content: '[]' } }], usage: { completion_tokens: 2 } };
       return { choices: [{ message: { content: JSON.stringify(payload) } }] };
     },
   };
@@ -40,6 +41,21 @@ const TC = { single: 5, judge: 5, term: 3, short: 2 };
 const BASE = { provider: null, apiKey: 'sk-test', model: 'm', modelConfig: { maxOutput: 8192 }, sourceText: '资料' };
 
 describe('aiQuestionFinalizer 数量保障 (round6)', () => {
+  it('自检模型空转（连续返回空数组、几乎不耗 tokens）→ 保留原题并给出"自检未生效"提示', async () => {
+    const raw = build(TC);
+    const provider = mkProvider(['EMPTY']); // 自检每次都空转
+    const out = await finalizeAiQuestions({ ...BASE, selfCheck: true, provider, rawQuestions: raw, typeCounts: TC });
+
+    expect(out.selfCheck.performed).toBe(true);
+    expect(out.selfCheck.status).toBe('empty');
+    expect(out.selfCheck.unengaged).toBe(true);
+    expect(out.selfCheck.error).toContain('未真正执行');
+    expect(out.warnings.join('|')).toContain('AI 自动判定未生效');
+    // 题目一道都不能少（保留未经二次审核的原始题目）
+    expect(out.questions.length).toBe(raw.length);
+  });
+
+
   it('自检删题导致缺口 → 自检后补题，最终数量=要求数量', async () => {
     const raw = build(TC); // 15 题，配额无缺口，无需预补题
     const selfCheckResult = build({ single: 4, judge: 5, term: 3, short: 2 }); // 自检删 1 道单选

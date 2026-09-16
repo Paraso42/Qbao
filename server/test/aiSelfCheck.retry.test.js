@@ -48,14 +48,14 @@ describe('AI 自动判定 —— 模型空转兜底重试', () => {
   let up = null;
   afterEach(() => { if (up) { up.restore(); up = null; } });
 
-  test('首次返回空数组且几乎没消耗 tokens → 补显式指令重试一次并采用第二次结果', async () => {
+  test('首次返回空数组且几乎没消耗 tokens → 补显式指令重试并采用第二次结果', async () => {
     up = installUpstream([
       reply('[]', 2),
       reply(JSON.stringify(QUESTIONS), 111),
     ]);
     const r = await runAiSelfCheck({ ...ARGS, questions: QUESTIONS });
 
-    assert.strictEqual(up.calls.length, 2, '必须恰好重试一次');
+    assert.strictEqual(up.calls.length, 2, '第二次成功后不得再多打上游');
     assert.strictEqual(up.calls[0].url, UPSTREAM);
     // 第一次是原始提示词：不含「原样保留」约束
     assert.ok(!up.calls[0].body.messages[0].content.includes('原样保留'));
@@ -68,14 +68,27 @@ describe('AI 自动判定 —— 模型空转兜底重试', () => {
     assert.strictEqual(r.unengaged, null, '第二次已真正参与，不应再标记空转');
   });
 
-  test('两次都空转 → 返回空题目且标记 unengaged（调用方保留原始结果）', async () => {
+  test('连续空转（达最大尝试次数）→ 返回空题目且标记 unengaged，且不无限重试', async () => {
     up = installUpstream([reply('[]', 2), reply('[]', 2)]);
     const r = await runAiSelfCheck({ ...ARGS, questions: QUESTIONS });
 
-    assert.strictEqual(up.calls.length, 2);
+    assert.strictEqual(up.calls.length, 3, '最多 3 次尝试后必须停止');
     assert.strictEqual(r.questions.length, 0);
     assert.strictEqual(r.retried, true);
     assert.ok(r.unengaged && r.unengaged.completionTokens === 2, '须记录空转信号');
+  });
+
+  test('前两次空转、第三次成功 → 采用第三次结果', async () => {
+    up = installUpstream([reply('[]', 2), reply('[]', 2), reply(JSON.stringify(QUESTIONS), 130)]);
+    const r = await runAiSelfCheck({ ...ARGS, questions: QUESTIONS });
+
+    assert.strictEqual(up.calls.length, 3);
+    assert.strictEqual(r.questions.length, 2);
+    assert.strictEqual(r.retried, true);
+    assert.strictEqual(r.unengaged, null);
+    // 第 2、3 次尝试都应带严格指令
+    assert.ok(up.calls[1].body.messages[0].content.includes('原样保留'));
+    assert.ok(up.calls[2].body.messages[0].content.includes('原样保留'));
   });
 
   test('模型认真审完并把题全删了（消耗大量 tokens）→ 不重试、不误判为空转', async () => {
