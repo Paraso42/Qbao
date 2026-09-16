@@ -1,3 +1,21 @@
+## v3.37.1（内测版 · beta.questionbox.cn）
+- **全库复查整改 R1–R12（不依赖历史结论，逐条以代码/线上端点/数据库取证）**：
+  - **附件下载鉴权与签名票据（R1）**：聊天附件与工单截图的下载端点此前只做 `requireAuth`，而消费方是浏览器 `<img src>`——**无法携带 Authorization 头**，整改后必须双通道。做法：路由改挂 `requireAuthOrMediaToken`（Bearer 头照旧有效），图片场景由服务端**出站时**签 `?t=<exp>.<hmac>`（HMAC-SHA256，密钥由 JWT_SECRET 派生、带用途分隔串，TTL 1 小时）；签名只覆盖**文件名**，故票据无法被挪用去读别的文件。数据库只存干净路径（上传/发消息时剥离 query），读取时重签，历史脏行（库里已带 `?t=`）自动归一化。非受保护路径（头像、uploads、外链 CDN）一律不签名。
+  - **全新建库必然 500（R2）**：`server/init.sql` + 迁移建出的库缺 `users.role / is_banned / avatar_url / last_login_at / last_active_at`，且代码大量引用的 `notices` 表**全仓没有任何 DDL** —— 新环境注册即 42703、所有鉴权请求 500。新增迁移 `018_v3.41_identity_notices.sql` 补齐；并新增 `schema.drift` 双向守卫：代码引用的表必须在仓库 DDL 中可复现、关键列必须有 DDL。
+  - **迁移记账诊断（R3）**：`run_migration.js` 新增 `--verify`，打印仓库编号缺口（允许）并**告警「已记账但仓库无文件」的幽灵版本**。
+  - **重复路由（R4）**：`files.routes.v2.js` 里 `DELETE /files/:id`、`POST /:id/assign`、`POST /:id/unassign`、`POST /:id/extend` 各注册了两遍（Express 只命中先注册者，改后面那个副本不生效、且不报错）。删除旧副本，保留含章节关联与 `in_pool` 复位的完整实现；新增「同一 method+path 不得重复注册」守卫（当前 107 个端点全唯一）。
+  - **AI 审计噪音（R5）**：审计行改到参数校验之后写入——此前缺 API Key 的 401 失败请求会在 `ai_request_log` 留下 2 条噪音。
+  - **前后端全局错误兜底 + 客户端错误上报（R6）**：前端补 `app.config.errorHandler`（30s 节流 toast）、`unhandledrejection`（跳过 AbortError）、本地数据读取/云端恢复失败 toast、启动失败兜底页；新增 `POST /api/v1/client-errors`（免鉴权，20 次/分/IP + 8KB 体量上限，**只落日志不落库**，字段截断 600 字）。
+  - **重试与令牌纪律（R7）**：`fetchWithRetry` 此前对 4xx 也重试并把 `{error:'登录已过期'}` 当正常响应返回（上游因此把「登录过期」报成「AI 未返回有效题目」）——改为仅对 5xx/429 重试；网页端所有出网请求统一走 `effectiveToken()`（不再有取到失效 token 的旁路），401 区分「登录过期」与「无权限」。
+  - **AI 上传通道白名单与体积上限（R8）**：与文件池共用扩展名白名单，且用 multer `fileFilter` **在落盘前**拦截（非白名单 → 422，磁盘零残留）；单次总量 >60MB → 413 并清理本请求已落盘分片。
+  - **providers 匿名可探测（R9）**：`GET /api/v1/ai/providers` 加 `requireAuth`。
+  - **优雅停机（R10）**：新增 `src/lib/gracefulShutdown.js`——停定时器 → 停收新连接 → 等待在途 AI 任务/同步（默认 15s，`QBAO_SHUTDOWN_GRACE_MS` 可调，与 systemd `TimeoutStopSec` 联动）→ 关连接池 → exit 0；二次信号立即退出（escape hatch）。此前重启硬切，`ai_tasks` 会滞留 `running`。
+  - **工单状态机 TOCTOU（R11）**：`PATCH /issues/:id/status` 先读快照后开事务，并发可写出互相矛盾的系统消息；改为 `BEGIN` + `SELECT … FOR UPDATE` 串行化，附图清理移到 `COMMIT` 之后（尽力而为，失败不牵连状态变更）。
+  - **multer 错误分流（R12）**：此前所有 multer 错误一律 422 且直接回显英文枚举（`File too large` / `LIMIT_FILE_COUNT`）——单文件超 20MB 被报成「参数错误」，用户无法自查。改为按 `err.code` 分流：体积类 → **413**（中文文案），其余 → 422，业务侧文案原样透出。
+- **桌面端**：更新检查的「已被撤回」判定修正——仅当清单**显式**标记 `retracted` 才提示；版本被清单剪枝（stable 只保留最新 3 个）不再被误判为「该版本已被撤回」并弹阻塞提示。
+- **守卫用例（防回归）**：新增 `mediaToken`（票据签名/过期/换文件/篡改）、`schema.drift`（双向 DDL 漂移 + 路由唯一性）、`clientErrors.routes`（限流与体量）、`gracefulShutdown`（停机顺序/宽限超时/二次信号）；`ai.routes.validation` 增补白名单零落盘、总量 413、审计零噪音、providers 鉴权；`errorHandler.unit` 增补 multer 分流；app `utils` 增补媒体票据透传与重试策略。
+- **量表和 DoD 基线**：server **43 文件 266/266**（原 39 文件 233）、app **27 文件 261/261**（原 250）、scripts 6、desktop 5；app/server eslint 0 error、`vite build` 成功（`dist/index.html` 606.96 kB）。
+- 纪律：本版为**内测版**，仅部署 L1（beta.questionbox.cn）供验收；**未 push、未打 tag、未动生产**；验收通过后再转正式版。
 ## v3.37.0
 - **科目总览看板工程化重构（专业信息架构 + 清爽渐变视觉 + 统计口径统一，采纳用户反馈）**：
   - **数据自洽（消除看板自相矛盾）**：确立单一权威源 = 章节当前轮次（quizSets）+ 轮次内逐题答案，科目级数字全部 = Σ章节（闭环恒等式由单测锁定）；题量与题库 tab 章节头/侧栏 X/Y 同函数同数（chapterQuestionTotal 轮次求和口径不变）；计数器拆分客观/主观（unanswered/skipped 仅含客观题，主观单独 subjAnswered/subjSkipped/subjUnanswered），-1 跳过单列、不计入对错与准确率；无实答客观题准确率显示「—」，删除旧看板 0%/100% 假值兜底；history 仅用于时间维度派生（较上轮 delta / 近 7 天 / 连续学习 / 趋势），绝不参与任何合计数字 → 各卡可验算：累计作答 143 = 客观 99 + 主观 44，环形图分母 134 = 图例合计 28+71+0+35，中心准确率 28% = 答对 28 ÷ 已答 99
