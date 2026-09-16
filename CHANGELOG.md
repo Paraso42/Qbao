@@ -1,3 +1,20 @@
+## v3.37.5（内测版 · beta.questionbox.cn）
+- **修复内测反馈的图片三连症状：「发送极慢 / 带图聊天打开极慢 / 图片过一会儿就加载不出来」（用户实测原文）**。三条症状是**三个独立根因**，逐条以线上取证定位后分别修复：
+  - **① 发送极慢 —— 原图直传，且上传期间界面完全无进度**：客户端此前把用户选中的文件**原封不动**POST 给 `/chat/upload`。手机原图动辄 2–8MB，而实测上传通道吞吐只有约 **24–380KB/s**（本地开发机实测：0.12MB→3.15–4.97s、0.58MB→2.98–4.23s、1.88MB→5.05–11.17s；服务端磁盘读取为 188MB/s，**瓶颈在上行链路，不在服务器**）。同时改用 `XMLHttpRequest` 只为拿到上传进度。
+    - 新增 `app/src/services/imageCompress.js`：上传前本地压缩（长边 ≤1600px、质量 0.82、优先 WebP 回退 JPEG）。安全网优先于压缩率：非图片/GIF 不碰；<400KB 不解码（重编码收益低于画质损失）；**压完反而变大就保留原件**；任何解码/编码异常一律**回退原文件**，绝不阻断发送。长截图额外受「总像素 ≤400 万」约束（防 canvas 内存爆炸）；JPEG 输出前先给透明像素铺白底（否则透明区变黑）；扩展名随输出格式改写（png→webp/jpg），避免服务端 magic bytes 校验拒绝。
+    - `chatApi.uploadFile(file, { onProgress })` + 输入框进度文案（「处理图片…」→「上传中 47%」→「上传中 1.2MB（原 4.8MB，已压缩）」）；401 处理与 `fetchWithAuth` 一致（只有本页令牌仍有效才清登出，避免把别的标签页登出），且**保留 fetch 回退分支**（无 XHR 环境功能不受影响）。
+  - **② 带图聊天打开极慢 —— 受保护媒体端点没有任何可用缓存，每次都全量回源**：`GET /api/v1/chat/files/:filename` 与 `GET /api/v1/issues/images/:filename` 走 `res.sendFile`，后者默认下发 `Cache-Control: public, max-age=0`；更糟的是反向代理按**扩展名**匹配静态资源（`.png/.jpg`…），把 API 媒体响应的缓存头改写掉了，于是浏览器的每一条 `Cache-Control` 都是冲突的。
+    - 线上取证（beta 实测该图片响应）：`cache-control: no-cache, no-store, must-revalidate` 与 `cache-control: public, max-age=0` **同时出现**，`content-length: 1975851`，第二次相同请求仍**整包传输**。
+    - 修复：新增 `server/src/lib/mediaCache.js`，由业务端点显式接管缓存头 —— `private, max-age=31536000, immutable` + `nosniff`，并**关闭 `sendFile` 自带的 `max-age=0`**（避免两个冲突的 Cache-Control）。文件名由服务端随机生成、内容不可变、下载仍需 Bearer 或 1 小时有效的签名 ticket，故长缓存安全；用 `private` 是因为媒体属于用户私有数据，不允许中间共享缓存保存。
+    - **反向代理侧同步修正**：`@assets` 匹配器原为纯扩展名匹配，会把 `/api/*.png` 这类**受保护媒体端点**一起命中，把下载响应改成 `public, max-age=604800`（一周）——这不仅是性能问题，**还会把 401/404 缓存一周，图片一旦裂开就再也好不了**（正是症状③的放大器）。
+      - 踩坑记录（值得写进文档）：直觉写法「`@assets path *.png … \` + 下一行 `not path /api/*`」**在 Caddy 2.11 里不是「且」**——适配器把 `"not"`、`"path"`、`"/api/*"` 当成**三个文件扩展名模式**塞进同一个 `path` 列表，匹配条件恒为假，**行为与修改前完全一致**（`caddy validate` 照样通过，只有查 `/config/` 编译产物或实测响应头才能发现）。正确写法是块式匹配器（`@assets { path … ; not path /api/* }`）或 `path *.png !/api/*`。
+      - 改前已备份 `Caddyfile.bak_assetsfix_20260916-232514` / `bak_assetsfix2_20260916-233112` / `bak_assets3_20260916-233414`，`caddy validate` 通过后 reload。**内测与生产共用同一份 Caddyfile**，故两侧一起生效：实测内测 API 图片为 `private, max-age=31536000, immutable`（不再有冲突头）、API 401 为**无缓存头**、静态资源仍是原来的 no-store；生产 API 响应在源站已不再带 `max-age=604800`（`max-age=604800` 仅剩静态资源，实测静态 png 仍为 7 天）。
+  - **③ 图片过一会儿就加载不出来 —— 媒体 ticket 只有 1 小时，且客户端不会自愈**：`requireAuthOrMediaToken` 签发的 `?t=<exp>.<hmac>` 有效期 1 小时，消息列表里的地址是**加载那一刻**签发的；页面停留超过 1 小时后，任何还没进浏览器缓存的图片再请求必然 401，而 `<img>` 失败后不会自己重试 —— 直到手动刷新页面。
+    - 修复（客户端）：图片 `@error` 时向服务端重取一次消息（拿到**重新签发**的地址），并给地址挂 `r=<n>` nonce 强制重取（旧地址可能已被中间层按「图片」缓存了失败响应，不换 URL 会一直裂）。**最多重试 2 次**，之后标记为真·损坏并停止，避免坏图把服务端打成重试风暴。
+    - 保持 1 小时有效期不变：短时效 URL 凭证是刻意的设计，长有效期会让「URL 泄漏 = 长期可读」；服务端 `sanitizeMediaUrl` 本就会剥离并重签 ticket，新鲜度以服务端为准。
+  - 回归用例：新增 `server/test/mediaCache.test.js`（4 例：缓存头常量、显式设头并关闭 `sendFile` 默认 `max-age=0`、调用方无法覆盖 `cacheControl`、**chat 与 issues 两个端点都走 `sendMediaFile` 防回退**）；新增 `app/src/services/imageCompress.test.js`（22 例：等比缩放/竖图/超长截图像素上限非法尺寸兜底、跳过条件、WebP→JPEG 回退、扩展名改写、非图片与小图不解码、解码抛错回退原件、压完更大保留原件、JPEG 透明铺白底）。其中「调用方无法覆盖 `cacheControl`」一例**当场抓出了本轮的实现漏洞**（`Object.assign` 顺序让调用方能把默认 `max-age=0` 打开），已修。
+- 量表：server **46 文件 281 例全绿**（原 45/277）；app **28 文件 286 例全绿**（原 27/264）；eslint 0 error。
+- 实时范围：L1（`beta.questionbox.cn`）服务端代码 + 客户端包体；Caddyfile 侧修正同时影响生产（原本就在错误地改写 API 媒体缓存）。**未 push、未打 tag**；版本号统一 3.37.5。
 ## v3.37.4（内测版 · beta.questionbox.cn）
 - **真实 Key 实测发现的第三处缺陷：「AI 自动判定（自检）」被模型空转，用户开了自检等于白花一次调用**：
   - 现象（用用户提供的 ECNU Key 在线上真实触发）：开启自检后，模型对**完全正确**的题目直接返回空数组 `[]` —— `completion_tokens=2`、耗时约 300ms，说明它**根本没有执行审核**。服务端随后判定「AI 自动判定后没有可用题目，保留原始结果」，题目虽然没丢，但这次自检调用完全无效。

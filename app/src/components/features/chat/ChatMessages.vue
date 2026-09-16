@@ -31,10 +31,11 @@
               <img
                 v-for="(url, i) in (m.imageSrcs || [])"
                 :key="i"
-                :src="url"
+                :src="mediaSrc(url)"
                 class="chat-msg-image"
                 loading="lazy"
-                @click="previewImage(url)"
+                @error="onImageError(m, url)"
+                @click="previewImage(mediaSrc(url))"
               />
             </div>
             <div v-if="m.content && m.content.trim()" class="chat-msg-text">{{ m.content }}</div>
@@ -222,6 +223,32 @@ const prepared = computed(() => {
 
 function imgError(url) {
   if (url) failedImgs.value = { ...failedImgs.value, [url]: true }
+}
+
+// —— v3.37.5：图片「刚开始好好的，过一会儿就裂」——
+// 服务端媒体 ticket 只有 1 小时有效期，消息列表里的地址是**加载那一刻**签发的；
+// 页面停留超过 1 小时后，任何还没被浏览器缓存的图再请求都会 401，且 <img> 不会自愈。
+// 处理：失败时向服务端要一次新签发的地址（loadMessages），并给地址挂 nonce 强制重取
+// （旧地址可能已被中间层按「图片」缓存了 401/404，不换 URL 会一直裂）。
+const retriedImgs = ref({})
+const mediaNonce = ref(0)
+function mediaSrc(url) {
+  if (!url) return url
+  const n = retriedImgs.value[url]
+  if (!n) return url
+  return url + (url.indexOf('?') === -1 ? '?' : '&') + 'r=' + n
+}
+async function onImageError(m, url) {
+  if (!url) return
+  const tried = retriedImgs.value[url] || 0
+  if (tried >= 2) {
+    // 两次重试仍失败：标记真·损坏，避免无限重试打爆服务端
+    imgError(url)
+    return
+  }
+  retriedImgs.value = { ...retriedImgs.value, [url]: tried + 1 }
+  mediaNonce.value++
+  if (store.openRoomId) await store.loadMessages(store.openRoomId, false)
 }
 
 function previewImage(url) {

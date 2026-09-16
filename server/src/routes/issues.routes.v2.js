@@ -19,6 +19,7 @@ const { IMAGE_ALLOWED_EXTS } = require('../config/files');
 const { isTrustedUpload } = require('../lib/fileSniff');
 // 本轮复查 P0-1：工单图片下载必须鉴权（图片以 <img src> 渲染，故用签名 ticket）。
 const { signUrl, sanitizeMessageRows, requireAuthOrMediaToken } = require('../lib/mediaToken');
+const { sendMediaFile } = require('../lib/mediaCache');
 
 const issueUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'issues');
 if (!fs.existsSync(issueUploadDir)) fs.mkdirSync(issueUploadDir, { recursive: true });
@@ -208,9 +209,9 @@ module.exports = function (app) {
 
     const filePath = path.join(issueUploadDir, filename);
     if (!fs.existsSync(filePath)) throw new ApiError(404, '图片不存在或已删除');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', 'inline');
-    res.sendFile(filePath);
+    // v3.37.5：与聊天附件一致的长缓存策略（见 lib/mediaCache.js）
+    sendMediaFile(res, filePath);
   }));
 
   app.put('/api/v1/issues/:id', validate({ params: issueIdParamsSchema, body: updateIssueTitleSchema }), requireAuth, asyncHandler(async (req, res) => {

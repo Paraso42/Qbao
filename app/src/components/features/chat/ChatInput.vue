@@ -28,7 +28,8 @@
         <button class="chat-file-preview-remove" @click="removeFile()">✕</button>
       </div>
     </div>
-    <div v-if="uploading" class="chat-uploading">上传中...</div>
+    <!-- v3.37.5：图片先本地压缩再上传；进度可见，避免大图上传时界面「一动不动」 -->
+    <div v-if="uploading" class="chat-uploading">{{ uploadingText }}</div>
 
     <!-- 分享车 -->
     <div v-if="store.quizCart.length > 0" class="chat-quiz-cart">
@@ -66,6 +67,8 @@ import { ref, computed } from 'vue'
 import Icon from '../../ui/Icon.vue'
 import { useChatStore } from '../../../stores/chat'
 import { useUiStore } from '../../../stores/ui'
+import { compressImage } from '../../../services/imageCompress'
+import { formatFileSize } from '../../../services/utils'
 
 const store = useChatStore()
 const ui = useUiStore()
@@ -74,6 +77,7 @@ const draft = ref('')
 const pendingImages = ref([])
 const pendingFile = ref(null)
 const uploading = ref(false)
+const uploadingText = ref('上传中...')
 const imageInput = ref(null)
 const fileInput = ref(null)
 const inputEl = ref(null)
@@ -94,13 +98,24 @@ function triggerFile() { fileInput.value && fileInput.value.click() }
 async function uploadImage(file) {
   if (!file) return
   uploading.value = true
+  uploadingText.value = '处理图片...'
   try {
-    const data = await store.uploadFile(file)
+    // 手机原图动辄数 MB，先本地压缩再上传：上行慢时这是「发送极慢」的主因
+    const shrunk = await compressImage(file)
+    uploadingText.value = shrunk.compressed
+      ? '上传中 ' + formatFileSize(shrunk.size) + '（原 ' + formatFileSize(shrunk.originalSize) + '，已压缩）'
+      : '上传中 ' + formatFileSize(shrunk.size)
+    const data = await store.uploadFile(shrunk.file, {
+      onProgress: (p) => {
+        if (p >= 0) uploadingText.value = '上传中 ' + p + '%'
+      },
+    })
     pendingImages.value.push(data)
   } catch (err) {
     ui.toast('上传失败: ' + (err.message || '请重试'), 'err')
   } finally {
     uploading.value = false
+    uploadingText.value = '上传中...'
   }
 }
 
@@ -117,12 +132,18 @@ async function onFileSelect(e) {
   const file = e.target.files[0]
   if (!file) return
   uploading.value = true
+  uploadingText.value = '上传中 ' + formatFileSize(file.size)
   try {
-    pendingFile.value = await store.uploadFile(file)
+    pendingFile.value = await store.uploadFile(file, {
+      onProgress: (p) => {
+        if (p >= 0) uploadingText.value = '上传中 ' + p + '%'
+      },
+    })
   } catch (err) {
     ui.toast('上传失败: ' + (err.message || '请重试'), 'err')
   } finally {
     uploading.value = false
+    uploadingText.value = '上传中...'
   }
   e.target.value = ''
 }

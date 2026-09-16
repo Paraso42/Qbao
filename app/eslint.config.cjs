@@ -19,6 +19,8 @@ const BROWSER_GLOBALS = {
   HTMLCanvasElement: 'readonly', CanvasRenderingContext2D: 'readonly', SVGElement: 'readonly',
   Image: 'readonly', Audio: 'readonly', DOMParser: 'readonly', XMLSerializer: 'readonly',
   indexedDB: 'readonly', requestIdleCallback: 'readonly',
+  // v3.37.5：图片压缩（createImageBitmap/canvas.toBlob）与带进度的上传（XHR）
+  XMLHttpRequest: 'readonly', createImageBitmap: 'readonly', ImageBitmap: 'readonly',
   getComputedStyle: 'readonly', matchMedia: 'readonly', queueMicrotask: 'readonly',
 };
 

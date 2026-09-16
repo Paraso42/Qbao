@@ -22,6 +22,7 @@ const {
 } = require('../schemas/chat.schema');
 
 const { CHAT_ALLOWED_EXTS, IMAGE_ALLOWED_EXTS } = require('../config/files');
+const { sendMediaFile } = require('../lib/mediaCache');
 const { isTrustedUpload } = require('../lib/fileSniff');
 // 本轮复查 P0-1：附件下载必须鉴权。图片消息用 <img src> 渲染、带不了
 // Authorization 头，故守卫接受「Bearer 头」或「出站签名 ticket」两种凭证。
@@ -91,14 +92,14 @@ module.exports = function (app) {
 
     const filePath = path.join(chatUploadDir, filename);
     if (!fs.existsSync(filePath)) throw new ApiError(404, '文件不存在或已删除');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
     // T2：非图片类型一律作为附件下载（防 .html/.svg 等被浏览器内联渲染）
     const ext = path.extname(filename).toLowerCase();
     if (!IMAGE_ALLOWED_EXTS.includes(ext)) {
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('Content-Disposition', 'attachment; filename="' + filename.replace(/"/g, '') + '"');
     }
-    res.sendFile(filePath);
+    // v3.37.5：显式长缓存（文件名随机且内容不可变），替代 send 默认的 max-age=0
+    sendMediaFile(res, filePath);
   }));
 
   app.get('/api/v1/chat/users/search', validate({ query: chatUserSearchQuerySchema }), requireAuth, asyncHandler(async (req, res) => {

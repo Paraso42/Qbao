@@ -4,7 +4,8 @@
 // revoke / update-quiz / search，全部基于 fetchWithAuth。
 // /chat/upload 使用 FormData 'file' 字段；错误统一 readApiError。
 // ============================================================
-import { fetchWithAuth, readApiError } from './api'
+import { fetchWithAuth, readApiError, readApiErrorSafe, effectiveToken, getToken, clearStoredAuth } from './api'
+import { API_BASE } from '../core/env'
 
 // —— 会话 ——
 export async function getRooms() {
@@ -61,12 +62,72 @@ export async function sendMessage(roomId, body) {
 }
 
 // 上传文件/图片（FormData 'file' 字段）→ { url, name, size, mimeType }
-export async function uploadFile(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await fetchWithAuth('/chat/upload', { method: 'POST', body: formData })
-  if (!res || !res.ok) throw new Error(await readApiError(res, '上传失败'))
-  return res.json()
+//
+// v3.37.5：改用 XHR，只为拿到 upload.onprogress —— fetch 无法报告上传进度，
+// 而图片原图动辄数 MB，上行慢时界面会「一动不动」，用户以为卡死。
+// onProgress 收到 0~100 的整数百分比（无法计算总长时收到 -1）。
+// 401 处理与 fetchWithAuth 保持一致：本页令牌仍有效才清登出（避免把别的标签页登出）。
+export function uploadFile(file, opts) {
+  const o = opts || {}
+  const onProgress = typeof o.onProgress === 'function' ? o.onProgress : null
+  return new Promise((resolve, reject) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    let xhr
+    try {
+      xhr = new XMLHttpRequest()
+    } catch {
+      // 极端环境（无 XHR）回退 fetch，功能不受影响
+      const fd = new FormData()
+      fd.append('file', file)
+      fetchWithAuth('/chat/upload', { method: 'POST', body: fd })
+        .then(async (res) => {
+          if (!res || !res.ok) throw new Error(await readApiError(res, '上传失败'))
+          resolve(await res.json())
+        })
+        .catch(reject)
+      return
+    }
+    xhr.open('POST', API_BASE + '/chat/upload')
+    const tok = effectiveToken()
+    if (tok) xhr.setRequestHeader('Authorization', 'Bearer ' + tok)
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e && e.lengthComputable && e.total > 0) {
+          onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
+        } else {
+          onProgress(-1)
+        }
+      }
+    }
+    xhr.onload = async () => {
+      if (xhr.status === 401) {
+        if (!tok || tok === getToken()) clearStoredAuth()
+        reject(new Error('登录已过期，请重新登录'))
+        return
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText || '{}')) } catch { reject(new Error('上传响应解析失败')) }
+        return
+      }
+      // 复用统一的错误文案提取：伪造一个最小的 Response 形状
+      const fake = {
+        ok: false,
+        status: xhr.status,
+        json: async () => { try { return JSON.parse(xhr.responseText || '{}') } catch { return {} } },
+        text: async () => xhr.responseText || '',
+      }
+      let msg = '上传失败'
+      try {
+        msg = await readApiErrorSafe(fake, '上传失败')
+      } catch { /* 保底文案 */ }
+      reject(new Error(msg))
+    }
+    xhr.onerror = () => reject(new Error('网络中断，上传失败'))
+    xhr.ontimeout = () => reject(new Error('上传超时，请重试'))
+    xhr.onabort = () => reject(new Error('上传已取消'))
+    try { xhr.send(formData) } catch (e) { reject(new Error('上传失败: ' + (e.message || '未知错误'))) }
+  })
 }
 
 export async function getUpdates() {

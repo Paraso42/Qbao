@@ -354,8 +354,8 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function uploadFile(file) {
-    return chatApi.uploadFile(file)
+  async function uploadFile(file, opts) {
+    return chatApi.uploadFile(file, opts)
   }
 
   // —— 好友 ——
