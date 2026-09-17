@@ -6,6 +6,8 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool } = require('./src/db');
 const { notFoundHandler, errorHandler } = require('./src/lib/errorHandler');
+const { isMediaRequest } = require('./src/lib/mediaLimits');
+const { MEDIA_DOWNLOAD_MAX_PER_MIN } = require('./src/config/files');
 
 // 组装 Express 应用（不监听端口）：server.js 启动进程与 supertest 测试共用。
 function createApp() {
@@ -33,9 +35,21 @@ function createApp() {
   }));
 
   const authLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: '请求过于频繁' }, keyGenerator: (req) => req.ip });
-  const generalLimiter = rateLimit({ windowMs: 60000, max: 120, keyGenerator: (req) => req.ip });
+  // v3.37.7：媒体路径（聊天附件 / 工单图片）从通用限流里豁免，改由 mediaLimiter 单独计数。
+  // 原因：① 加载一屏聊天图片会瞬间打出几十个并发请求；② 校园网 NAT 出口可能几百人
+  // 共享同一个公网 IP —— 沿用 120/min 会把正常浏览一起拦掉。
+  // 真正的兜底不是次数而是「字节预算」：见 lib/mediaLimits.js。
+  const generalLimiter = rateLimit({ windowMs: 60000, max: 120, keyGenerator: (req) => req.ip, skip: isMediaRequest });
+  const mediaLimiter = rateLimit({
+    windowMs: 60000,
+    max: MEDIA_DOWNLOAD_MAX_PER_MIN,
+    keyGenerator: (req) => req.ip,
+    message: { error: '下载过于频繁，请稍后再试' },
+  });
   app.use('/api/v1/auth/', authLimiter);
   app.use('/api/v1/', generalLimiter);
+  app.use('/api/v1/chat/files', mediaLimiter);
+  app.use('/api/v1/issues/images', mediaLimiter);
 
   app.get('/health', async (req, res) => {
     try {

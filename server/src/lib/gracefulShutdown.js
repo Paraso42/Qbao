@@ -24,6 +24,7 @@ function createShutdownHandler(deps) {
     pool,
     stopAiTaskWorker,
     stopExpiryJob,
+    stopChatMediaJob,
     drainAiTaskWorker,
     logger,
     graceMs,
@@ -46,6 +47,7 @@ function createShutdownHandler(deps) {
     // 1) 停止后台定时器：不再领取新任务
     try { if (stopAiTaskWorker) stopAiTaskWorker() } catch (e) { log.warn('[shutdown] 停止 AI worker 失败:', e && e.message) }
     try { if (stopExpiryJob) stopExpiryJob() } catch (e) { log.warn('[shutdown] 停止积分定时任务失败:', e && e.message) }
+    try { if (stopChatMediaJob) stopChatMediaJob() } catch (e) { log.warn('[shutdown] 停止聊天媒体回收任务失败:', e && e.message) }
 
     // 2) 停止接收新连接
     const closed = new Promise((resolve) => {

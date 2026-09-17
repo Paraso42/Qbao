@@ -17,6 +17,7 @@ const {
 
 const { IMAGE_ALLOWED_EXTS } = require('../config/files');
 const { isTrustedUpload } = require('../lib/fileSniff');
+const { mediaDownloadBudget, clientKey } = require('../lib/mediaLimits');
 // 本轮复查 P0-1：工单图片下载必须鉴权（图片以 <img src> 渲染，故用签名 ticket）。
 const { signUrl, sanitizeMessageRows, requireAuthOrMediaToken } = require('../lib/mediaToken');
 const { sendMediaFile } = require('../lib/mediaCache');
@@ -209,6 +210,13 @@ module.exports = function (app) {
 
     const filePath = path.join(issueUploadDir, filename);
     if (!fs.existsSync(filePath)) throw new ApiError(404, '图片不存在或已删除');
+    // v3.37.7：与聊天附件同一套流量闸门（ticket 可重放，只靠次数拦不住） 
+    const stat = fs.statSync(filePath);
+    const budgetKey = clientKey(req);
+    if (!mediaDownloadBudget.allows(budgetKey, stat.size)) {
+      throw new ApiError(429, '下载流量已超出限制，请稍后再试');
+    }
+    mediaDownloadBudget.consume(budgetKey, stat.size);
     res.setHeader('Content-Disposition', 'inline');
     // v3.37.5：与聊天附件一致的长缓存策略（见 lib/mediaCache.js）
     sendMediaFile(res, filePath);

@@ -124,14 +124,14 @@ v1.1 及以前：本地测完直接部署生产，测试动作（测试账号、
 
 ## 5. DoD（部署前必须全绿）
 
-- `server`: `npx vitest run` 全绿（基线 **287 例 / 47 文件**，2026-09-17 复核；含鉴权媒体票据、迁移完整性 + 路由唯一性、优雅停机、客户端错误上报守卫、**AI 出题任务全链路 e2e 与自检空转兜底**、**受保护媒体缓存头与两端点防回退**、**列表缩略图 ?w= 与票据时间桶稳定性**）
+- `server`: `npx vitest run` 全绿（基线 **311 例 / 49 文件**，2026-09-17 复核；含鉴权媒体票据、迁移完整性 + 路由唯一性、优雅停机、客户端错误上报守卫、**AI 出题任务全链路 e2e 与自检空转兜底**、**受保护媒体缓存头与两端点防回退**、**列表缩略图 ?w= 与票据时间桶稳定性**、**聊天媒体四道闸门（配额/水位/归属/回收）与下载侧次数+字节双预算**）
 - `server`: 数据库变更后跑 `node scripts/run_migration.js --verify`（打印未落库的迁移编号 / 仓库缺失的已记账版本）
 - `app`: `npx vitest run` 全绿（基线 **317 用例 / 31 文件**，2026-09-17 复核）；**登录门禁：未登录整页登录门禁、匿名零写盘、匿名改动锁重建**；**图片上传前压缩的安全网（非图片/GIF/小图不压、压大即弃、异常回退原件）**；**图片本地缓存键稳定性（票据变化不改键、缩略图与整图分键、无 IndexedDB 环境静默降级）**
 - **手机竖屏检查**（≤768px：360/390 两档）无横向滚动、输入控件 ≥16px、主操作按钮 ≤1 屏内可达、无「查看报告」章节入口、活动会话大键不落 localStorage
 - **科目总览数字自洽检查**（涉及看板/统计改动时）：总览与题库 tab 同数；环形图分母 = 图例合计；跳过不计正确率；科目级 = Σ章节（单测锁定）
 - `scripts`: `node --test scripts/installer-lib.test.js` 全绿（6 例）
 - `desktop`: `node --check main.js preload.js updater.js updater-util.js` + `node --test desktop/test` 全绿（5 例）
-- `npx eslint .`（app/server）0 error
+- `npx eslint .`（app/server）0 error（2026-09-17 复核：server `src` 71 warning、app 153 warning，均为既有风格项；`server/test` 另有 6 个既有 `no-undef 'test'` 属历史用例，不在 `src` 门禁口径内）
 - `app`: `npx vite build` 成功；`dist/index.html` 大小**以字节核对**；涉及 Vue 模板时 compiler-sfc 扫描无悬空绑定
 - **游戏 QA（新游戏/游戏逻辑改动时）**：宿主门禁单测（`app/src/games/qa-gate`）全绿；游戏 QA 清单见 docs/GAMES.md 第六节
 

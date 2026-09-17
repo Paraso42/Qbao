@@ -237,6 +237,21 @@ sudo -u postgres createdb -O <db_user> qbao_beta
 sudo bash server/deploy/prepare_dirs.sh {PROD_ROOT}
 ```
 
+### 5.1 聊天媒体治理（v3.37.7 起，运维要点）
+
+`uploads/chat/` **不是长期存储**，四道闸门（详见 docs/ARCHITECTURE.md §2.6）会持续回收它：
+
+| 现象 | 含义 | 运维动作 |
+|---|---|---|
+| 日志 `[chat-media] 回收完成：孤儿 N，过期 N，残留 N，释放 NMB` | 每小时一次的正常回收 | 无需干预（残留=迁移前遗留的无台账文件，按 180 天保留期清） |
+| 日志 `[chat-media] 台账表不可用（可能尚未执行 020 迁移）` | 新代码先上线、迁移没跑 | 立即 `node scripts/run_migration.js`；期间上传仍可用（降级） |
+| 用户报「聊天文件存储已满（上限 500MB）」 | 该账号留存总量到顶 | 让用户删大文件；180 天前的附件会自动释放 |
+| 用户报「下载流量已超出限制」 | 该 IP 10 分钟内下载超 1GB | 正常浏览到不了，多半是脚本重放；必要时调 `MEDIA_DOWNLOAD_BYTES_PER_10MIN` |
+
+> **两个下载计数器在进程内存里**（`lib/mediaLimits.js`）：单实例部署下正确；**若将来加第二个 API 实例，
+> 必须改成 Redis/PG 共享计数**，否则限额会按实例数翻倍。
+> 所有阈值集中在 `server/src/config/files.js`（`CHAT_*` / `MEDIA_*`），改完重启生效。
+
 ## 6. HTTPS
 
 线上链路：TLS 由服务器上的 **Caddy 就地终结**并自动续期（Let's Encrypt / ACME HTTP-01，`{DOMAIN}` 与 `{BETA_HOST}` 各一张）；

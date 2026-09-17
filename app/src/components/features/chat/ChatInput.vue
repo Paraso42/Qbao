@@ -5,7 +5,7 @@
       <button class="chat-tool-btn" title="发送图片" @click="triggerImage">
         <Icon name="image" :size="16" />
       </button>
-      <button class="chat-tool-btn" title="发送文件" @click="triggerFile">
+      <button class="chat-tool-btn" title="发送文件（单个最大 20MB）" @click="triggerFile">
         <Icon name="upload" :size="16" />
       </button>
       <button v-if="store.canShareQuiz" class="chat-tool-btn" title="分享题目" @click="store.openSharePicker()">
@@ -85,6 +85,12 @@ const inputEl = ref(null)
 
 const typeIcon = { single: 'radio', judge: 'scale', term: 'book', short: 'edit' }
 
+// v3.37.7 聊天媒体加固：本地先拦一道，别把注定被拒的字节传上去。
+// 口径与服务端 server/src/config/files.js 保持一致（CHAT_MAX_FILE_BYTES /
+// CHAT_MAX_IMAGE_BYTES），改一处必须改两处。
+const MAX_FILE_BYTES = 20 * 1024 * 1024
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
 const canSend = computed(() => {
   return draft.value.trim() !== '' || pendingImages.value.length > 0 || pendingFile.value !== null
 })
@@ -104,6 +110,11 @@ async function uploadImage(file) {
     // 手机原图动辄数 MB，先本地压缩再上传：上行慢时这是「发送极慢」的主因。
     // thumb:true 会顺带生成列表用的小图（复用同一次解码，不额外解码原图）。
     const shrunk = await compressImage(file, { thumb: true })
+    // 压缩后仍然超限（例如超长截图）：没必要走一趟上行再被服务端打回来
+    if (shrunk.size > MAX_IMAGE_BYTES) {
+      ui.toast('图片超过 ' + Math.round(MAX_IMAGE_BYTES / 1024 / 1024) + 'MB 上限，请裁剪后再发送', 'err')
+      return
+    }
     uploadingText.value = shrunk.compressed
       ? '上传中 ' + formatFileSize(shrunk.size) + '（原 ' + formatFileSize(shrunk.originalSize) + '，已压缩）'
       : '上传中 ' + formatFileSize(shrunk.size)
@@ -143,6 +154,13 @@ async function onImageSelect(e) {
 async function onFileSelect(e) {
   const file = e.target.files[0]
   if (!file) return
+  // v3.37.7：超大文件本地直接拒绝 —— 聊天只做「学习资料级别」的传递，
+  // 传上去也会被服务端 413 拒绝，白白占用上行带宽。
+  if (file.size > MAX_FILE_BYTES) {
+    ui.toast('文件超过 ' + Math.round(MAX_FILE_BYTES / 1024 / 1024) + 'MB 上限，请压缩或分卷后再发送', 'err')
+    e.target.value = ''
+    return
+  }
   uploading.value = true
   uploadingText.value = '上传中 ' + formatFileSize(file.size)
   try {

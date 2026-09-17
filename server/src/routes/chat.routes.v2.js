@@ -21,9 +21,26 @@ const {
   updateQuizSchema,
 } = require('../schemas/chat.schema');
 
-const { CHAT_ALLOWED_EXTS, IMAGE_ALLOWED_EXTS } = require('../config/files');
+const {
+  CHAT_ALLOWED_EXTS,
+  IMAGE_ALLOWED_EXTS,
+  CHAT_MAX_FILE_BYTES,
+  CHAT_MAX_IMAGE_BYTES,
+  CHAT_MAX_THUMB_BYTES,
+  CHAT_MAX_IMAGES_PER_MESSAGE,
+} = require('../config/files');
 const { sendMediaFile } = require('../lib/mediaCache');
+const { mediaDownloadBudget, clientKey } = require('../lib/mediaLimits');
 const { isTrustedUpload } = require('../lib/fileSniff');
+// v3.37.7 加固：配额/水位/归属/回收四道闸门都在这个服务里（见该文件头注释）
+const {
+  CHAT_UPLOAD_DIR: chatUploadDir,
+  uploadGate,
+  recordAsset,
+  resolveAttachments,
+  bindAttachments,
+  releaseMessageMedia,
+} = require('../services/chatMediaService');
 // 本轮复查 P0-1：附件下载必须鉴权。图片消息用 <img src> 渲染、带不了
 // Authorization 头，故守卫接受「Bearer 头」或「出站签名 ticket」两种凭证。
 const {
@@ -32,7 +49,6 @@ const {
   requireAuthOrMediaToken,
 } = require('../lib/mediaToken');
 
-const chatUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'chat');
 if (!fs.existsSync(chatUploadDir)) fs.mkdirSync(chatUploadDir, { recursive: true });
 
 // v3.37.6：列表缩略图。
@@ -83,7 +99,9 @@ const chatUpload = multer({
       cb(null, name);
     },
   }),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  // v3.37.7：单文件上限 50MB → 20MB（学习资料级别，与文件池一致）。
+  // 图片另有更严的 8MB 上限，在 handler 里按类型判定（multer 阶段拿不到类型与体积的组合）。
+  limits: { fileSize: CHAT_MAX_FILE_BYTES },
   // T2 整改：扩展名白名单 + 图片/pdf magic bytes 校验，杜绝改后缀的
   // HTML/SVG 以同源静态方式被浏览器执行（存储型 XSS）。
   fileFilter: function (req, file, cb) {
@@ -119,6 +137,20 @@ async function validateUploadedFile(file) {
   return file;
 }
 
+// v3.37.7：按类型收紧单文件体积。multer 只有一个全局上限（20MB，文件与图片共用），
+// 图片这条更严的线只能在落盘后判定；超限立即删除，不在盘上留痕。
+function enforceTypeLimit(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const isImage = IMAGE_ALLOWED_EXTS.includes(ext);
+  const cap = isImage ? CHAT_MAX_IMAGE_BYTES : CHAT_MAX_FILE_BYTES;
+  if (file.size > cap) {
+    try { fs.unlinkSync(file.path); } catch (err) { void err; }
+    const mb = Math.round(cap / (1024 * 1024)) + 'MB';
+    throw new ApiError(413, (isImage ? '图片' : '文件') + '超过 ' + mb + ' 上限，请压缩后再发送');
+  }
+  return file;
+}
+
 module.exports = function (app) {
   // 文件下载/预览。路径做 basename 校验，防止穿越。
   // 鉴权：Bearer 头 或 短时效签名 ticket（图片场景，见 lib/mediaToken.js）。
@@ -143,6 +175,17 @@ module.exports = function (app) {
       if (thumbPath) filePath = thumbPath;
     }
     if (!fs.existsSync(filePath)) throw new ApiError(404, '文件不存在或已删除');
+
+    // v3.37.7：流量闸门。签名 ticket 在有效期内可无限重放 —— 只靠次数限流拦不住
+    // 「反复拉同一个大附件」。这里按 IP 累计窗口内实际发出的字节，超了就 429。
+    // 记账发生在真正发送之前（发送是同步开始的，失败也无从回滚），宁可多算不可少算。
+    const stat = fs.statSync(filePath);
+    const budgetKey = clientKey(req);
+    if (!mediaDownloadBudget.allows(budgetKey, stat.size)) {
+      throw new ApiError(429, '下载流量已超出限制，请稍后再试');
+    }
+    mediaDownloadBudget.consume(budgetKey, stat.size);
+
     // v3.37.5：显式长缓存（文件名随机且内容不可变），替代 send 默认的 max-age=0
     sendMediaFile(res, filePath);
   }));
@@ -527,6 +570,18 @@ module.exports = function (app) {
     if ((finalType === 'quiz_share' || finalType === 'bank_share') && !req.body.quiz_data) {
       throw new ApiError(422, '题目分享需要包含题目数据');
     }
+    // v3.37.7：一条消息最多带几张图（schema 的 20 是硬上限，这里是业务上限）
+    if (finalImages.length > CHAT_MAX_IMAGES_PER_MESSAGE) {
+      throw new ApiError(422, '一条消息最多发送 ' + CHAT_MAX_IMAGES_PER_MESSAGE + ' 张图片');
+    }
+
+    // v3.37.7：附件归属闸门。必须在 INSERT 之前 —— 否则非法附件会留下半条消息。
+    // 规则：地址必须是本站 /chat/files/ 下的文件名；文件必须真实存在（或有台账）；
+    // 台账归属必须是本人（不能引用别人上传的文件）。
+    const attachmentNames = await resolveAttachments(
+      req.userId,
+      finalImages.concat(finalFileInfo && finalFileInfo.url ? [finalFileInfo.url] : [])
+    );
 
     const result = await pool.query(
       `INSERT INTO chat_messages (room_id, user_id, content, msg_type, images, file_info, quiz_data, reply_to)
@@ -544,6 +599,10 @@ module.exports = function (app) {
       ]
     );
 
+    // v3.37.7：把附件绑到这条消息上（上传早于发送，所以只能发送成功后回填）——
+    // 从此它不再算孤儿，改为按保留期管理。
+    if (attachmentNames.length > 0) await bindAttachments(req.userId, result.rows[0].id, attachmentNames);
+
     await pool.query('UPDATE chat_room_members SET last_read_at = NOW() WHERE room_id = $1 AND user_id = $2', [req.params.roomId, req.userId]);
 
     const userResult = await pool.query('SELECT display_name, username FROM users WHERE id = $1', [req.userId]);
@@ -560,24 +619,49 @@ module.exports = function (app) {
     res.json({ read: true });
   }));
 
-  app.post('/api/v1/chat/upload', requireAuth, chatUpload.fields([
-    { name: 'file', maxCount: 1 },
-    { name: 'thumb', maxCount: 1 }, // v3.37.6：可选，列表用的小图
-  ]), asyncHandler(async (req, res) => {
+  app.post('/api/v1/chat/upload', requireAuth,
+    // v3.37.7：配额 + 磁盘水位闸门必须排在 multer **之前** ——
+    // multer 一旦跑起来字节就已经落盘了，「防刷盘」也就无从谈起。
+    uploadGate(),
+    chatUpload.fields([
+      { name: 'file', maxCount: 1 },
+      { name: 'thumb', maxCount: 1 }, // v3.37.6：可选，列表用的小图
+    ]), asyncHandler(async (req, res) => {
     const files = req.files || {};
     const main = (files.file || [])[0];
     if (!main) throw new ApiError(422, '请选择文件');
     // T2：magic bytes 二次校验（fileFilter 只拦扩展名，此处验真实内容）
     await validateUploadedFile(main);
+    enforceTypeLimit(main);
+
     const thumb = (files.thumb || [])[0];
+    let keptThumb = null;
     if (thumb) {
-      try {
-        await validateUploadedFile(thumb);
-      } catch (err) {
-        // 小图不合法不该让整次上传失败：删掉它，继续用原图
-        try { fs.unlinkSync(thumb.path); } catch (_) {}
+      if (thumb.size > CHAT_MAX_THUMB_BYTES) {
+        // 小图超出预期体积（正常 < 50KB）：当作没带，别让它变成绕过主图上限的口子
+        try { fs.unlinkSync(thumb.path); } catch (e) { void e; }
+      } else {
+        try {
+          await validateUploadedFile(thumb);
+          keptThumb = thumb;
+        } catch (e) {
+          // 小图不合法不该让整次上传失败：删掉它，继续用原图
+          void e;
+          try { fs.unlinkSync(thumb.path); } catch (e2) { void e2; }
+        }
       }
     }
+
+    // v3.37.7：上传成功即入台账（此时 message_id 仍为空 = 孤儿，
+    // 只有真正发出去才会被 bindAttachments 认领）。
+    // 小图字节一并计入配额，因为它同样占用磁盘。
+    await recordAsset({
+      userId: req.userId,
+      storedName: main.filename,
+      kind: IMAGE_ALLOWED_EXTS.includes(path.extname(main.filename).toLowerCase()) ? 'image' : 'file',
+      fileSize: main.size + (keptThumb ? keptThumb.size : 0),
+    });
+
     res.json({
       url: signUrl('/api/v1/chat/files/' + main.filename),
       name: main.originalname,
@@ -606,7 +690,9 @@ module.exports = function (app) {
        WHERE id = $1`,
       [req.params.id]
     );
-    res.json({ revoked: true });
+    // v3.37.7：撤回即释放磁盘（附件与小图一起删），并按配额口径销账
+    const released = await releaseMessageMedia(req.params.id);
+    res.json({ revoked: true, releasedMedia: released });
   }));
 
   app.post('/api/v1/chat/messages/:id/update-quiz', validate({ params: chatMessageIdParamsSchema, body: updateQuizSchema }), requireAuth, asyncHandler(async (req, res) => {

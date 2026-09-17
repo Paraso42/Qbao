@@ -12,6 +12,7 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || process.env
 }
 const { startAiTaskWorker, stopAiTaskWorker, drainAiTaskWorker, markStaleTasksFailed } = require('./src/services/aiTaskService');
 const { startExpiryJob, stopExpiryJob } = require('./src/services/pointsService');
+const { startChatMediaJob, stopChatMediaJob } = require('./src/services/chatMediaService');
 const { createApp } = require('./app');
 const { pool } = require('./src/db');
 const { createShutdownHandler, registerShutdownHandlers } = require('./src/lib/gracefulShutdown');
@@ -26,6 +27,9 @@ const server = createApp().listen(PORT, () => {
   });
   // 积分：学期清零（每年 2/1、8/1）× 每日低峰对账定时任务
   startExpiryJob();
+  // v3.37.7 聊天媒体治理：启动时回填历史文件台账，之后每小时回收
+  // 孤儿（24h）/ 过期（180d）/ 无台账残留。
+  startChatMediaJob();
 });
 
 // P1-7：优雅停机。此前进程被 SIGTERM 直接杀掉 —— 在途 AI 任务/同步被硬切断，
@@ -37,6 +41,7 @@ const shutdown = createShutdownHandler({
   pool,
   stopAiTaskWorker,
   stopExpiryJob,
+  stopChatMediaJob,
   drainAiTaskWorker,
   logger: console,
   graceMs,
