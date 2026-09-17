@@ -145,7 +145,7 @@ describe('AI 出题全链路（任务队列）', () => {
     const created = await request(app)
       .post('/api/v1/ai/tasks')
       .set('Authorization', 'Bearer ' + token)
-      .set('x-ai-api-key', 'sk-live-test-key-0123456789')
+      .set('x-ai-api-key', 'sk-test-key-0123456789')
       .set('x-ai-provider', 'ecnu')
       .set('x-ai-model', 'ecnu-plus')
       .send({
@@ -165,7 +165,7 @@ describe('AI 出题全链路（任务队列）', () => {
     const call = upstream.calls[0];
     expect(call.url).toBe(UPSTREAM);
     expect(call.opts.method).toBe('POST');
-    expect(call.opts.headers.Authorization).toBe('Bearer sk-live-test-key-0123456789');
+    expect(call.opts.headers.Authorization).toBe('Bearer sk-test-key-0123456789');
     expect(call.opts.headers['Content-Type']).toBe('application/json');
     expect(call.body.model).toBe('ecnu-plus');
     expect(call.body.stream).toBe(false);
@@ -231,7 +231,7 @@ describe('AI 出题全链路（任务队列）', () => {
     await request(app)
       .post('/api/v1/ai/tasks')
       .set('Authorization', 'Bearer ' + token)
-      .set('x-ai-api-key', 'sk-live-test-key-0123456789')
+      .set('x-ai-api-key', 'sk-test-key-0123456789')
       .set('x-ai-provider', 'ecnu')
       .set('x-ai-model', 'ecnu-plus')
       .send({ textContent: '资料', typeCounts: { single: 1 }, selfCheck: false });
@@ -255,7 +255,7 @@ describe('AI 出题全链路（任务队列）', () => {
     await request(app)
       .post('/api/v1/ai/tasks')
       .set('Authorization', 'Bearer ' + token)
-      .set('x-ai-api-key', 'sk-live-test-key-0123456789')
+      .set('x-ai-api-key', 'sk-test-key-0123456789')
       .set('x-ai-provider', 'ecnu')
       .set('x-ai-model', 'ecnu-plus')
       .send({ textContent: '资料', typeCounts: { single: 1 }, selfCheck: false });

@@ -91,6 +91,9 @@ node server/scripts/diagnose_api.js <api_key> [model] [jwt_token]
 - **套件规模基线**（随迭代刷新；唯一出处 = docs/DEVELOPMENT_FLOW.md §5）：server 233 / app 250 / scripts 6 / desktop 5（2026-09-08 复核）。
 - **构建**：`cd app && npm run build`（Vite singlefile → dist/index.html，含 CSP；CI 冒烟校验）。
 - **CI**（`.github/workflows/ci.yml`）：gitleaks 密钥扫描 → 公开脱敏扫描（privacy-guard，§1 护栏）→ 后端语法+测试 → 前端构建冒烟+单测 → 双方 npm audit（高危告警不阻断）。
+- **CI 两条易踩的红线**（2026-09-17 v3.37.7 推送时两条同时踩中，均已修）：
+  - 测试里的**假密钥必须用 `.gitleaks.toml` 已登记的形状**（`sk-test-key-*` / `test-secret-*`）。写成 `sk-live-…`、`another-secret-…` 这类「看起来像真的」的字面量会让 gitleaks 当成泄漏 —— 该 job 在**推送范围**内扫描，所以只有代码提交会红、纯文档提交不会红，容易被误判成偶发。
+  - `server` 的 `npm run lint` 是 `eslint .`，**覆盖 `test/`**；vitest 注入的全局变量清单写在 `server/eslint.config.cjs`，用到新的全局（如 `test`/`beforeAll`）必须先登记，否则 `no-undef` 直接以 error 让 CI 变红（本地只跑 `npx eslint src` 是看不出来的）。
 - 新增/修改逻辑时按模块补测试：routes 用 supertest + installFakePool；纯函数直接单测。
 
 ## 7. 数据库变更

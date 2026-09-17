@@ -59,7 +59,9 @@ describe('媒体下载签名 ticket（P0-1）', () => {
 
   it('换密钥后旧 ticket 失效', () => {
     const t = signMedia('chat_1_abc.png');
-    process.env.JWT_SECRET = 'another-secret-0123456789';
+    // 轮换后的密钥也要用「已登记的假值形状」（.gitleaks.toml 只豁免 test-secret-*），
+    // 否则 CI 的密钥扫描会把这个测试夹具当成真密钥。
+    process.env.JWT_SECRET = 'test-secret-9876543210';
     expect(verifyToken('chat_1_abc.png', t)).toBe(false);
   });
 
