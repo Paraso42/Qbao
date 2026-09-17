@@ -43,7 +43,9 @@ function limitsSnapshot(overrides) {
     retentionDays: limits.CHAT_MEDIA_RETENTION_DAYS,
     minFreeBytes: limits.CHAT_UPLOAD_MIN_FREE_BYTES,
     maxFileBytes: limits.CHAT_MAX_FILE_BYTES,
+    maxImageBytes: limits.CHAT_MAX_IMAGE_BYTES,
     maxThumbBytes: limits.CHAT_MAX_THUMB_BYTES,
+    maxImagesPerMessage: limits.CHAT_MAX_IMAGES_PER_MESSAGE,
   }, overrides || {});
 }
 

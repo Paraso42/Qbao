@@ -93,6 +93,18 @@ describe('聊天媒体路径工具（v3.37.7）', () => {
     const custom = svc.limitsSnapshot({ maxPerHour: 3 });
     expect(custom.maxPerHour).toBe(3);
     expect(custom.retentionDays).toBe(cfg.CHAT_MEDIA_RETENTION_DAYS);
+    // 快照是「启动日志/调参」的唯一来源：任何一个上限缺项都会让日志谎报（曾出现 "图片 0MB"）
+    expect(base.maxImageBytes).toBe(cfg.CHAT_MAX_IMAGE_BYTES);
+    expect(base.maxThumbBytes).toBe(cfg.CHAT_MAX_THUMB_BYTES);
+    expect(base.maxImagesPerMessage).toBe(cfg.CHAT_MAX_IMAGES_PER_MESSAGE);
+    expect(base.totalBytes).toBe(cfg.CHAT_USER_TOTAL_BYTES);
+    expect(base.minFreeBytes).toBe(cfg.CHAT_UPLOAD_MIN_FREE_BYTES);
+    for (const k of ['maxPerHour', 'dailyBytes', 'totalBytes', 'orphanTtlHours', 'retentionDays',
+      'minFreeBytes', 'maxFileBytes', 'maxImageBytes', 'maxThumbBytes', 'maxImagesPerMessage']) {
+      expect(typeof base[k]).toBe('number');
+      expect(Number.isFinite(base[k])).toBe(true);
+      expect(base[k]).toBeGreaterThan(0);
+    }
   });
 
   it('磁盘剩余空间探测：真实目录返回正数', () => {
