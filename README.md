@@ -8,7 +8,7 @@
 ![Backend](https://img.shields.io/badge/Backend-Node.js%2FExpress-339933)
 ![DB](https://img.shields.io/badge/DB-PostgreSQL-4169E1)
 ![Desktop](https://img.shields.io/badge/Desktop-Electron%2036-47848F)
-![Release](https://img.shields.io/badge/Release-v3.37.0-2ea44f)
+![Release](https://img.shields.io/badge/Release-v3.37.7-2ea44f)
 
 ## 项目简介
 
@@ -101,8 +101,8 @@ cd desktop && npm ci && npm run dev                # Electron 窗口
 
 ## 质量与发布
 
-- **测试**：server 233 + app 250 + scripts 6 + desktop 5 = **494 例**（2026-09-08 复核），CI 全绿
-- **CI**：gitleaks 全历史密钥扫描 · npm audit · 构建产物冒烟（singlefile + CSP）· Vitest · ESLint 0 error
+- **测试**：server 312 + app 317 + scripts 6 + desktop 5 = **640 例**（2026-09-17 全量实跑复核），CI 全绿
+- **CI（6 个 job）**：gitleaks 全历史密钥扫描 · 公开脱敏护栏（服务器 IP / 私钥名 / 部署根 / AppID 硬拦截）· 后端语法检查 + npm audit + Vitest + ESLint · 前端构建门禁 + 产物冒烟（singlefile + CSP）· 发布工具 node:test · 桌面端更新工具 node:test
 - **发布纪律**：本地提交 → 部署 → 用户验收「测试通过」→ push + tag（版本与三端断言）→ Release 构建 → 公网逐字节核验（见 [docs/DEVELOPMENT_FLOW.md](docs/DEVELOPMENT_FLOW.md)）
 - 完整版本历史见 [CHANGELOG.md](CHANGELOG.md) 与 [Releases](https://github.com/Paraso42/Qbao/releases)
 
@@ -180,6 +180,16 @@ Vue 3 + Vite + Pinia 前端（singlefile 产物，网页 / Electron 双形态共
 - 密码 bcrypt 哈希、JWT（强密钥启动校验）、登录与全局限流
 - 上传通道扩展名白名单 + 魔数嗅探 + 附件响应头；CSP 收紧；API 与数据库只在回环可达（主机防火墙 ufw 仅放行 22/80/443，3000/3100/3011 显式拒绝，云安全组同口径）
 - AI API Key 用户自管、服务端不落库；桌面端凭据以 DPAPI（safeStorage）加密
+
+## 平台支持与致谢
+
+本项目的 AI 能力（资料→题目生成、服务端出题任务队列、AI 二次自检、多模态视觉设计评审）默认且深度适配**华东师范大学人工智能公共服务平台（ChatECNU，`https://chat.ecnu.edu.cn/open/api/v1`，ecnu-plus / ecnu-max / ecnu-turbo）**；项目自身的开发过程——代码编写与重构、测试用例补全、线上故障定位、文档与发布工具打磨——同样依托该平台的大模型完成。谨此致谢：
+
+> 本研究工作得到华东师范大学人工智能公共服务平台（ChatECNU）支持。
+>
+> This work was supported by ChatECNU, the AI Service Platform of East China Normal University.
+
+上述声明为本项目对外成果（论文、软件著作权、数据集、开源 Release、对外报告）的统一署名口径，逐字照抄学校《致谢声明模板》；在线服务（网页）与客户端（桌面端 / 手机端）内部的致谢展示将随后续版本加入。
 
 ## 许可证
 
