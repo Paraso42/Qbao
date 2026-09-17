@@ -18,6 +18,11 @@ scripts/publish-installer.js add --channel stable|beta
 - 服务器**永不直连 GitHub**；每次 Release 后由发布者走「签名直链」通道人工搬运（见 §3）。
 - downloads/ 位于 repo 根（QBAO_DESKTOP_DIR），部署清理脚本不会触碰。
 
+> ⚠️ **最容易漏的一步（2026-09-17 v3.37.7 实际漏过一次）**：**Release 成功 ≠ 用户能看到更新**。
+> 桌面端的自动更新、设置页「下载中心」、`/dl` 落地页**全部只认 `downloads/manifest.json`**，
+> GitHub Release 只是云端归档。只做 ⑩（推 tag → CI 出包 → 核对三资产）而不做 ⑪（`add` 入库），
+> 客户端就会一直显示「已是最新」。30 秒自检：`curl -s https://<host>/api/v1/desktop/latest`。
+
 ## 2. 渠道与版本纪律（与 DEVELOPMENT_FLOW.md §3A 一致）
 
 | 项 | 测试版（beta） | 稳定版（stable） |
@@ -114,6 +119,7 @@ node scripts/publish-installer.js retract --channel stable --version 3.35.0 --re
 | 桌面端弹「当前版本已被撤回」 | 用户装了被撤回版本 | 打开下载页/历史版本重装其他版本 |
 | /update/stable/latest.yml 404 | 渠道目录缺 latest.yml | add 会保证写入；检查目录权限 |
 | 老用户桌面端弹「已被撤回」（该版本并未 retract） | 版本已被留存策略剪枝，旧逻辑把「不在清单」当成「被撤回」（R 系列已修） | 升级到修复后的客户端；服务端无需改动，剪枝是正常行为 |
+| 桌面端「检查更新」说已是最新、设置页/ `/dl` 仍是旧版本 | **漏做 ⑪ 搬包入库**：Release 有了但 `downloads/manifest.json` 没更新（manifest 才是分发事实源） | 按 §3 执行 `add` + §3.3 公网验证；`curl -s https://<host>/api/v1/desktop/latest` 应返回新版本 |
 
 ## 7. 测试版（beta）构建
 
