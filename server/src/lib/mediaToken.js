@@ -15,7 +15,15 @@
 const crypto = require('crypto');
 const { ApiError } = require('./errorHandler');
 
-const TTL_MS = 60 * 60 * 1000; // 1 小时
+const TTL_MS = 60 * 60 * 1000; // 票据最短有效期：1 小时
+// v3.37.6：签发时刻按 30 分钟对齐（而不是每毫秒都不同）。
+//
+// 起因：票在 URL 里（?t=），而 URL 是浏览器的缓存键。原先 exp = Date.now()+1h，
+// 同一张图每次下发消息列表都会得到**不同的 URL** —— 于是 Cache-Control 再怎么
+// 设得漂亮，浏览器缓存命中率也是 0：每次打开带图聊天都要把每张图重新下一遍。
+// 现在把签发时刻对齐到 30 分钟桶，同一桶内所有响应产出完全相同的 URL，
+// 强缓存得以生效；对齐后再加一个桶宽，保证实际有效期仍有 60~90 分钟。
+const BUCKET_MS = 30 * 60 * 1000;
 
 function key() {
   return crypto.createHmac('sha256', String(process.env.JWT_SECRET || ''))
@@ -25,7 +33,11 @@ function key() {
 
 function signToken(filename, ttlMs) {
   if (!filename) return '';
-  const exp = Date.now() + (ttlMs || TTL_MS);
+  // 显式传 ttl 的调用方（测试、短票据）保持原来的「此刻 + ttl」语义；
+  // 默认签发才走时间桶。
+  const exp = ttlMs
+    ? Date.now() + ttlMs
+    : Math.floor(Date.now() / BUCKET_MS) * BUCKET_MS + TTL_MS + BUCKET_MS;
   const mac = crypto.createHmac('sha256', key()).update(filename + '|' + exp).digest('base64url');
   return exp + '.' + mac;
 }
@@ -85,4 +97,4 @@ function sanitizeMessageRows(rows) {
   return rows;
 }
 
-module.exports = { signToken, verifyToken, signUrl, sanitizeMediaUrl, sanitizeMessageRows, requireAuthOrMediaToken, TTL_MS };
+module.exports = { signToken, verifyToken, signUrl, sanitizeMediaUrl, sanitizeMessageRows, requireAuthOrMediaToken, TTL_MS, BUCKET_MS };

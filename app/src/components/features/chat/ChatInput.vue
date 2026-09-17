@@ -68,6 +68,7 @@ import Icon from '../../ui/Icon.vue'
 import { useChatStore } from '../../../stores/chat'
 import { useUiStore } from '../../../stores/ui'
 import { compressImage } from '../../../services/imageCompress'
+import { seedMedia } from '../../../services/mediaCache'
 import { formatFileSize } from '../../../services/utils'
 
 const store = useChatStore()
@@ -100,16 +101,27 @@ async function uploadImage(file) {
   uploading.value = true
   uploadingText.value = '处理图片...'
   try {
-    // 手机原图动辄数 MB，先本地压缩再上传：上行慢时这是「发送极慢」的主因
-    const shrunk = await compressImage(file)
+    // 手机原图动辄数 MB，先本地压缩再上传：上行慢时这是「发送极慢」的主因。
+    // thumb:true 会顺带生成列表用的小图（复用同一次解码，不额外解码原图）。
+    const shrunk = await compressImage(file, { thumb: true })
     uploadingText.value = shrunk.compressed
       ? '上传中 ' + formatFileSize(shrunk.size) + '（原 ' + formatFileSize(shrunk.originalSize) + '，已压缩）'
       : '上传中 ' + formatFileSize(shrunk.size)
     const data = await store.uploadFile(shrunk.file, {
+      thumb: shrunk.thumb,
+      // 进度 100% 只代表字节交给了浏览器网络层，之后还要等服务端落盘返回，
+      // 这一段以前显示「上传中 100%」不动，看着像卡死。
       onProgress: (p) => {
-        if (p >= 0) uploadingText.value = '上传中 ' + p + '%'
+        if (p >= 100) uploadingText.value = '已发送，服务器处理中…'
+        else if (p >= 0) uploadingText.value = '上传中 ' + p + '%'
       },
     })
+    // 发送者自己的图：本地已有原图和小图，直接灌进本地缓存，
+    // 发出去的图立刻可见，不必再从服务器下一遍（这一步最影响「发完等半天」的观感）。
+    try {
+      await seedMedia(data.url, shrunk.file)
+      if (shrunk.thumb) await seedMedia(data.url + '&w=480', shrunk.thumb)
+    } catch { /* 缓存失败不影响发送 */ }
     pendingImages.value.push(data)
   } catch (err) {
     ui.toast('上传失败: ' + (err.message || '请重试'), 'err')

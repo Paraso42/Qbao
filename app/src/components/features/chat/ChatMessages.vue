@@ -31,10 +31,12 @@
               <img
                 v-for="(url, i) in (m.imageSrcs || [])"
                 :key="i"
-                :src="mediaSrc(url)"
+                :src="mediaSrc(m.imageThumbs[i] || url)"
                 class="chat-msg-image"
                 loading="lazy"
-                @error="onImageError(m, url)"
+                decoding="async"
+                @error="onImageError(m, m.imageThumbs[i] || url)"
+                @load="onImageLoaded(m.imageThumbs[i] || url)"
                 @click="previewImage(mediaSrc(url))"
               />
             </div>
@@ -134,6 +136,14 @@ import { useUserStore } from '../../../stores/user'
 import Icon from '../../ui/Icon.vue'
 import { renderMarkdown, formatFileSize, resolveMediaUrl, resolveMediaSrc } from '../../../services/utils'
 import { msgEstimateHeight, computeChatWindow } from '../../../services/chatVirtual'
+import { mediaKey, ensureLoaded, warmMedia, withMediaWidth, cachedOrOriginal } from '../../../services/mediaCache'
+
+// v3.37.6：列表只拉小图（?w=480），点开大图才拉原图。
+// 老消息没有派生小图时服务端会静默回退原图，所以这里无条件加参数是安全的。
+const THUMB_WIDTH = 480
+function withThumbWidth(url) {
+  return withMediaWidth(url, THUMB_WIDTH)
+}
 
 const store = useChatStore()
 const user = useUserStore()
@@ -214,6 +224,7 @@ const prepared = computed(() => {
       avatarUrl: avatarUrlOf(m),
       // 服务端已在下发时为受保护媒体签好 ticket，这里只需补全为绝对地址
       imageSrcs: (m.images || []).map((u) => resolveMediaSrc(u)),
+      imageThumbs: (m.images || []).map((u) => withThumbWidth(resolveMediaSrc(u))),
       fileUrl: resolveMediaSrc((m.file_info || {}).url),
       time: store.formatTime(m.created_at),
       revocable: isMine && !m.is_revoked && canRevoke(m)
@@ -232,11 +243,40 @@ function imgError(url) {
 // （旧地址可能已被中间层按「图片」缓存了 401/404，不换 URL 会一直裂）。
 const retriedImgs = ref({})
 const mediaNonce = ref(0)
+
+// —— v3.37.6：本地图片缓存 ——
+// 服务端票据现在按 30 分钟时间桶签发（同一张图 URL 稳定），但换桶后 URL 仍会变，
+// 而浏览器缓存键就是 URL。所以这里再补一层「按文件名缓存 Blob」：
+// 只要这张图在本机出现过一次，之后无论票据怎么换、甚至离线，渲染都不再走网络。
+const mediaMap = ref({}) // mediaKey -> blob: 地址
 function mediaSrc(url) {
   if (!url) return url
+  const base = cachedOrOriginal(url, mediaMap.value)
+  if (base !== url) return base // blob: 地址不能再挂查询参数
   const n = retriedImgs.value[url]
   if (!n) return url
   return url + (url.indexOf('?') === -1 ? '?' : '&') + 'r=' + n
+}
+
+// 消息列表变化时，把「本机已有的图」一次性解析成 blob: 地址（纯本地读，不发请求）
+async function primeMedia() {
+  const urls = []
+  for (const m of prepared.value) {
+    for (const u of (m.imageThumbs || [])) urls.push(u)
+    if (m.fileUrl) urls.push(m.fileUrl)
+  }
+  if (!urls.length) return
+  const found = await ensureLoaded(urls)
+  if (Object.keys(found).length) mediaMap.value = { ...mediaMap.value, ...found }
+}
+
+// 图片加载成功后再落盘一份（走浏览器 HTTP 缓存，几乎不额外耗流量），下次直接命中
+function onImageLoaded(url) {
+  const key = mediaKey(url)
+  if (!key || mediaMap.value[key]) return
+  warmMedia(url).then((objUrl) => {
+    if (objUrl) mediaMap.value = { ...mediaMap.value, [key]: objUrl }
+  }).catch(() => {})
 }
 async function onImageError(m, url) {
   if (!url) return
@@ -313,6 +353,8 @@ function isNearBottom() {
   if (!el) return true
   return el.scrollHeight - el.scrollTop - el.clientHeight < 50
 }
+
+watch(() => store.messages, () => { primeMedia() }, { immediate: true })
 
 watch(() => store.openRoomId, (id, old) => {
   if (id && id !== old) {

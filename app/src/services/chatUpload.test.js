@@ -61,6 +61,25 @@ describe('uploadFile（XHR 进度版）', () => {
     await expect(p).resolves.toMatchObject({ name: 'a.png' })
   })
 
+  it('v3.37.6：带 thumb 时作为第二个字段同一次请求上传（列表小图）', async () => {
+    const thumb = new File([new Uint8Array(64)], 'thumb.webp', { type: 'image/webp' })
+    const p = uploadFile(bigFile(), { thumb })
+    const x = FakeXHR.last
+    expect(x.body.get('file')).toBeInstanceOf(File)
+    expect(x.body.get('thumb')).toBeInstanceOf(File)
+    // 只发一次请求：小图不额外起一次上传
+    expect(calls.length).toBe(1)
+    x.finish(200, JSON.stringify({ url: '/api/v1/chat/files/a.png' }))
+    await p
+  })
+
+  it('不带 thumb 时不多发字段（老行为不变）', async () => {
+    const p = uploadFile(bigFile())
+    expect(FakeXHR.last.body.get('thumb')).toBe(null)
+    FakeXHR.last.finish(200, '{}')
+    await p
+  })
+
   it('进度被换算成 0~100 的整数并回调，且不会超过 100', async () => {
     const seen = []
     const p = uploadFile(bigFile(), { onProgress: (v) => seen.push(v) })

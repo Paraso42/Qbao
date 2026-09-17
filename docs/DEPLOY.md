@@ -29,6 +29,20 @@
 
 - Node.js ≥ 18（线上实测 v26.x）、PostgreSQL ≥ 13（线上 14）、Caddy 2（自动 HTTPS；自托管可用任意反向代理）。
 - 域名 + 可公网校验的 DNS（Caddy 走 ACME HTTP-01 自动签发证书）。
+- **内核 TCP 拥塞控制必须是 BBR（v3.37.6，实测差 12~21 倍，缺了它图片就是「发不动也打不开」）**：
+
+  ```bash
+  # /etc/modules-load.d/qbao-net.conf
+  tcp_bbr
+  sch_fq
+  # /etc/sysctl.d/99-qbao-net.conf
+  net.core.default_qdisc=fq
+  net.ipv4.tcp_congestion_control=bbr
+  ```
+  `sysctl --system` 后确认 `sysctl net.ipv4.tcp_congestion_control` = `bbr`、`tc qdisc show dev eth0` 首行是 `fq`。
+  原理：本机在境外、用户在国内，跨境链路有丢包；默认的 cubic 把丢包一律当拥塞，单条 TCP 流实测只有
+  **10.6 KB/s**，而 BBR 按带宽×RTT 建模，同样一条流跑到 **126.9 KB/s**。浏览器对一个源只开一条
+  HTTP/2 连接，所有图片共享这一条流 —— 所以这个内核参数直接决定聊天图片的可用性。
 
 ## 3. 后端部署
 
@@ -261,6 +275,8 @@ rsync -a {PROD_ROOT}/uploads/ {BACKUP_DIR}/uploads/
 香港主机若需重建（服务与数据库同机，这是唯一线上主机）：
 
 1. 重装基础环境：Node.js ≥ 18、PostgreSQL ≥ 13、**Caddy 2**、swap（小内存主机建议 1G）。
+   **并重放 §2 的 BBR 内核参数**（`/etc/sysctl.d/99-qbao-net.conf` 与 `/etc/modules-load.d/qbao-net.conf`）——
+   漏掉这一步不会报任何错，但跨境单流吞吐会掉到 1/12，表现为「图片发得极慢、打开聊天极慢」。
 2. 按 §3–4 完成建库与部署（init.sql + `run_migration.js`）。
 3. **恢复数据库**：取最近一份 `{BACKUP_DIR}/qbao_*.sql.gz`（或本机 `local/backups/pre-hk-migration/`）导入；内测库同理。
 4. 还原上传文件与 `downloads/` 分发储藏室（manifest.json 是发布事实源，务必一并恢复）。

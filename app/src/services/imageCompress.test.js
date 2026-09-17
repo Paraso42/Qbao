@@ -7,6 +7,9 @@ import {
   compressImage,
   SKIP_BELOW_BYTES,
   DEFAULT_MAX_EDGE,
+  MIN_SHORT_EDGE,
+  DEFAULT_THUMB_EDGE,
+  DEFAULT_THUMB_QUALITY,
 } from './imageCompress'
 
 // v3.37.5：聊天图片上传前压缩。真实事故 —— 手机原图数 MB 原样上传，
@@ -166,5 +169,33 @@ describe('compressImage 安全网', () => {
 
   it('默认最大边为 1600（导出常量与实现一致）', () => {
     expect(DEFAULT_MAX_EDGE).toBe(1600)
+  })
+})
+
+describe('列表缩略图尺寸（v3.37.6）', () => {
+  it('普通照片：长边压到 480', () => {
+    const s = scaledSize(4000, 3000, DEFAULT_THUMB_EDGE, 0, 0)
+    expect(s.width).toBe(480)
+    expect(s.height).toBe(360)
+  })
+
+  it('长截图：缩略图不套用短边下限，否则 400x4444 根本不叫缩略图', () => {
+    const s = scaledSize(1080, 12000, DEFAULT_THUMB_EDGE, 0, 0)
+    expect(s.width).toBe(43)
+    expect(s.height).toBe(480)
+    // 主图仍保短边可读（两者是不同策略，不能互相污染）
+    const full = scaledSize(1080, 12000, DEFAULT_MAX_EDGE)
+    expect(full.width).toBe(MIN_SHORT_EDGE)
+  })
+
+  it('缩略图不放大', () => {
+    const s = scaledSize(120, 90, DEFAULT_THUMB_EDGE, 0, 0)
+    expect(s.width).toBe(120)
+    expect(s.height).toBe(90)
+  })
+
+  it('默认缩略图参数（长边 480 / 质量 0.62）', () => {
+    expect(DEFAULT_THUMB_EDGE).toBe(480)
+    expect(DEFAULT_THUMB_QUALITY).toBe(0.62)
   })
 })

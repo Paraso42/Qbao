@@ -31,8 +31,16 @@ export const NEVER_COMPRESS_TYPES = ['image/gif']
 // 极端长宽比时改为保短边，宁可体积大一些也不能让人看不清内容。
 export const MIN_SHORT_EDGE = 400
 
+// v3.37.6：列表缩略图（聊天列表只拉小图，点开才拉原图）。
+// 浏览器对一个源只开一条 HTTP/2 连接，所有图共享这一条流的带宽——
+// 列表里放整图会让「一屏五张图」串行等一条流慢慢拉，这是「打开聊天极慢」的主因。
+export const DEFAULT_THUMB_EDGE = 480
+export const DEFAULT_THUMB_QUALITY = 0.62
+
 // 缩放到最长边不超过 maxEdge 的目标尺寸；不放大（放大只会更糊更占体积）。
-export function scaledSize(width, height, maxEdge, maxPixels) {
+// minShortEdge：短边下限。缩略图必须传 0 —— 长截图（1080x12000）若套用 400px
+// 短边下限会得到 400x4444，那已经不是缩略图了。
+export function scaledSize(width, height, maxEdge, maxPixels, minShortEdge) {
   const w = Number(width) || 0
   const h = Number(height) || 0
   if (w <= 0 || h <= 0) return { width: 0, height: 0, scale: 1 }
@@ -41,7 +49,7 @@ export function scaledSize(width, height, maxEdge, maxPixels) {
   let scale = Math.min(1, edge / Math.max(w, h))
   // 极端长宽比（长截图/全景）兜底：保短边可读，允许长边超出 maxEdge。
   // 正常照片/截图不会触发（它们的短边本身就远大于下限）。
-  const floor = Number(MIN_SHORT_EDGE) > 0 ? Number(MIN_SHORT_EDGE) : 0
+  const floor = minShortEdge === 0 ? 0 : (Number(minShortEdge) > 0 ? Number(minShortEdge) : (Number(MIN_SHORT_EDGE) > 0 ? Number(MIN_SHORT_EDGE) : 0))
   if (floor > 0 && shortEdge * scale < floor) {
     scale = Math.min(1, floor / shortEdge)
   }
@@ -124,12 +132,37 @@ function hasAlpha(ctx, width, height) {
   return false
 }
 
+// 把已解码的 bitmap 画成一张变体图（复用同一次解码，避免二次解码大图）。
+async function renderVariant(bitmap, target, type, quality) {
+  let canvas = null
+  try {
+    canvas = document.createElement('canvas')
+    canvas.width = target.width
+    canvas.height = target.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    if (type === 'image/jpeg' && hasAlpha(ctx, target.width, target.height)) {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, target.width, target.height)
+    }
+    ctx.drawImage(bitmap, 0, 0, target.width, target.height)
+    const blob = await canvasToBlob(canvas, type, quality)
+    if (!blob || blob.size <= 0) return null
+    return blob
+  } catch {
+    return null
+  } finally {
+    if (canvas) { canvas.width = 0; canvas.height = 0 }
+  }
+}
+
 // 主入口：返回 { file, originalSize, size, compressed, width, height }。
+// opts.thumb=true 时额外返回 { thumb, thumbWidth, thumbHeight }（列表缩略图）。
 // 任何环节失败都**回退原文件**，绝不阻断发送。
 export async function compressImage(file, opts) {
   const o = opts || {}
   const originalSize = (file && file.size) || 0
-  const passthrough = { file, originalSize, size: originalSize, compressed: false, width: 0, height: 0 }
+  const passthrough = { file, originalSize, size: originalSize, compressed: false, width: 0, height: 0, thumb: null, thumbWidth: 0, thumbHeight: 0 }
   if (!file) return passthrough
   const type = file.type || ''
   if (type.indexOf('image/') !== 0 || NEVER_COMPRESS_TYPES.indexOf(type) !== -1) return passthrough
@@ -145,6 +178,10 @@ export async function compressImage(file, opts) {
   const outType = o.outputType || pickOutputType(detectSupportedTypes())
   if (!outType) return passthrough
 
+  const thumbEdge = Number(o.thumbEdge) > 0 ? Number(o.thumbEdge) : DEFAULT_THUMB_EDGE
+  const thumbQuality = Number(o.thumbQuality) > 0 ? Number(o.thumbQuality) : DEFAULT_THUMB_QUALITY
+  const wantThumb = !!o.thumb
+
   let bitmap = null
   let canvas = null
   try {
@@ -152,9 +189,28 @@ export async function compressImage(file, opts) {
     bitmap = await createImageBitmap(file)
     const w = bitmap.width || 0
     const h = bitmap.height || 0
+
+    // 缩略图先用同一次解码画出来：长边 480、短边不限（长截图也能得到真正的缩略图）。
+    // 失败不影响主流程，列表会退回整图。
+    let thumbFile = null
+    let thumbW = 0
+    let thumbH = 0
+    if (wantThumb && w > 0 && h > 0 && outType) {
+      const ts = scaledSize(w, h, thumbEdge, 0, 0)
+      const blob = await renderVariant(bitmap, ts, outType, thumbQuality)
+      if (blob && blob.size > 0) {
+        thumbW = ts.width
+        thumbH = ts.height
+        thumbFile = typeof File === 'function'
+          ? new File([blob], outputName(file.name, outType), { type: outType, lastModified: Date.now() })
+          : blob
+      }
+    }
+    const withThumb = (r) => Object.assign({}, r, { thumb: thumbFile, thumbWidth: thumbW, thumbHeight: thumbH })
+
     if (!shouldCompress({ type, size: originalSize, width: w, height: h }, o)) {
       if (bitmap.close) bitmap.close()
-      return Object.assign({}, passthrough, { width: w, height: h })
+      return withThumb(Object.assign({}, passthrough, { width: w, height: h }))
     }
     const target = scaledSize(w, h, maxEdge, o.maxPixels)
     canvas = document.createElement('canvas')
@@ -173,14 +229,14 @@ export async function compressImage(file, opts) {
     // 压不小就放弃（例如本来就是高压缩比的小图被重编码变大）
     if (blob.size >= originalSize * (Number(o.gainThreshold) > 0 ? Number(o.gainThreshold) : GAIN_THRESHOLD)) {
       if (bitmap.close) bitmap.close()
-      return Object.assign({}, passthrough, { width: w, height: h })
+      return withThumb(Object.assign({}, passthrough, { width: w, height: h }))
     }
     const name = outputName(file.name, outType)
     const out = typeof File === 'function'
       ? new File([blob], name, { type: outType, lastModified: Date.now() })
       : blob
     if (bitmap.close) bitmap.close()
-    return { file: out, originalSize, size: blob.size, compressed: true, width: target.width, height: target.height }
+    return withThumb({ file: out, originalSize, size: blob.size, compressed: true, width: target.width, height: target.height })
   } catch {
     // 任何解码/编码失败都不阻断发送：原样上传原件
     if (bitmap && bitmap.close) {

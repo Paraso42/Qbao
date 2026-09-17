@@ -35,6 +35,36 @@ const {
 const chatUploadDir = path.join(__dirname, '..', '..', '..', 'uploads', 'chat');
 if (!fs.existsSync(chatUploadDir)) fs.mkdirSync(chatUploadDir, { recursive: true });
 
+// v3.37.6：列表缩略图。
+//
+// 背景（「每次加载对话内图片都要很久」）：聊天列表原先直接渲染压缩后的整图
+// （几百 KB）。而浏览器对一个源只开一条 HTTP/2 连接，所有图共享同一条流的
+// 带宽，于是「一屏五张图」= 串行等一条流把 1MB 拉完。
+// 官方聊天软件的做法都是列表只拉小图、点开才拉原图，这里照做：
+//   - 客户端上传时额外生成一张长边 480 的小图（同一次请求，字段名 thumb）；
+//   - 服务端把它存成 <原名>.w480.<ext>；
+//   - 下载端点支持 ?w=480，命中派生图就发小图，没有就**静默回退原图**
+//     （老消息没有派生图，行为与以前完全一致，不会裂图，也不需要改库表）。
+const THUMB_WIDTHS = [320, 480, 640];
+const THUMB_WIDTH = 480;
+
+function thumbName(filename, w, ext) {
+  const own = path.extname(filename);
+  const base = own ? filename.slice(0, filename.length - own.length) : filename;
+  return base + '.w' + w + (ext || own);
+}
+
+// 派生图可能换过格式（png 主图 + webp 小图），按扩展名候选表查找
+function resolveThumbPath(filename, w) {
+  const own = path.extname(filename).toLowerCase();
+  const exts = [own].concat(IMAGE_ALLOWED_EXTS.filter((e) => e !== own));
+  for (const e of exts) {
+    const p = path.join(chatUploadDir, thumbName(filename, w, e));
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 const chatUpload = multer({
   storage: multer.diskStorage({
     destination: chatUploadDir,
@@ -43,7 +73,14 @@ const chatUpload = multer({
       try { origName = Buffer.from(origName, 'latin1').toString('utf8'); } catch (_) {}
       const ext = path.extname(origName || '') || '';
       file.originalname = origName;
-      cb(null, 'chat_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + ext);
+      if (file.fieldname === 'thumb') {
+        // 与主图同名 + .w480 后缀，便于下载端点按 ?w= 派生
+        const main = req._qbaoMainUpload;
+        if (main) return cb(null, thumbName(main, THUMB_WIDTH, ext));
+      }
+      const name = 'chat_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + ext;
+      if (file.fieldname === 'file') req._qbaoMainUpload = name;
+      cb(null, name);
     },
   }),
   limits: { fileSize: 50 * 1024 * 1024 },
@@ -90,14 +127,22 @@ module.exports = function (app) {
     const filename = path.basename(requested);
     if (filename !== requested || filename.includes('..')) throw new ApiError(404, '文件不存在或已删除');
 
-    const filePath = path.join(chatUploadDir, filename);
-    if (!fs.existsSync(filePath)) throw new ApiError(404, '文件不存在或已删除');
     // T2：非图片类型一律作为附件下载（防 .html/.svg 等被浏览器内联渲染）
     const ext = path.extname(filename).toLowerCase();
     if (!IMAGE_ALLOWED_EXTS.includes(ext)) {
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('Content-Disposition', 'attachment; filename="' + filename.replace(/"/g, '') + '"');
     }
+
+    // v3.37.6：?w=<列表缩略图宽度> —— 票仍然按原文件名校验（URL 里那个名字），
+    // w 只从固定白名单取值，取不到派生图就回退原图。
+    const w = Number(req.query && req.query.w);
+    let filePath = path.join(chatUploadDir, filename);
+    if (THUMB_WIDTHS.indexOf(w) !== -1) {
+      const thumbPath = resolveThumbPath(filename, w);
+      if (thumbPath) filePath = thumbPath;
+    }
+    if (!fs.existsSync(filePath)) throw new ApiError(404, '文件不存在或已删除');
     // v3.37.5：显式长缓存（文件名随机且内容不可变），替代 send 默认的 max-age=0
     sendMediaFile(res, filePath);
   }));
@@ -515,15 +560,29 @@ module.exports = function (app) {
     res.json({ read: true });
   }));
 
-  app.post('/api/v1/chat/upload', requireAuth, chatUpload.single('file'), asyncHandler(async (req, res) => {
-    if (!req.file) throw new ApiError(422, '请选择文件');
+  app.post('/api/v1/chat/upload', requireAuth, chatUpload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'thumb', maxCount: 1 }, // v3.37.6：可选，列表用的小图
+  ]), asyncHandler(async (req, res) => {
+    const files = req.files || {};
+    const main = (files.file || [])[0];
+    if (!main) throw new ApiError(422, '请选择文件');
     // T2：magic bytes 二次校验（fileFilter 只拦扩展名，此处验真实内容）
-    await validateUploadedFile(req.file);
+    await validateUploadedFile(main);
+    const thumb = (files.thumb || [])[0];
+    if (thumb) {
+      try {
+        await validateUploadedFile(thumb);
+      } catch (err) {
+        // 小图不合法不该让整次上传失败：删掉它，继续用原图
+        try { fs.unlinkSync(thumb.path); } catch (_) {}
+      }
+    }
     res.json({
-      url: signUrl('/api/v1/chat/files/' + req.file.filename),
-      name: req.file.originalname,
-      size: req.file.size,
-      mimeType: req.file.mimetype,
+      url: signUrl('/api/v1/chat/files/' + main.filename),
+      name: main.originalname,
+      size: main.size,
+      mimeType: main.mimetype,
     });
   }));
 

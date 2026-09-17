@@ -67,19 +67,26 @@ export async function sendMessage(roomId, body) {
 // 而图片原图动辄数 MB，上行慢时界面会「一动不动」，用户以为卡死。
 // onProgress 收到 0~100 的整数百分比（无法计算总长时收到 -1）。
 // 401 处理与 fetchWithAuth 保持一致：本页令牌仍有效才清登出（避免把别的标签页登出）。
+// v3.37.6：可选 opts.thumb —— 列表用的小图，和主图同一次请求上传（字段名 thumb）。
+// 服务端存成 <主图名>.w480.<ext>，列表用 ?w=480 取它，点开才取原图。
 export function uploadFile(file, opts) {
   const o = opts || {}
   const onProgress = typeof o.onProgress === 'function' ? o.onProgress : null
+  const thumb = o.thumb || null
+  const appendAll = (fd) => {
+    fd.append('file', file)
+    if (thumb) fd.append('thumb', thumb, thumb.name || 'thumb.webp')
+  }
   return new Promise((resolve, reject) => {
     const formData = new FormData()
-    formData.append('file', file)
+    appendAll(formData)
     let xhr
     try {
       xhr = new XMLHttpRequest()
     } catch {
       // 极端环境（无 XHR）回退 fetch，功能不受影响
       const fd = new FormData()
-      fd.append('file', file)
+      appendAll(fd)
       fetchWithAuth('/chat/upload', { method: 'POST', body: fd })
         .then(async (res) => {
           if (!res || !res.ok) throw new Error(await readApiError(res, '上传失败'))

@@ -35,6 +35,33 @@ describe('压缩收益（按手机原图量级）', () => {
     expect(r.size / r.originalSize).toBeLessThan(0.1)
   })
 
+  it('thumb:true 顺带产出列表小图，且只解码原图一次', async () => {
+    const { canvas, drawn } = stubCanvas(22 * 1024, 'image/webp')
+    global.document = { createElement: () => canvas }
+    let decodes = 0
+    global.createImageBitmap = async () => { decodes++; return { width: 4000, height: 3000, close: vi.fn() } }
+    const file = { name: 'IMG_20260101_120000.jpg', type: 'image/jpeg', size: 5.2 * 1024 * 1024 }
+    const r = await compressImage(file, { thumb: true })
+    expect(decodes).toBe(1) // 大图解码很贵，小图复用同一次解码
+    expect(r.thumb).toBeTruthy()
+    expect(r.thumb.name).toBe('IMG_20260101_120000.webp')
+    expect(r.thumb.type).toBe('image/webp')
+    expect(r.thumbWidth).toBe(480)
+    expect(r.thumbHeight).toBe(360)
+    expect(drawn[0][3]).toBe(480) // 先画小图
+    expect(drawn[1][3]).toBe(1600) // 再画主图
+  })
+
+  it('不传 thumb 时不额外产出小图（老调用方行为不变）', async () => {
+    const { canvas } = stubCanvas(420 * 1024, 'image/webp')
+    global.document = { createElement: () => canvas }
+    global.createImageBitmap = async () => ({ width: 4000, height: 3000, close: vi.fn() })
+    const file = { name: 'a.jpg', type: 'image/jpeg', size: 5.2 * 1024 * 1024 }
+    const r = await compressImage(file)
+    expect(r.thumb).toBe(null)
+    expect(r.thumbWidth).toBe(0)
+  })
+
   it('默认质量 0.82：既能压到十位数百分比，又不至于肉眼糊', () => {
     expect(DEFAULT_QUALITY).toBe(0.82)
   })
