@@ -34,6 +34,21 @@ describe('聊天媒体回收任务的生命周期（v3.37.7）', () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
+  it('启动时打一行「闸门已武装」，否则运维无法从日志判断任务是否在跑', () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      svc.startChatMediaJob();
+      const lines = spy.mock.calls.map((c) => String(c[0]));
+      const armed = lines.filter((l) => l.indexOf('[chat-media] 回收任务已启动') === 0);
+      expect(armed.length).toBe(1);
+      expect(armed[0]).toContain('孤儿 ' + cfg.CHAT_ORPHAN_TTL_HOURS + ' 小时');
+      expect(armed[0]).toContain('保留 ' + cfg.CHAT_MEDIA_RETENTION_DAYS + ' 天');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('停止后定时器被清掉，可以再次启动', () => {
     vi.useFakeTimers();
     svc.startChatMediaJob();

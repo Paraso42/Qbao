@@ -454,6 +454,7 @@ let timer = null;
 
 function startChatMediaJob() {
   if (timer) return timer;
+  const L = limitsSnapshot();
   const run = function () {
     sweepOnce().catch(function (e) { console.error('[chat-media] 回收任务失败:', e.message); });
   };
@@ -463,6 +464,11 @@ function startChatMediaJob() {
   timer = setInterval(run, TICK_MS);
   // T8: unref — 不阻止进程退出/优雅停机
   if (typeof timer.unref === 'function') timer.unref();
+  // 启动即报一次「闸门已武装」：回收任务平时是静默的（只有真回收了才打日志），
+  // 没有这行就无法从日志判断它到底有没有跑起来（生产首次上线时踩过这个盲区）。
+  console.log('[chat-media] 回收任务已启动：每 ' + (TICK_MS / 60000) + ' 分钟一次；孤儿 ' +
+    L.orphanTtlHours + ' 小时、保留 ' + L.retentionDays + ' 天；单文件 ' + formatMB(L.maxFileBytes) +
+    '、图片 ' + formatMB(L.maxImageBytes) + '、每人每日 ' + formatMB(L.dailyBytes));
   return timer;
 }
 
