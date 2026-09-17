@@ -55,6 +55,13 @@
   | `Qbao-Setup-3.37.7.exe.blockmap` | 91,098 字节 | sha256 `fb8687661929f2a3fa63f7842682f941fef866e08e92647d6af82f832e209d5d` |
   | `latest.yml` | 339 字节 | `version: 3.37.7`；sha512 与安装包实测值 **一致 ✅** |
   三个资产均 HTTP 200 可下载；**把安装包与 `latest.yml` 都拉下来实测 sha512(base64)，与清单里写的 `27juhDsAbAaPYIb7bq16FSGEDy9Nt/X0zCBrEm+40AQcNGsQIH1OSBJd1+3ofnD0QYiBJ56QrB0LSxwDQPTtOA==` 完全一致** —— 桌面端自动更新通道指向的文件哈希正确，客户端升级不会因哈希不符而失败。
+- **⑪ 收尾：下载站入库 —— 这一步第一次漏了，用户反馈「我的桌面端也查找不到更新」后才补上**：
+  - **症状与根因**：GitHub Release 三资产齐全、pages 也同步了，但桌面端「检查更新」一直显示「已是最新」。原因是**发行其实是两半**：Release 只是云端归档，**客户端（自动更新 / 设置页下载中心 / `/dl` 落地页）全部只认服务器上的 `downloads/manifest.json`**。漏做 `publish-installer add`（DSH 流程里的 ⑪）＝ 用户端等于没发布。故障态的实测证据：补做前 `/api/v1/desktop/latest` 返回的还是 **3.37.0**（发布于 09-06）。
+  - **补做**：按 `docs/PUBLISHING.md` §3 走签名直链搬包 → `publish-installer add --channel stable --notes "…" --prune --keep 3` → stable 清单变为 **3.37.7 / 3.37.0 / 3.36.0**（3.35.0 安装包按留存策略剪枝，GitHub Release 上仍可下载；旧客户端不受影响 —— 「不在清单」不等于「已撤回」，这条 v3.37.1 已修）。
+  - **三重校验**：GitHub 官方 asset digest sha256 `523fe5a0…5e5` ＝ 本机实测 ＝ 入库记录，三者一致 ✓；工具内部再把 `latest.yml` 的 sha512/size 与安装包逐字节交叉校验。
+  - **公网验证（全过）**：`/api/v1/desktop/manifest?channel=stable` 首位 **3.37.7**；`/api/v1/desktop/latest` → **3.37.7**；generic feed `/api/v1/desktop/update/stable/latest.yml` → **HTTP 200 + `version: 3.37.7`**；`/api/v1/desktop/download?file=Qbao-Setup-3.37.7.exe` → **HTTP 200 / 86,310,245 字节 / sha256 与清单一致**；`/dl` 落地页已展示 3.37.7。
+  - **用桌面端自己的纯函数对线上清单跑了一遍客户端决策**（`desktop/updater-util.js`）：当前 3.37.0 / 3.36.0 / 3.37.6 → `hasUpdate=true`，且无误报「已被撤回」、无强制更新；当前 3.37.7 → 无更新。桌面端 `package.json` 已是 3.37.7（与 tag 一致，Release workflow 会逐步断言），因此装完后版本上报正确、下一次更新不会误判。
+  - **防复发**：`docs/PUBLISHING.md` §1 增加显著警示「**Release 成功 ≠ 用户能看到更新**」并附 30 秒自检命令（`curl -s https://<host>/api/v1/desktop/latest`），§6 故障判定表新增一行「桌面端查不到更新 → 漏做 ⑪ 入库」。
 - **CI 两条红线（推送后立刻变红，均已修，修完 6/6 jobs 全绿）**：
   - ① `backend` 的 `npm run lint` 是 `eslint .`，**覆盖 `test/`**；而 `server/eslint.config.cjs` 的 vitest 全局清单里漏登记 `test`/`beforeAll`/`afterAll` → 6 个 `no-undef` error。**本地只跑 `npx eslint src` 永远发现不了**（src 一直是 0 error）——这是这次踩坑的真正教训。
   - ② `secret-scan`（gitleaks）：`.gitleaks.toml` 只豁免 `sk-test-key-*` 与 `test-secret-*` 两种已登记的假值形状，而本次新增的测试夹具写成了 `sk-live-test-key-…`（像真的 OpenAI 线上 key）与 `another-secret-…`，被判成真密钥。**修法是改夹具去适配已登记形状，而不是放宽豁免规则**（放宽等于给真泄漏开口子）。该 job 在**推送范围**内扫描，所以表现为「代码提交红、纯文档提交绿」，很容易被误判成偶发。
